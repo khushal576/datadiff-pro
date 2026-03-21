@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DataDiff Pro</title>
+  <style>
+    /* ── Reset & base ─────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #f4f6fb;
+      --surface:   #ffffff;
+      --border:    #dde1ef;
+      --text:      #1c2035;
+      --muted:     #6b7180;
+      --accent:    #4f5ef0;
+
+      --match-bg:      transparent;
+      --match-text:    #adb5c7;
+      --mismatch-bg:   rgba(220, 38, 38,  0.07);
+      --mismatch-text: #dc2626;
+      --equiv-bg:      rgba(37, 99, 235,  0.07);
+      --equiv-text:    #2563eb;
+      --extra-bg:      rgba(180, 83, 9,   0.07);
+      --extra-text:    #b45309;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px 20px 60px;
+    }
+
+    /* ── Header ───────────────────────────────────────────────────── */
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+    header h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.5px; }
+    header h1 span { color: var(--accent); }
+    header p { color: var(--muted); font-size: 0.85rem; margin-top: 2px; }
+
+    /* ── Layout helpers ───────────────────────────────────────────── */
+    .row   { display: flex; gap: 16px; }
+    .col   { display: flex; flex-direction: column; gap: 8px; flex: 1; }
+    .card  {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+    }
+
+    /* ── Labels & selects ─────────────────────────────────────────── */
+    label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    select {
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 0.82rem;
+      cursor: pointer;
+    }
+    select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+    /* ── Textareas ────────────────────────────────────────────────── */
+    textarea {
+      width: 100%;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
+      font-size: 0.83rem;
+      resize: vertical;
+      min-height: 260px;
+      line-height: 1.6;
+      transition: border-color 0.15s;
+    }
+    textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    textarea::placeholder { color: var(--muted); opacity: 0.6; }
+
+    /* ── Collapsible sections ─────────────────────────────────────── */
+    .collapsible-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--muted);
+      padding: 10px 0 6px;
+      border-top: 1px solid var(--border);
+      margin-top: 16px;
+    }
+    .collapsible-header:hover { color: var(--text); }
+    .collapsible-header .arrow {
+      font-size: 0.7rem;
+      transition: transform 0.2s;
+      display: inline-block;
+    }
+    .collapsible-header.open .arrow { transform: rotate(90deg); }
+    .collapsible-body {
+      display: none;
+      padding-top: 10px;
+    }
+    .collapsible-body.open { display: block; }
+    .collapsible-body textarea { min-height: 110px; }
+    .hint {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+      line-height: 1.5;
+    }
+
+    /* ── Compare button ───────────────────────────────────────────── */
+    .actions {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin: 22px 0;
+    }
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      padding: 10px 28px;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    button:active { transform: scale(0.97); }
+    #btn-compare {
+      background: var(--accent);
+      color: #fff;
+      min-width: 160px;
+    }
+    #btn-compare:hover { opacity: 0.88; }
+    #btn-compare:disabled { opacity: 0.45; cursor: not-allowed; }
+    #btn-export {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      display: none;
+    }
+    #btn-export:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── Error banner ─────────────────────────────────────────────── */
+    #error-banner {
+      display: none;
+      background: rgba(220, 38, 38, 0.06);
+      border: 1px solid rgba(220, 38, 38, 0.3);
+      border-radius: 8px;
+      padding: 14px 18px;
+      color: #b91c1c;
+      font-size: 0.88rem;
+      white-space: pre-wrap;
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+
+    /* ── Summary bar ──────────────────────────────────────────────── */
+    #summary-bar {
+      display: none;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .pill {
+      border-radius: 20px;
+      padding: 6px 16px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .pill-count {
+      font-size: 1rem;
+      font-weight: 700;
+    }
+    .pill-match    { background: rgba(107,114,128,0.12); color: #6b7280; border: 1px solid rgba(107,114,128,0.2); }
+    .pill-mismatch { background: rgba(220,38,38,0.08);   color: #dc2626; border: 1px solid rgba(220,38,38,0.2); }
+    .pill-equiv    { background: rgba(37,99,235,0.08);   color: #2563eb; border: 1px solid rgba(37,99,235,0.2); }
+    .pill-extra    { background: rgba(180,83,9,0.08);    color: #b45309; border: 1px solid rgba(180,83,9,0.2); }
+
+    /* ── Strategy notes ───────────────────────────────────────────── */
+    #strategy-notes {
+      display: none;
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-bottom: 14px;
+      line-height: 1.7;
+    }
+    #strategy-notes span { font-weight: 600; color: var(--text); }
+
+    /* ── Results table ────────────────────────────────────────────── */
+    #results-section { display: none; }
+
+    .table-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .table-controls label {
+      text-transform: none;
+      letter-spacing: 0;
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .table-controls input[type="checkbox"] {
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+    #filter-input {
+      margin-left: auto;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-size: 0.82rem;
+      width: 220px;
+    }
+    #filter-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+    .table-wrap {
+      overflow-x: auto;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.83rem;
+    }
+    thead th {
+      background: var(--surface);
+      color: var(--muted);
+      text-align: left;
+      padding: 10px 14px;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    tbody tr { border-bottom: 1px solid var(--border); }
+    tbody tr:last-child { border-bottom: none; }
+    tbody td {
+      padding: 9px 14px;
+      vertical-align: top;
+      word-break: break-word;
+    }
+    /* Row colour coding */
+    tr.row-mismatch { background: var(--mismatch-bg); }
+    tr.row-equiv    { background: var(--equiv-bg); }
+    tr.row-extra    { background: var(--extra-bg); }
+
+    td.path  { font-family: monospace; font-size: 0.8rem; color: var(--text); max-width: 320px; }
+    td.value { font-family: monospace; font-size: 0.8rem; }
+    td.left  { color: #b91c1c; }
+    td.right { color: #15803d; }
+    td.match-val { color: var(--muted); }
+
+    /* Left-border stripe for instant side identification */
+    tr.row-mismatch td.value.left  { border-left: 3px solid rgba(220,38,38,0.5); padding-left: 11px; }
+    tr.row-mismatch td.value.right { border-left: 3px solid rgba(21,128,61,0.5); padding-left: 11px; }
+
+    .badge {
+      display: inline-block;
+      border-radius: 4px;
+      padding: 2px 7px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+    }
+    .badge-MATCH      { background: rgba(107,114,128,0.12); color: #6b7280; }
+    .badge-MISMATCH   { background: rgba(220,38,38,0.12);   color: #dc2626; }
+    .badge-EQUIVALENT { background: rgba(37,99,235,0.12);   color: #2563eb; }
+    .badge-EXTRA_LEFT { background: rgba(180,83,9,0.12);    color: #b45309; }
+    .badge-EXTRA_RIGHT{ background: rgba(180,83,9,0.12);    color: #b45309; }
+
+    /* null / undefined display */
+    .null-val { color: var(--muted); font-style: italic; }
+
+    /* Spinner */
+    #spinner {
+      display: none;
+      width: 20px; height: 20px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Responsive */
+    @media (max-width: 700px) {
+      .row { flex-direction: column; }
+      #filter-input { width: 100%; margin-left: 0; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────────────────────────────── -->
+<header>
+  <div>
+    <h1>Data<span>Diff</span> Pro</h1>
+    <p>Deep smart diff for JSON, XML &amp; CSV — nested objects, list keys, equivalence rules</p>
+  </div>
+</header>
+
+<!-- ── Input panels ────────────────────────────────────────────────────── -->
+<div class="row">
+
+  <!-- Left -->
+  <div class="col card">
+    <label>
+      Left Input
+      <select id="left-format">
+        <option value="json">JSON</option>
+        <option value="xml">XML</option>
+        <option value="csv">CSV</option>
+      </select>
+    </label>
+    <textarea id="left-data" placeholder='Paste JSON, XML, or CSV here…
+Example:
+{
+  "name": "Alice",
+  "score": 95
+}'></textarea>
+  </div>
+
+  <!-- Right -->
+  <div class="col card">
+    <label>
+      Right Input
+      <select id="right-format">
+        <option value="json">JSON</option>
+        <option value="xml">XML</option>
+        <option value="csv">CSV</option>
+      </select>
+    </label>
+    <textarea id="right-data" placeholder='Paste JSON, XML, or CSV here…
+Example:
+{
+  "name": "Alice",
+  "score": "95.0"
+}'></textarea>
+  </div>
+
+</div>
+
+<!-- ── Optional: Field Mapper ──────────────────────────────────────────── -->
+<div class="card" style="margin-top:16px;">
+  <div class="collapsible-header" id="toggle-mapper">
+    <span class="arrow">▶</span> Field Mapper
+    <span style="font-weight:400; font-size:0.78rem; margin-left:4px;">(optional — rename fields before diffing)</span>
+  </div>
+  <div class="collapsible-body" id="body-mapper">
+    <p class="hint">
+      One mapping per line: <code>source_path,target_path</code><br>
+      Dot notation for nested fields: <code>user.address.city,person.location.city</code><br>
+      Applied to the <strong>left</strong> side. Lines starting with <code>#</code> are ignored.
+    </p>
+    <textarea id="mapper-csv" placeholder="# Example:
+banks,BankData
+nominee.nomineeName,nominee.name
+user.address.city,person.location.city"></textarea>
+  </div>
+</div>
+
+<!-- ── Optional: Environment / Rules ───────────────────────────────────── -->
+<div class="card" style="margin-top:10px;">
+  <div class="collapsible-header" id="toggle-env">
+    <span class="arrow">▶</span> Environment / Rules
+    <span style="font-weight:400; font-size:0.78rem; margin-left:4px;">(optional — equivalence rules &amp; list keys)</span>
+  </div>
+  <div class="collapsible-body" id="body-env">
+    <p class="hint">
+      Paste a YAML config. See the <code>environments/example.yaml</code> in the repo for the full format.
+    </p>
+    <textarea id="env-yaml" placeholder="# Example:
+equivalence_rules:
+  - [pending, in_progress]
+  - [USD, usd, US Dollar]
+
+list_keys:
+  nominees: [nomineeName, percent]
+  accounts: [accountId]"></textarea>
+  </div>
+</div>
+
+<!-- ── Actions ─────────────────────────────────────────────────────────── -->
+<div class="actions">
+  <button id="btn-compare">
+    <span id="spinner"></span>
+    Compare
+  </button>
+  <button id="btn-export">⬇ Export JSON</button>
+</div>
+
+<!-- ── Error banner ────────────────────────────────────────────────────── -->
+<div id="error-banner"></div>
+
+<!-- ── Summary bar ─────────────────────────────────────────────────────── -->
+<div id="summary-bar">
+  <div class="pill pill-match">
+    <span class="pill-count" id="count-match">0</span> Matched
+  </div>
+  <div class="pill pill-mismatch">
+    <span class="pill-count" id="count-mismatch">0</span> Mismatched
+  </div>
+  <div class="pill pill-equiv">
+    <span class="pill-count" id="count-equiv">0</span> Equivalent
+  </div>
+  <div class="pill pill-extra">
+    <span class="pill-count" id="count-extra">0</span> Extra
+  </div>
+</div>
+
+<!-- ── List strategy notes ─────────────────────────────────────────────── -->
+<div id="strategy-notes"></div>
+
+<!-- ── Results table ───────────────────────────────────────────────────── -->
+<div id="results-section">
+  <div class="table-controls">
+    <label><input type="checkbox" id="hide-match" checked> Hide Matches</label>
+    <label><input type="checkbox" id="show-mismatch" checked> Mismatches</label>
+    <label><input type="checkbox" id="show-equiv" checked> Equivalent</label>
+    <label><input type="checkbox" id="show-extra" checked> Extra</label>
+    <input type="text" id="filter-input" placeholder="Filter by path…" />
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:30%">Path</th>
+          <th style="width:28%; border-right:2px solid var(--border)">← Left Value</th>
+          <th style="width:28%">Right Value →</th>
+          <th style="width:14%">Status</th>
+        </tr>
+      </thead>
+      <tbody id="results-body"></tbody>
+    </table>
+  </div>
+</div>
+
+
+<script>
+  // ── State ────────────────────────────────────────────────────────────
+  let _lastResult = null;   // raw API response, used by Export
+
+  // ── Collapsible sections ─────────────────────────────────────────────
+  function setupCollapsible(toggleId, bodyId) {
+    const toggle = document.getElementById(toggleId);
+    const body   = document.getElementById(bodyId);
+    toggle.addEventListener('click', () => {
+      const open = body.classList.toggle('open');
+      toggle.classList.toggle('open', open);
+    });
+  }
+  setupCollapsible('toggle-mapper', 'body-mapper');
+  setupCollapsible('toggle-env',    'body-env');
+
+  // ── Compare ──────────────────────────────────────────────────────────
+  document.getElementById('btn-compare').addEventListener('click', runCompare);
+
+  async function runCompare() {
+    const btn     = document.getElementById('btn-compare');
+    const spinner = document.getElementById('spinner');
+
+    // Collect inputs
+    const payload = {
+      left_data:        document.getElementById('left-data').value,
+      right_data:       document.getElementById('right-data').value,
+      left_format:      document.getElementById('left-format').value,
+      right_format:     document.getElementById('right-format').value,
+      mapper_csv:       document.getElementById('mapper-csv').value || null,
+      environment_yaml: document.getElementById('env-yaml').value   || null,
+    };
+
+    // UI: loading state
+    btn.disabled = true;
+    spinner.style.display = 'inline-block';
+    hideError();
+    hideResults();
+
+    try {
+      const res  = await fetch('/compare', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(payload),
+      });
+      const data = await res.json();
+
+      if (!data.ok) {
+        showError(data.error || 'An unknown error occurred.');
+        return;
+      }
+
+      _lastResult = data;
+      renderResults(data);
+
+    } catch (err) {
+      showError(
+        'Could not reach the server.\n' +
+        'Make sure the container is running: docker-compose up\n' +
+        `Detail: ${err.message}`
+      );
+    } finally {
+      btn.disabled = false;
+      spinner.style.display = 'none';
+    }
+  }
+
+  // ── Render ───────────────────────────────────────────────────────────
+  function renderResults(data) {
+    // Summary pills
+    const s = data.summary || {};
+    document.getElementById('count-match').textContent    = s.MATCH      || 0;
+    document.getElementById('count-mismatch').textContent = s.MISMATCH   || 0;
+    document.getElementById('count-equiv').textContent    = s.EQUIVALENT || 0;
+    document.getElementById('count-extra').textContent    = (s.EXTRA_LEFT || 0) + (s.EXTRA_RIGHT || 0);
+    document.getElementById('summary-bar').style.display  = 'flex';
+
+    // List strategy notes
+    const notesEl = document.getElementById('strategy-notes');
+    if (data.list_strategies && data.list_strategies.length > 0) {
+      notesEl.innerHTML =
+        '<span>List key strategies used:</span> ' +
+        data.list_strategies.map(s => escHtml(s)).join(' &nbsp;·&nbsp; ');
+      notesEl.style.display = 'block';
+    } else {
+      notesEl.style.display = 'none';
+    }
+
+    // Table rows
+    buildTable(data.records || []);
+
+    document.getElementById('results-section').style.display = 'block';
+    document.getElementById('btn-export').style.display      = 'inline-block';
+  }
+
+  function buildTable(records) {
+    const hideMatch    = document.getElementById('hide-match').checked;
+    const showMismatch = document.getElementById('show-mismatch').checked;
+    const showEquiv    = document.getElementById('show-equiv').checked;
+    const showExtra    = document.getElementById('show-extra').checked;
+    const filterText   = document.getElementById('filter-input').value.toLowerCase();
+
+    const tbody = document.getElementById('results-body');
+    tbody.innerHTML = '';
+
+    let shown = 0;
+    for (const rec of records) {
+      const status = rec.status;
+
+      // Apply visibility filters
+      if (status === 'MATCH'      &&  hideMatch)    continue;
+      if (status === 'MISMATCH'   && !showMismatch) continue;
+      if (status === 'EQUIVALENT' && !showEquiv)    continue;
+      if ((status === 'EXTRA_LEFT' || status === 'EXTRA_RIGHT') && !showExtra) continue;
+
+      // Apply path filter
+      if (filterText && !rec.path.toLowerCase().includes(filterText)) continue;
+
+      const tr = document.createElement('tr');
+      tr.className = rowClass(status);
+
+      // Indent path by nesting depth (count dots outside brackets)
+      const depth = pathDepth(rec.path);
+      const indent = depth > 0 ? `style="padding-left:${6 + depth * 14}px"` : '';
+
+      tr.innerHTML =
+        `<td class="path" ${indent}>${escHtml(rec.path)}</td>` +
+        `<td class="value ${valueClass(status, 'left')}" style="border-right:1px solid var(--border)">${formatValue(rec.left_value, status, 'left')}</td>` +
+        `<td class="value ${valueClass(status, 'right')}">${formatValue(rec.right_value, status, 'right')}</td>` +
+        `<td><span class="badge badge-${escHtml(status)}">${escHtml(status.replace(/_/g, ' '))}</span></td>`;
+
+      tbody.appendChild(tr);
+      shown++;
+    }
+
+    if (shown === 0) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td colspan="4" style="text-align:center; color:var(--muted); padding:24px;">
+        No records match the current filters.</td>`;
+      tbody.appendChild(tr);
+    }
+  }
+
+  function rowClass(status) {
+    if (status === 'MISMATCH')              return 'row-mismatch';
+    if (status === 'EQUIVALENT')            return 'row-equiv';
+    if (status === 'EXTRA_LEFT' ||
+        status === 'EXTRA_RIGHT')           return 'row-extra';
+    return '';
+  }
+
+  function valueClass(status, side) {
+    if (status === 'MATCH') return 'match-val';
+    if (side === 'left'  && (status === 'MISMATCH' || status === 'EXTRA_LEFT'))  return 'left';
+    if (side === 'right' && (status === 'MISMATCH' || status === 'EXTRA_RIGHT')) return 'right';
+    return '';
+  }
+
+  function formatValue(val, status, side) {
+    if (val === null || val === undefined) {
+      // Show a meaningful placeholder for EXTRA rows so it's clear which side is missing
+      if (status === 'EXTRA_LEFT'  && side === 'right')
+        return '<span class="null-val" style="font-size:0.75rem">not present</span>';
+      if (status === 'EXTRA_RIGHT' && side === 'left')
+        return '<span class="null-val" style="font-size:0.75rem">not present</span>';
+      return '<span class="null-val">—</span>';
+    }
+    if (typeof val === 'object') {
+      return `<span title="${escHtml(JSON.stringify(val, null, 2))}">${escHtml(JSON.stringify(val))}</span>`;
+    }
+    return escHtml(String(val));
+  }
+
+  function pathDepth(path) {
+    // Count nesting level by dots that appear outside of [...] brackets
+    let depth = 0, inBracket = 0;
+    for (const ch of path) {
+      if (ch === '[') inBracket++;
+      else if (ch === ']') inBracket--;
+      else if (ch === '.' && inBracket === 0) depth++;
+    }
+    return depth;
+  }
+
+  // ── Filter / toggle listeners ─────────────────────────────────────────
+  ['hide-match','show-mismatch','show-equiv','show-extra'].forEach(id => {
+    document.getElementById(id).addEventListener('change', () => {
+      if (_lastResult) buildTable(_lastResult.records || []);
+    });
+  });
+  document.getElementById('filter-input').addEventListener('input', () => {
+    if (_lastResult) buildTable(_lastResult.records || []);
+  });
+
+  // ── Export ───────────────────────────────────────────────────────────
+  document.getElementById('btn-export').addEventListener('click', () => {
+    if (!_lastResult) return;
+    const blob = new Blob(
+      [JSON.stringify(_lastResult, null, 2)],
+      { type: 'application/json' }
+    );
+    const url = URL.createObjectURL(blob);
+    const a   = document.createElement('a');
+    a.href     = url;
+    a.download = 'datadiff-result.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // ── Helpers ──────────────────────────────────────────────────────────
+  function showError(msg) {
+    const el = document.getElementById('error-banner');
+    el.textContent   = msg;
+    el.style.display = 'block';
+  }
+  function hideError() {
+    document.getElementById('error-banner').style.display = 'none';
+  }
+  function hideResults() {
+    document.getElementById('summary-bar').style.display    = 'none';
+    document.getElementById('strategy-notes').style.display = 'none';
+    document.getElementById('results-section').style.display = 'none';
+    document.getElementById('btn-export').style.display     = 'none';
+  }
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+</script>
+</body>
+</html>

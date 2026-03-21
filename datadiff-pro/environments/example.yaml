@@ -1,0 +1,121 @@
+# =============================================================================
+# DataDiff Pro — Environment / Rules Configuration
+# =============================================================================
+#
+# Paste the contents of this file (or a customised version) into the
+# "Environment / Rules" panel in the UI before clicking Compare.
+#
+# There are three sections, all optional:
+#   1. equivalence_rules  — groups of values that should be treated as equal
+#   2. list_keys          — key fields used to pair items in lists of objects
+#   3. field_mapper       — field renames (same as the Field Mapper panel)
+#
+# You only need to include the sections relevant to your comparison.
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# 1. EQUIVALENCE RULES
+# -----------------------------------------------------------------------------
+# Each entry is a list of values that should all be considered equal to each
+# other.  When the diff engine sees two values from the same group it marks
+# the record as EQUIVALENT instead of MISMATCH.
+#
+# Built-in rules (always active, no need to repeat them here):
+#   - null / none / na / n/a / nil / undefined / ""  → all equivalent
+#   - true  / 1 / yes / y / on                       → all equivalent
+#   - false / 0 / no  / n / off                      → all equivalent
+#   - numeric strings with the same numeric value     → always equivalent
+#     e.g. "1.0" == 1 == "1.00"
+#
+# Add your own groups below.  Comparison is case-insensitive.
+# -----------------------------------------------------------------------------
+
+equivalence_rules:
+
+  # Status codes that mean "not yet started" in your system
+  - [pending, not_started, queued, INIT]
+
+  # Status codes that mean "currently running"
+  - [in_progress, processing, running, active, ACTIVE]
+
+  # Status codes that mean "finished successfully"
+  - [completed, done, success, CLOSED, finished]
+
+  # Currency aliases
+  - [USD, usd, "US Dollar", "U.S. Dollar"]
+
+  # Country code variants
+  - [US, USA, "United States", "United States of America"]
+
+  # Date sentinel values (both mean "no date set")
+  - ["0001-01-01", "1900-01-01", "N/A", ""]
+
+  # Boolean-like strings beyond the built-ins
+  - [enabled, enable, true, "1"]
+  - [disabled, disable, false, "0"]
+
+
+# -----------------------------------------------------------------------------
+# 2. LIST KEYS
+# -----------------------------------------------------------------------------
+# When comparing two lists of objects DataDiff Pro needs to know WHICH item
+# on the left matches WHICH item on the right.
+#
+# Format:
+#   list_keys:
+#     <list_field_name>: [<key_field>, ...]   # one or more key fields
+#
+# The <list_field_name> is the name of the field that holds the list in your
+# data (case-insensitive).  Use dot notation if the list is nested:
+#   e.g.  policy.nominees  →  write "nominees" (just the last segment)
+#         NOTE: currently matched on the last path segment only.
+#
+# Single key example  — accountId uniquely identifies each account:
+#   accounts: [accountId]
+#
+# Composite key example — no single field is unique, but the combination of
+# nomineeName + percent is:
+#   nominees: [nomineeName, percent]
+#
+# If you do NOT specify a key here DataDiff Pro will try to auto-detect one.
+# If auto-detection also fails it falls back to index-based pairing.
+# The strategy used is shown in the results panel so you always know.
+# -----------------------------------------------------------------------------
+
+list_keys:
+
+  # Insurance / financial domain examples
+  nominees:   [nomineeName, relationship]   # composite key
+  accounts:   [accountId]                   # single key
+  policies:   [policyNumber]
+  funds:      [fundCode, fundName]          # composite — fundCode alone may not be unique
+  riders:     [riderCode]
+  charges:    [chargeType, chargeCode]
+
+  # Generic examples
+  items:      [id]
+  products:   [sku]
+  employees:  [employeeId]
+  addresses:  [addressType]                 # e.g. HOME, WORK — one per person
+
+
+# -----------------------------------------------------------------------------
+# 3. FIELD MAPPER  (alternative to the UI panel)
+# -----------------------------------------------------------------------------
+# You can also embed field mappings here instead of using the Field Mapper
+# panel in the UI.  This is useful when you want to save a complete
+# "comparison recipe" as a single YAML file.
+#
+# Format: exactly the same CSV-style lines as the Field Mapper panel.
+#   source_path,target_path
+#
+# NOTE: if you also fill in the Field Mapper panel in the UI, the UI panel
+# takes precedence and this section is ignored.
+# -----------------------------------------------------------------------------
+
+# field_mapper: |
+#   banks,BankData
+#   nominee.nomineeName,nominee.name
+#   policy.policyNo,policy.policyNumber
+#   user.address.city,person.location.city

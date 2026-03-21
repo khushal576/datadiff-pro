@@ -1,0 +1,37 @@
+# =============================================================================
+# DataDiff Pro — docker-compose.yml
+# =============================================================================
+# Usage:
+#   Start:   docker-compose up --build
+#   Stop:    docker-compose down
+#   Logs:    docker-compose logs -f
+#
+# Open in browser: http://localhost:8080
+# =============================================================================
+
+version: "3.9"
+
+services:
+  datadiff-pro:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    # Map host port 8080 → container port 8080.
+    # To use a different host port (e.g. 9090), change the left side:
+    #   ports: ["9090:8080"]
+    ports:
+      - "8089:8080"
+
+    # Restart the container automatically if it crashes.
+    restart: unless-stopped
+
+    # Environment variables available inside the container.
+    # Add any future config here (e.g. LOG_LEVEL, MAX_PAYLOAD_MB).
+    environment:
+      - PYTHONUNBUFFERED=1
+
+    # Optional: mount the ui/ folder so you can edit the frontend
+    # without rebuilding the image.  Uncomment during development:
+    # volumes:
+    #   - ./ui:/app/ui:ro
