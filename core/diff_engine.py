@@ -35,6 +35,7 @@ from typing import Any
 
 from core.equivalence import EquivalenceEngine
 from core.list_resolver import ListResolver
+from core.deep_expander import deep_expand
 
 
 # ---------------------------------------------------------------------------
@@ -84,15 +85,24 @@ class DiffEngine:
         Used to decide if two non-equal values should be EQUIVALENT.
     list_resolver : ListResolver
         Used to pair items inside lists of objects.
+    deep_mode : bool
+        When True enables two extra behaviours during comparison:
+        1. String values are attempted to be parsed as JSON or XML on-the-fly
+           before comparing (handles any depth of nested stringified data).
+        2. A single-item list is automatically unwrapped and compared against
+           a plain object/scalar on the other side, instead of recording an
+           immediate MISMATCH.
     """
 
     def __init__(
         self,
         equivalence_engine: EquivalenceEngine,
         list_resolver: ListResolver,
+        deep_mode: bool = False,
     ) -> None:
         self._eq = equivalence_engine
         self._lr = list_resolver
+        self._deep = deep_mode
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -123,7 +133,43 @@ class DiffEngine:
         """
         Dispatch to the right comparison handler based on the types of
         *left* and *right*.
+
+        In deep mode, two extra resolution steps fire before the normal type
+        dispatch:
+
+        Step D1 — inline string expansion
+            If either side is a string that looks like JSON or XML it is parsed
+            in-place before comparison.  This handles any depth of nested
+            stringified data that was not caught by the pre-processing pass
+            (e.g. a string produced by a list-item merge, or a field that was
+            not a string at the top level but became one after an earlier
+            normalisation step).
+
+        Step D2 — single-item list ↔ object / scalar unwrapping
+            If one side is a list containing exactly one element and the other
+            side is NOT a list, the single element is unwrapped and the
+            comparison recurses.  This handles the common case where an XML
+            normaliser produces ``[{…}]`` for a tag that appears only once
+            while the equivalent JSON has a plain ``{…}``.
         """
+        # ── Deep mode pre-processing ──────────────────────────────────────
+        if self._deep:
+            # D1: expand any string values to JSON/XML in-place
+            if isinstance(left, str):
+                left = deep_expand(left)
+            if isinstance(right, str):
+                right = deep_expand(right)
+
+            # D2: unwrap single-item list when comparing against non-list
+            if isinstance(left, list) and len(left) == 1 and not isinstance(right, list):
+                self._compare_values(left[0], right, path, result)
+                return
+            if isinstance(right, list) and len(right) == 1 and not isinstance(left, list):
+                self._compare_values(left, right[0], path, result)
+                return
+
+        # ── Normal type dispatch ──────────────────────────────────────────
+
         # Both are dicts → recurse key by key
         if isinstance(left, dict) and isinstance(right, dict):
             self._compare_dicts(left, right, path, result)

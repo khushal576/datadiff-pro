@@ -33,6 +33,7 @@ from core.mapper import parse_mapping, apply_mapping
 from core.equivalence import EquivalenceEngine
 from core.list_resolver import ListResolver
 from core.diff_engine import DiffEngine, DiffRecord, DiffResult
+from core.deep_expander import deep_expand
 
 # ---------------------------------------------------------------------------
 # App setup
@@ -72,7 +73,23 @@ class CompareRequest(BaseModel):
         default=None,
         description=(
             "Optional field mapping in CSV format: source_path,target_path "
-            "(one per line). Applied to the LEFT side before diffing."
+            "(one per line). Applied to the side specified by mapper_direction."
+        ),
+    )
+    mapper_direction: str = Field(
+        default="left_to_right",
+        description=(
+            "Direction the mapper is applied: "
+            "'left_to_right' renames LEFT fields to match RIGHT (default), "
+            "'right_to_left' renames RIGHT fields to match LEFT."
+        ),
+    )
+    deep_mode: bool = Field(
+        default=False,
+        description=(
+            "When True, recursively scan all string-valued fields on both sides "
+            "and attempt to parse them as JSON or XML before diffing. "
+            "Useful when structured data is stored as escaped strings."
         ),
     )
     environment_yaml: Optional[str] = Field(
@@ -148,14 +165,33 @@ async def compare(req: CompareRequest) -> JSONResponse:
         return _error(f"Right side — {right_err}")
 
     # ------------------------------------------------------------------
-    # Step 3 — Apply field mapping to the LEFT side (optional)
+    # Step 3 — Apply field mapping (optional)
+    # Direction: left_to_right → rename LEFT fields to match RIGHT (default)
+    #            right_to_left → rename RIGHT fields to match LEFT
     # ------------------------------------------------------------------
+    direction = (req.mapper_direction or "left_to_right").strip().lower()
+    if direction not in ("left_to_right", "right_to_left"):
+        return _error(
+            f"Invalid mapper_direction '{req.mapper_direction}'. "
+            f"Use 'left_to_right' or 'right_to_left'."
+        )
+
     if req.mapper_csv and req.mapper_csv.strip():
         mapping_pairs, map_err = parse_mapping(req.mapper_csv)
         if map_err:
             return _error(f"Field mapper — {map_err}")
         if mapping_pairs:
-            left_data = apply_mapping(left_data, mapping_pairs)
+            if direction == "left_to_right":
+                left_data = apply_mapping(left_data, mapping_pairs)
+            else:  # right_to_left
+                right_data = apply_mapping(right_data, mapping_pairs)
+
+    # ------------------------------------------------------------------
+    # Step 3b — Deep Mode: expand string-encoded JSON/XML values (optional)
+    # ------------------------------------------------------------------
+    if req.deep_mode:
+        left_data  = deep_expand(left_data)
+        right_data = deep_expand(right_data)
 
     # ------------------------------------------------------------------
     # Step 4 — Build engines from environment YAML
@@ -174,7 +210,7 @@ async def compare(req: CompareRequest) -> JSONResponse:
     # ------------------------------------------------------------------
     # Step 5 — Run the diff
     # ------------------------------------------------------------------
-    engine = DiffEngine(eq_engine, list_resolver)
+    engine = DiffEngine(eq_engine, list_resolver, deep_mode=req.deep_mode)
     try:
         diff_result: DiffResult = engine.compare(left_data, right_data)
     except Exception as exc:
@@ -194,7 +230,9 @@ async def compare(req: CompareRequest) -> JSONResponse:
         "meta": {
             "left_format":  req.left_format,
             "right_format": req.right_format,
-            "mapping_applied": bool(req.mapper_csv and req.mapper_csv.strip()),
+            "mapping_applied":   bool(req.mapper_csv and req.mapper_csv.strip()),
+            "mapper_direction":  direction,
+            "deep_mode":         req.deep_mode,
             "environment_applied": bool(yaml_text.strip()),
         },
     })

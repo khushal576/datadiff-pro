@@ -175,13 +175,13 @@ def _collect_list_tag_names(obj: Any, result: set) -> None:
     Two cases are detected:
     a) A key whose value is already a list — multiple sibling occurrences in
        the document; xmltodict already made it a list.
-    b) A single-key wrapper dict whose sole child value is a dict (not a
-       scalar).  E.g. ``{"users": {"user": {…}}}`` → add ``"user"`` to
-       force_list so it becomes ``[{…}]`` instead of a bare dict.  This
-       handles the case where only one item exists in a repeating collection.
-       Safety guard: the child value must be a dict (dicts are records/objects);
-       if the child value were a string/number it would be a plain field, not
-       a list-item container.
+    b) A single-key wrapper dict whose sole child value is a dict, AND the
+       parent key name looks like a collection wrapper for the child key
+       (e.g. ``purchases`` → ``purchase``, ``employees`` → ``employee``).
+       This handles single-item repeating collections consistently with the
+       multi-item case, while NOT incorrectly flagging structural nesting
+       like ``<c><d>…</d></c>`` where ``c`` and ``d`` have no plural
+       relationship.
     """
     if isinstance(obj, dict):
         for k, v in obj.items():
@@ -200,13 +200,45 @@ def _collect_list_tag_names(obj: Any, result: set) -> None:
                     not child_key.startswith("@")
                     and child_key != "#text"
                     and isinstance(child_val, dict)
+                    and _is_collection_of(k, child_key)
                 ):
-                    # child is an object (record) — treat parent as container
+                    # Parent looks like a plural/collection wrapper for child
                     result.add(child_key)
             _collect_list_tag_names(v, result)
     elif isinstance(obj, list):
         for item in obj:
             _collect_list_tag_names(item, result)
+
+
+def _is_collection_of(parent: str, child: str) -> bool:
+    """
+    Return True when *parent* looks like a collection/plural wrapper for *child*.
+
+    Handles common English plural patterns:
+        purchases   → purchase   (+s)
+        employees   → employee   (+s)
+        orders      → order      (+s)
+        entries     → entry      (y → ies)
+        boxes       → box        (+es, approximate)
+        userList    → user       (List / Array / Items / Set / Collection suffix)
+
+    Does NOT match arbitrary structural nesting like c → d or root → data.
+    """
+    p, c = parent.lower(), child.lower()
+    return (
+        p == c + "s"                                   # purchase → purchases
+        or p == c + "es"                               # box → boxes (approx)
+        or (c.endswith("y") and p == c[:-1] + "ies")  # entry → entries
+        or p == c + "list"
+        or p == c + "_list"
+        or p == c + "array"
+        or p == c + "_array"
+        or p == c + "items"
+        or p == c + "_items"
+        or p == c + "set"
+        or p == c + "collection"
+        or p.endswith(("list", "array", "items", "set", "collection"))
+    )
 
 
 def _unwrap_xml_lists(obj: Any, _depth: int = 0) -> Any:

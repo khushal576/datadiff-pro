@@ -386,11 +386,20 @@ Example:
     <span style="font-weight:400; font-size:0.78rem; margin-left:4px;">(optional — rename fields before diffing)</span>
   </div>
   <div class="collapsible-body" id="body-mapper">
-    <p class="hint">
-      One mapping per line: <code>source_path,target_path</code><br>
-      Dot notation for nested fields: <code>user.address.city,person.location.city</code><br>
-      Applied to the <strong>left</strong> side. Lines starting with <code>#</code> are ignored.
-    </p>
+    <div style="display:flex; align-items:center; gap:16px; margin-bottom:8px;">
+      <p class="hint" style="margin-bottom:0; flex:1;">
+        One mapping per line: <code>source_path,target_path</code><br>
+        Dot notation for nested fields: <code>user.address.city,person.location.city</code><br>
+        Lines starting with <code>#</code> are ignored.
+      </p>
+      <div style="display:flex; flex-direction:column; gap:4px; flex-shrink:0;">
+        <label style="text-transform:none; letter-spacing:0; font-size:0.78rem; font-weight:600; color:var(--muted);">Apply direction</label>
+        <select id="mapper-direction" style="font-size:0.82rem;">
+          <option value="left_to_right">Left → Right (rename left to match right)</option>
+          <option value="right_to_left">Right → Left (rename right to match left)</option>
+        </select>
+      </div>
+    </div>
     <textarea id="mapper-csv" placeholder="# Example:
 banks,BankData
 nominee.nomineeName,nominee.name
@@ -420,12 +429,19 @@ list_keys:
 </div>
 
 <!-- ── Actions ─────────────────────────────────────────────────────────── -->
-<div class="actions">
-  <button id="btn-compare">
-    <span id="spinner"></span>
-    Compare
-  </button>
-  <button id="btn-export">⬇ Export JSON</button>
+<div class="actions" style="flex-direction:column; align-items:center; gap:10px;">
+  <div style="display:flex; align-items:center; gap:16px;">
+    <button id="btn-compare">
+      <span id="spinner"></span>
+      Compare
+    </button>
+    <button id="btn-export">⬇ Export JSON</button>
+  </div>
+  <label style="display:flex; align-items:center; gap:8px; font-size:0.82rem; font-weight:500; color:var(--muted); text-transform:none; letter-spacing:0; cursor:pointer;"
+         title="Recursively parse any string-valued fields that contain JSON or XML into real objects before diffing. Useful when data has fields stored as escaped JSON/XML strings.">
+    <input type="checkbox" id="deep-mode" style="accent-color:var(--accent); cursor:pointer; width:15px; height:15px;">
+    Deep Mode — expand string-encoded JSON / XML values before comparing
+  </label>
 </div>
 
 <!-- ── Error banner ────────────────────────────────────────────────────── -->
@@ -504,8 +520,10 @@ list_keys:
       right_data:       document.getElementById('right-data').value,
       left_format:      document.getElementById('left-format').value,
       right_format:     document.getElementById('right-format').value,
-      mapper_csv:       document.getElementById('mapper-csv').value || null,
-      environment_yaml: document.getElementById('env-yaml').value   || null,
+      mapper_csv:       document.getElementById('mapper-csv').value       || null,
+      mapper_direction: document.getElementById('mapper-direction').value,
+      deep_mode:        document.getElementById('deep-mode').checked,
+      environment_yaml: document.getElementById('env-yaml').value         || null,
     };
 
     // UI: loading state
@@ -552,12 +570,23 @@ list_keys:
     document.getElementById('count-extra').textContent    = (s.EXTRA_LEFT || 0) + (s.EXTRA_RIGHT || 0);
     document.getElementById('summary-bar').style.display  = 'flex';
 
-    // List strategy notes
+    // List strategy notes + deep mode indicator
     const notesEl = document.getElementById('strategy-notes');
+    const parts = [];
+    if (data.meta && data.meta.deep_mode) {
+      parts.push('<span>Deep Mode active</span> — string-encoded JSON/XML fields were expanded before diffing');
+    }
+    if (data.meta && data.meta.mapping_applied) {
+      const dir = data.meta.mapper_direction === 'right_to_left'
+        ? 'Right → Left' : 'Left → Right';
+      parts.push(`<span>Mapping applied</span> (${dir})`);
+    }
     if (data.list_strategies && data.list_strategies.length > 0) {
-      notesEl.innerHTML =
-        '<span>List key strategies used:</span> ' +
-        data.list_strategies.map(s => escHtml(s)).join(' &nbsp;·&nbsp; ');
+      parts.push('<span>List key strategies:</span> ' +
+        data.list_strategies.map(s => escHtml(s)).join(' · '));
+    }
+    if (parts.length > 0) {
+      notesEl.innerHTML = parts.join(' &nbsp;|&nbsp; ');
       notesEl.style.display = 'block';
     } else {
       notesEl.style.display = 'none';
