@@ -49,6 +49,17 @@ class DiffRecord:
     left_value: Any         # raw value from the left side  (None if EXTRA_RIGHT)
     right_value: Any        # raw value from the right side (None if EXTRA_LEFT)
     status: str             # MATCH | MISMATCH | EQUIVALENT | EXTRA_LEFT | EXTRA_RIGHT
+    # Optional traceability metadata — None for simple cases.
+    # Keys present depend on what caused the status:
+    #   equivalence_rule : str — which rule made two different values EQUIVALENT
+    #                            e.g. "numeric_tolerance" | "group:null-likes"
+    #   type_mismatch    : str — human-readable type difference for MISMATCH
+    #                            e.g. "dict vs str"
+    #   list_strategy    : str — how the containing list was paired
+    #                            e.g. "auto-detected key (id)"
+    #   list_key_values  : dict — key field values used to pair this item
+    #                            e.g. {"accountId": "ACC001"}
+    trace: dict | None = None
 
 
 @dataclass
@@ -129,6 +140,7 @@ class DiffEngine:
         right: Any,
         path: str,
         result: DiffResult,
+        _list_trace: dict | None = None,
     ) -> None:
         """
         Dispatch to the right comparison handler based on the types of
@@ -162,17 +174,17 @@ class DiffEngine:
 
             # D2: unwrap single-item list when comparing against non-list
             if isinstance(left, list) and len(left) == 1 and not isinstance(right, list):
-                self._compare_values(left[0], right, path, result)
+                self._compare_values(left[0], right, path, result, _list_trace)
                 return
             if isinstance(right, list) and len(right) == 1 and not isinstance(left, list):
-                self._compare_values(left, right[0], path, result)
+                self._compare_values(left, right[0], path, result, _list_trace)
                 return
 
         # ── Normal type dispatch ──────────────────────────────────────────
 
         # Both are dicts → recurse key by key
         if isinstance(left, dict) and isinstance(right, dict):
-            self._compare_dicts(left, right, path, result)
+            self._compare_dicts(left, right, path, result, _list_trace)
             return
 
         # Both are lists → use ListResolver then recurse
@@ -186,18 +198,24 @@ class DiffEngine:
             # Special case: if both could be reasonably compared as scalars
             # (e.g. int vs float vs str-number) let the equivalence engine decide.
             if not isinstance(left, (dict, list)) and not isinstance(right, (dict, list)):
-                self._compare_scalars(left, right, path, result)
+                self._compare_scalars(left, right, path, result, _list_trace)
             else:
                 result.records.append(DiffRecord(
                     path=path or "(root)",
                     left_value=_serialisable(left),
                     right_value=_serialisable(right),
                     status="MISMATCH",
+                    trace={
+                        "type_mismatch": f"{type(left).__name__} vs {type(right).__name__}",
+                        **({"list_strategy": _list_trace["list_strategy"],
+                            "list_key_values": _list_trace.get("list_key_values")}
+                           if _list_trace else {}),
+                    },
                 ))
             return
 
         # Both are scalars
-        self._compare_scalars(left, right, path, result)
+        self._compare_scalars(left, right, path, result, _list_trace)
 
     def _compare_dicts(
         self,
@@ -205,6 +223,7 @@ class DiffEngine:
         right: dict,
         path: str,
         result: DiffResult,
+        _list_trace: dict | None = None,
     ) -> None:
         """Compare two dicts key by key."""
         all_keys = _ordered_union(left.keys(), right.keys())
@@ -215,8 +234,10 @@ class DiffEngine:
             in_right = key in right
 
             if in_left and in_right:
-                # Key exists on both sides — recurse
-                self._compare_values(left[key], right[key], child_path, result)
+                # Key exists on both sides — recurse; pass list trace only to
+                # the first level of children so it explains HOW the items were
+                # paired, not every field within them.
+                self._compare_values(left[key], right[key], child_path, result, _list_trace)
 
             elif in_left:
                 # Only on the left
@@ -225,6 +246,7 @@ class DiffEngine:
                     left_value=_serialisable(left[key]),
                     right_value=None,
                     status="EXTRA_LEFT",
+                    trace=_list_trace,
                 ))
 
             else:
@@ -234,6 +256,7 @@ class DiffEngine:
                     left_value=None,
                     right_value=_serialisable(right[key]),
                     status="EXTRA_RIGHT",
+                    trace=_list_trace,
                 ))
 
     def _compare_lists(
@@ -261,6 +284,16 @@ class DiffEngine:
             item_label = _item_label(left_item, right_item, resolved.key_fields)
             item_path = f"{path}[{item_label}]"
 
+            # Build trace data for this pair so child records know HOW the
+            # items were paired (which strategy and which key values matched).
+            item_trace: dict = {"list_strategy": resolved.strategy_used}
+            if resolved.key_fields:
+                ref_item = left_item if left_item is not None else right_item
+                if isinstance(ref_item, dict):
+                    item_trace["list_key_values"] = {
+                        f: ref_item.get(f) for f in resolved.key_fields
+                    }
+
             if left_item is None:
                 # Item only exists on the right
                 result.records.append(DiffRecord(
@@ -268,6 +301,7 @@ class DiffEngine:
                     left_value=None,
                     right_value=_serialisable(right_item),
                     status="EXTRA_RIGHT",
+                    trace=item_trace,
                 ))
             elif right_item is None:
                 # Item only exists on the left
@@ -276,10 +310,12 @@ class DiffEngine:
                     left_value=_serialisable(left_item),
                     right_value=None,
                     status="EXTRA_LEFT",
+                    trace=item_trace,
                 ))
             else:
-                # Both present — recurse
-                self._compare_values(left_item, right_item, item_path, result)
+                # Both present — recurse, threading the list trace so direct
+                # children know which pairing strategy placed them together.
+                self._compare_values(left_item, right_item, item_path, result, item_trace)
 
     def _compare_scalars(
         self,
@@ -287,6 +323,7 @@ class DiffEngine:
         right: Any,
         path: str,
         result: DiffResult,
+        _list_trace: dict | None = None,
     ) -> None:
         """Compare two scalar values and record the appropriate status."""
         record_path = path or "(root)"
@@ -298,16 +335,22 @@ class DiffEngine:
                 left_value=left,
                 right_value=right,
                 status="MATCH",
+                trace=_list_trace,
             ))
             return
 
         # Equivalence check (null="", true=1, custom rules, numeric tolerance)
-        if self._eq.are_equivalent(left, right):
+        rule = self._eq.explain_equivalence(left, right)
+        if rule is not None:
+            trace = {"equivalence_rule": rule}
+            if _list_trace:
+                trace.update(_list_trace)
             result.records.append(DiffRecord(
                 path=record_path,
                 left_value=left,
                 right_value=right,
                 status="EQUIVALENT",
+                trace=trace,
             ))
             return
 
@@ -317,6 +360,7 @@ class DiffEngine:
             left_value=left,
             right_value=right,
             status="MISMATCH",
+            trace=_list_trace,
         ))
 
 

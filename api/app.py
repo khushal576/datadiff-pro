@@ -29,11 +29,12 @@ from pydantic import BaseModel, Field
 
 # Core pipeline imports
 from core.normalizer import normalize
-from core.mapper import parse_mapping, apply_mapping
+from core.mapper import parse_mapping, apply_mapping, MapTrace
 from core.equivalence import EquivalenceEngine
 from core.list_resolver import ListResolver
 from core.diff_engine import DiffEngine, DiffRecord, DiffResult
 from core.deep_expander import deep_expand
+from core.validator import validate_transform, ValidationResult
 
 # ---------------------------------------------------------------------------
 # App setup
@@ -82,6 +83,21 @@ class CompareRequest(BaseModel):
             "Direction the mapper is applied: "
             "'left_to_right' renames LEFT fields to match RIGHT (default), "
             "'right_to_left' renames RIGHT fields to match LEFT."
+        ),
+    )
+    strict_mode: bool = Field(
+        default=False,
+        description=(
+            "When True, the mapper raises an error if a declared source path "
+            "is not found in the data instead of silently skipping it."
+        ),
+    )
+    multi_match_rule: str = Field(
+        default="keep_list",
+        description=(
+            "What to do when a mapping path resolves to multiple values "
+            "(e.g. a field inside a list): "
+            "'keep_list' (default) | 'flatten' | 'pick_first'."
         ),
     )
     deep_mode: bool = Field(
@@ -176,15 +192,49 @@ async def compare(req: CompareRequest) -> JSONResponse:
             f"Use 'left_to_right' or 'right_to_left'."
         )
 
+    map_traces: list[MapTrace] = []
+    validation: ValidationResult | None = None
+    mapping_pairs: list = []
+
     if req.mapper_csv and req.mapper_csv.strip():
         mapping_pairs, map_err = parse_mapping(req.mapper_csv)
         if map_err:
             return _error(f"Field mapper — {map_err}")
         if mapping_pairs:
-            if direction == "left_to_right":
-                left_data = apply_mapping(left_data, mapping_pairs)
-            else:  # right_to_left
-                right_data = apply_mapping(right_data, mapping_pairs)
+            try:
+                if direction == "left_to_right":
+                    original_snapshot = left_data
+                    left_data, map_traces = apply_mapping(
+                        left_data, mapping_pairs,
+                        strict_mode=req.strict_mode,
+                        multi_match_rule=req.multi_match_rule,
+                    )
+                    validation = validate_transform(
+                        original_snapshot, left_data,
+                        mapping_pairs, map_traces,
+                        strict_mode=req.strict_mode,
+                    )
+                else:  # right_to_left
+                    original_snapshot = right_data
+                    right_data, map_traces = apply_mapping(
+                        right_data, mapping_pairs,
+                        strict_mode=req.strict_mode,
+                        multi_match_rule=req.multi_match_rule,
+                    )
+                    validation = validate_transform(
+                        original_snapshot, right_data,
+                        mapping_pairs, map_traces,
+                        strict_mode=req.strict_mode,
+                    )
+            except ValueError as exc:
+                # Raised by apply_mapping when strict_mode=True and path missing
+                return _error(f"Field mapper (strict mode) — {exc}")
+
+            if validation and not validation.passed:
+                return _error(
+                    "Mapping validation failed:\n"
+                    + "\n".join(f"  • {e}" for e in validation.errors)
+                )
 
     # ------------------------------------------------------------------
     # Step 3b — Deep Mode: expand string-encoded JSON/XML values (optional)
@@ -222,16 +272,23 @@ async def compare(req: CompareRequest) -> JSONResponse:
     # ------------------------------------------------------------------
     # Step 6 — Build and return the response
     # ------------------------------------------------------------------
+    warnings = validation.warnings if validation else []
+
     return JSONResponse(content={
         "ok": True,
         "summary": diff_result.summary,
         "records": [_record_to_dict(r) for r in diff_result.records],
         "list_strategies": diff_result.list_strategies,
+        "map_traces": [_trace_to_dict(t) for t in map_traces],
+        "validation": _validation_to_dict(validation) if validation else None,
+        "warnings": warnings,
         "meta": {
             "left_format":  req.left_format,
             "right_format": req.right_format,
             "mapping_applied":   bool(req.mapper_csv and req.mapper_csv.strip()),
             "mapper_direction":  direction,
+            "strict_mode":       req.strict_mode,
+            "multi_match_rule":  req.multi_match_rule,
             "deep_mode":         req.deep_mode,
             "environment_applied": bool(yaml_text.strip()),
         },
@@ -252,11 +309,36 @@ def _error(message: str, status_code: int = 422) -> JSONResponse:
 
 def _record_to_dict(record: DiffRecord) -> dict:
     """Convert a DiffRecord dataclass to a plain dict for JSON serialisation."""
-    return {
+    d: dict = {
         "path":        record.path,
         "left_value":  record.left_value,
         "right_value": record.right_value,
         "status":      record.status,
+    }
+    if record.trace:
+        d["trace"] = record.trace
+    return d
+
+
+def _trace_to_dict(trace: MapTrace) -> dict:
+    """Convert a MapTrace dataclass to a plain dict for JSON serialisation."""
+    return {
+        "rule_index":          trace.rule_index,
+        "src_path":            trace.src_path,
+        "tgt_path":            trace.tgt_path,
+        "resolved_src_paths":  trace.resolved_src_paths,
+        "action":              trace.action,
+        "detail":              trace.detail,
+    }
+
+
+def _validation_to_dict(v: ValidationResult) -> dict:
+    """Convert a ValidationResult dataclass to a plain dict."""
+    return {
+        "passed":        v.passed,
+        "warnings":      v.warnings,
+        "errors":        v.errors,
+        "dropped_paths": v.dropped_paths,
     }
 
 

@@ -310,6 +310,39 @@
     /* null / undefined display */
     .null-val { color: var(--muted); font-style: italic; }
 
+    /* ── Warnings banner ──────────────────────────────────────────── */
+    #warnings-banner {
+      display: none;
+      background: rgba(180, 83, 9, 0.06);
+      border: 1px solid rgba(180, 83, 9, 0.3);
+      border-radius: 8px;
+      padding: 12px 16px;
+      color: #92400e;
+      font-size: 0.85rem;
+      white-space: pre-wrap;
+      line-height: 1.6;
+      margin-bottom: 14px;
+    }
+    #warnings-banner strong { display: block; margin-bottom: 4px; }
+
+    /* ── Trace cell ───────────────────────────────────────────────── */
+    td.trace-col {
+      font-size: 0.73rem;
+      color: var(--muted);
+      font-family: monospace;
+      max-width: 180px;
+      word-break: break-word;
+    }
+    td.trace-col .trace-tag {
+      display: inline-block;
+      background: rgba(79,94,240,0.08);
+      color: #4f5ef0;
+      border-radius: 3px;
+      padding: 1px 5px;
+      font-size: 0.7rem;
+      margin: 1px 1px 1px 0;
+    }
+
     /* Spinner */
     #spinner {
       display: none;
@@ -387,18 +420,34 @@ Example:
     <span style="font-weight:400; font-size:0.78rem; margin-left:4px;">(optional — rename fields before diffing)</span>
   </div>
   <div class="collapsible-body" id="body-mapper">
-    <div style="display:flex; align-items:center; gap:16px; margin-bottom:8px;">
-      <p class="hint" style="margin-bottom:0; flex:1;">
+    <div style="display:flex; align-items:flex-start; gap:16px; margin-bottom:8px; flex-wrap:wrap;">
+      <p class="hint" style="margin-bottom:0; flex:1; min-width:220px;">
         One mapping per line: <code>source_path,target_path</code><br>
         Dot notation for nested fields: <code>user.address.city,person.location.city</code><br>
         Lines starting with <code>#</code> are ignored.
       </p>
-      <div style="display:flex; flex-direction:column; gap:4px; flex-shrink:0;">
-        <label style="text-transform:none; letter-spacing:0; font-size:0.78rem; font-weight:600; color:var(--muted);">Apply direction</label>
-        <select id="mapper-direction" style="font-size:0.82rem;">
-          <option value="left_to_right">Left → Right (rename left to match right)</option>
-          <option value="right_to_left">Right → Left (rename right to match left)</option>
-        </select>
+      <div style="display:flex; flex-direction:column; gap:8px; flex-shrink:0;">
+        <div style="display:flex; flex-direction:column; gap:4px;">
+          <label style="text-transform:none; letter-spacing:0; font-size:0.78rem; font-weight:600; color:var(--muted);">Apply direction</label>
+          <select id="mapper-direction" style="font-size:0.82rem;">
+            <option value="left_to_right">Left → Right (rename left to match right)</option>
+            <option value="right_to_left">Right → Left (rename right to match left)</option>
+          </select>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:4px;">
+          <label style="text-transform:none; letter-spacing:0; font-size:0.78rem; font-weight:600; color:var(--muted);">Multi-match rule</label>
+          <select id="multi-match-rule" style="font-size:0.82rem;"
+                  title="What to do when a mapped path resolves to multiple values (e.g. inside a list).">
+            <option value="keep_list">Keep list — return all matches</option>
+            <option value="flatten">Flatten — expand list values individually</option>
+            <option value="pick_first">Pick first — use only the first match</option>
+          </select>
+        </div>
+        <label style="text-transform:none; letter-spacing:0; font-size:0.78rem; font-weight:500; color:var(--muted); cursor:pointer; display:flex; align-items:center; gap:6px;"
+               title="When enabled, the comparison fails if a declared mapping source path is not found in the data. Helpful to catch typos in your mapping rules.">
+          <input type="checkbox" id="strict-mode" style="accent-color:var(--accent); cursor:pointer;">
+          Strict Mode — fail on missing mapping paths
+        </label>
       </div>
     </div>
     <textarea id="mapper-csv" placeholder="# Example:
@@ -469,6 +518,9 @@ list_keys:
 <!-- ── List strategy notes ─────────────────────────────────────────────── -->
 <div id="strategy-notes"></div>
 
+<!-- ── Warnings banner ─────────────────────────────────────────────────── -->
+<div id="warnings-banner"></div>
+
 <!-- ── Results table ───────────────────────────────────────────────────── -->
 <div id="results-section">
   <div class="table-controls">
@@ -476,16 +528,18 @@ list_keys:
     <label><input type="checkbox" id="show-mismatch" checked> Mismatches</label>
     <label><input type="checkbox" id="show-equiv" checked> Equivalent</label>
     <label><input type="checkbox" id="show-extra" checked> Extra</label>
+    <label><input type="checkbox" id="show-trace"> Show Trace</label>
     <input type="text" id="filter-input" placeholder="Filter by path…" />
   </div>
   <div class="table-wrap">
     <table>
       <thead>
         <tr>
-          <th style="width:30%">Path</th>
-          <th style="width:28%; border-right:2px solid var(--border)">← Left Value</th>
-          <th style="width:28%">Right Value →</th>
-          <th style="width:14%">Status</th>
+          <th style="width:28%">Path</th>
+          <th style="width:25%; border-right:2px solid var(--border)">← Left Value</th>
+          <th style="width:25%">Right Value →</th>
+          <th style="width:11%">Status</th>
+          <th id="th-trace" style="width:11%; display:none;">Trace</th>
         </tr>
       </thead>
       <tbody id="results-body"></tbody>
@@ -525,6 +579,8 @@ list_keys:
       right_format:     document.getElementById('right-format').value,
       mapper_csv:       document.getElementById('mapper-csv').value       || null,
       mapper_direction: document.getElementById('mapper-direction').value,
+      strict_mode:      document.getElementById('strict-mode').checked,
+      multi_match_rule: document.getElementById('multi-match-rule').value,
       deep_mode:        document.getElementById('deep-mode').checked,
       environment_yaml: document.getElementById('env-yaml').value         || null,
     };
@@ -582,7 +638,8 @@ list_keys:
     if (data.meta && data.meta.mapping_applied) {
       const dir = data.meta.mapper_direction === 'right_to_left'
         ? 'Right → Left' : 'Left → Right';
-      parts.push(`<span>Mapping applied</span> (${dir})`);
+      const strictTag = data.meta.strict_mode ? ' · <span>Strict</span>' : '';
+      parts.push(`<span>Mapping applied</span> (${dir})${strictTag}`);
     }
     if (data.list_strategies && data.list_strategies.length > 0) {
       parts.push('<span>List key strategies:</span> ' +
@@ -593,6 +650,18 @@ list_keys:
       notesEl.style.display = 'block';
     } else {
       notesEl.style.display = 'none';
+    }
+
+    // Warnings banner
+    const warnEl = document.getElementById('warnings-banner');
+    const warnings = data.warnings || [];
+    if (warnings.length > 0) {
+      warnEl.innerHTML =
+        `<strong>⚠ Mapping Warnings (${warnings.length})</strong>` +
+        warnings.map(w => escHtml(w)).join('\n');
+      warnEl.style.display = 'block';
+    } else {
+      warnEl.style.display = 'none';
     }
 
     // Table rows
@@ -609,7 +678,11 @@ list_keys:
     const showMismatch = document.getElementById('show-mismatch').checked;
     const showEquiv    = document.getElementById('show-equiv').checked;
     const showExtra    = document.getElementById('show-extra').checked;
+    const showTrace    = document.getElementById('show-trace').checked;
     const filterText   = document.getElementById('filter-input').value.toLowerCase();
+
+    // Show/hide trace column header
+    document.getElementById('th-trace').style.display = showTrace ? '' : 'none';
 
     const tbody = document.getElementById('results-body');
     tbody.innerHTML = '';
@@ -634,11 +707,16 @@ list_keys:
       const depth = pathDepth(rec.path);
       const indent = depth > 0 ? `style="padding-left:${6 + depth * 14}px"` : '';
 
+      const traceCell = showTrace
+        ? `<td class="trace-col" style="display:table-cell">${formatTrace(rec.trace)}</td>`
+        : `<td class="trace-col" style="display:none"></td>`;
+
       tr.innerHTML =
         `<td class="path" ${indent}>${escHtml(rec.path)}</td>` +
         `<td class="value ${valueClass(status, 'left')}" style="border-right:1px solid var(--border)">${formatValue(rec.left_value, status, 'left')}</td>` +
         `<td class="value ${valueClass(status, 'right')}">${formatValue(rec.right_value, status, 'right')}</td>` +
-        `<td><span class="badge badge-${escHtml(status)}">${escHtml(status.replace(/_/g, ' '))}</span></td>`;
+        `<td><span class="badge badge-${escHtml(status)}">${escHtml(status.replace(/_/g, ' '))}</span></td>` +
+        traceCell;
 
       tbody.appendChild(tr);
       shown++;
@@ -646,10 +724,27 @@ list_keys:
 
     if (shown === 0) {
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td colspan="4" style="text-align:center; color:var(--muted); padding:24px;">
+      tr.innerHTML = `<td colspan="${showTrace ? 5 : 4}" style="text-align:center; color:var(--muted); padding:24px;">
         No records match the current filters.</td>`;
       tbody.appendChild(tr);
     }
+  }
+
+  function formatTrace(trace) {
+    if (!trace) return '—';
+    const tags = [];
+    if (trace.equivalence_rule)
+      tags.push(`<span class="trace-tag">≈ ${escHtml(trace.equivalence_rule)}</span>`);
+    if (trace.type_mismatch)
+      tags.push(`<span class="trace-tag">type: ${escHtml(trace.type_mismatch)}</span>`);
+    if (trace.list_strategy)
+      tags.push(`<span class="trace-tag">key: ${escHtml(trace.list_strategy)}</span>`);
+    if (trace.list_key_values) {
+      const kv = Object.entries(trace.list_key_values)
+        .map(([k, v]) => `${k}=${v}`).join(', ');
+      tags.push(`<span class="trace-tag">${escHtml(kv)}</span>`);
+    }
+    return tags.length ? tags.join(' ') : '—';
   }
 
   function rowClass(status) {
@@ -694,7 +789,7 @@ list_keys:
   }
 
   // ── Filter / toggle listeners ─────────────────────────────────────────
-  ['hide-match','show-mismatch','show-equiv','show-extra'].forEach(id => {
+  ['hide-match','show-mismatch','show-equiv','show-extra','show-trace'].forEach(id => {
     document.getElementById(id).addEventListener('change', () => {
       if (_lastResult) buildTable(_lastResult.records || []);
     });
@@ -721,9 +816,10 @@ list_keys:
   // ── Export CSV ───────────────────────────────────────────────────────
   document.getElementById('btn-export-csv').addEventListener('click', () => {
     if (!_lastResult) return;
-    const rows = [['Path', 'Left Value', 'Right Value', 'Status']];
+    const rows = [['Path', 'Left Value', 'Right Value', 'Status', 'Trace']];
     (_lastResult.records || []).forEach(r => {
-      rows.push([r.path, r.left_value ?? '', r.right_value ?? '', r.status]);
+      const traceStr = r.trace ? JSON.stringify(r.trace) : '';
+      rows.push([r.path, r.left_value ?? '', r.right_value ?? '', r.status, traceStr]);
     });
     const csv = rows.map(row =>
       row.map(cell => {
@@ -743,13 +839,14 @@ list_keys:
   // ── Export Excel ─────────────────────────────────────────────────────
   document.getElementById('btn-export-excel').addEventListener('click', () => {
     if (!_lastResult) return;
-    const rows = [['Path', 'Left Value', 'Right Value', 'Status']];
+    const rows = [['Path', 'Left Value', 'Right Value', 'Status', 'Trace']];
     (_lastResult.records || []).forEach(r => {
-      rows.push([r.path, r.left_value ?? '', r.right_value ?? '', r.status]);
+      const traceStr = r.trace ? JSON.stringify(r.trace) : '';
+      rows.push([r.path, r.left_value ?? '', r.right_value ?? '', r.status, traceStr]);
     });
     const ws = XLSX.utils.aoa_to_sheet(rows);
     // Column widths
-    ws['!cols'] = [{ wch: 50 }, { wch: 30 }, { wch: 30 }, { wch: 14 }];
+    ws['!cols'] = [{ wch: 50 }, { wch: 30 }, { wch: 30 }, { wch: 14 }, { wch: 30 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'DataDiff Report');
     XLSX.writeFile(wb, 'datadiff-report.xlsx');
@@ -767,6 +864,7 @@ list_keys:
   function hideResults() {
     document.getElementById('summary-bar').style.display    = 'none';
     document.getElementById('strategy-notes').style.display = 'none';
+    document.getElementById('warnings-banner').style.display = 'none';
     document.getElementById('results-section').style.display = 'none';
     document.getElementById('btn-export').style.display       = 'none';
     document.getElementById('btn-export-csv').style.display   = 'none';

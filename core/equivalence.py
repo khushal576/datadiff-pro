@@ -75,6 +75,40 @@ class EquivalenceEngine:
     # Public method
     # ------------------------------------------------------------------
 
+    def explain_equivalence(self, a: Any, b: Any) -> str | None:
+        """
+        Return a short human-readable string explaining WHY *a* and *b* are
+        equivalent, or None if they are not equivalent.
+
+        Used by diff_engine.py to populate the ``trace`` field on EQUIVALENT
+        DiffRecord entries.
+
+        Examples
+        --------
+        "numeric_tolerance"
+        "group:null-likes"
+        "group:bool-true"
+        "group:bool-false"
+        "group:custom-0"   (first custom equivalence group)
+        """
+        if self._numeric_equivalent(a, b):
+            return "numeric_tolerance"
+
+        norm_a = self._normalise(a)
+        norm_b = self._normalise(b)
+        if norm_a is None or norm_b is None:
+            return None
+        idx_a = self._lookup.get(norm_a)
+        idx_b = self._lookup.get(norm_b)
+        if idx_a is None or idx_b is None or idx_a != idx_b:
+            return None
+
+        # Name the group
+        builtin_names = ["null-likes", "bool-true", "bool-false"]
+        if idx_a < len(builtin_names):
+            return f"group:{builtin_names[idx_a]}"
+        return f"group:custom-{idx_a - len(builtin_names)}"
+
     def are_equivalent(self, a: Any, b: Any) -> bool:
         """
         Return True if *a* and *b* are equivalent (but not strictly equal).
