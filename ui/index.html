@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>DataDiff Pro</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
     /* ── Reset & base ─────────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -156,13 +157,13 @@
     }
     #btn-compare:hover { opacity: 0.88; }
     #btn-compare:disabled { opacity: 0.45; cursor: not-allowed; }
-    #btn-export {
+    #btn-export, #btn-export-csv, #btn-export-excel {
       background: var(--surface);
       color: var(--text);
       border: 1px solid var(--border);
       display: none;
     }
-    #btn-export:hover { border-color: var(--accent); color: var(--accent); }
+    #btn-export:hover, #btn-export-csv:hover, #btn-export-excel:hover { border-color: var(--accent); color: var(--accent); }
 
     /* ── Error banner ─────────────────────────────────────────────── */
     #error-banner {
@@ -436,6 +437,8 @@ list_keys:
       Compare
     </button>
     <button id="btn-export">⬇ Export JSON</button>
+    <button id="btn-export-csv">⬇ Export CSV</button>
+    <button id="btn-export-excel">⬇ Export Excel</button>
   </div>
   <label style="display:flex; align-items:center; gap:8px; font-size:0.82rem; font-weight:500; color:var(--muted); text-transform:none; letter-spacing:0; cursor:pointer;"
          title="Recursively parse any string-valued fields that contain JSON or XML into real objects before diffing. Useful when data has fields stored as escaped JSON/XML strings.">
@@ -595,8 +598,10 @@ list_keys:
     // Table rows
     buildTable(data.records || []);
 
-    document.getElementById('results-section').style.display = 'block';
-    document.getElementById('btn-export').style.display      = 'inline-block';
+    document.getElementById('results-section').style.display  = 'block';
+    document.getElementById('btn-export').style.display       = 'inline-block';
+    document.getElementById('btn-export-csv').style.display   = 'inline-block';
+    document.getElementById('btn-export-excel').style.display = 'inline-block';
   }
 
   function buildTable(records) {
@@ -713,6 +718,43 @@ list_keys:
     URL.revokeObjectURL(url);
   });
 
+  // ── Export CSV ───────────────────────────────────────────────────────
+  document.getElementById('btn-export-csv').addEventListener('click', () => {
+    if (!_lastResult) return;
+    const rows = [['Path', 'Left Value', 'Right Value', 'Status']];
+    (_lastResult.records || []).forEach(r => {
+      rows.push([r.path, r.left_value ?? '', r.right_value ?? '', r.status]);
+    });
+    const csv = rows.map(row =>
+      row.map(cell => {
+        const s = String(cell).replace(/"/g, '""');
+        return /[",\n\r]/.test(s) ? `"${s}"` : s;
+      }).join(',')
+    ).join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = 'datadiff-report.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // ── Export Excel ─────────────────────────────────────────────────────
+  document.getElementById('btn-export-excel').addEventListener('click', () => {
+    if (!_lastResult) return;
+    const rows = [['Path', 'Left Value', 'Right Value', 'Status']];
+    (_lastResult.records || []).forEach(r => {
+      rows.push([r.path, r.left_value ?? '', r.right_value ?? '', r.status]);
+    });
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    // Column widths
+    ws['!cols'] = [{ wch: 50 }, { wch: 30 }, { wch: 30 }, { wch: 14 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'DataDiff Report');
+    XLSX.writeFile(wb, 'datadiff-report.xlsx');
+  });
+
   // ── Helpers ──────────────────────────────────────────────────────────
   function showError(msg) {
     const el = document.getElementById('error-banner');
@@ -726,7 +768,9 @@ list_keys:
     document.getElementById('summary-bar').style.display    = 'none';
     document.getElementById('strategy-notes').style.display = 'none';
     document.getElementById('results-section').style.display = 'none';
-    document.getElementById('btn-export').style.display     = 'none';
+    document.getElementById('btn-export').style.display       = 'none';
+    document.getElementById('btn-export-csv').style.display   = 'none';
+    document.getElementById('btn-export-excel').style.display = 'none';
   }
   function escHtml(str) {
     return String(str)
