@@ -262,6 +262,22 @@ def apply_mapping(
     if not pairs:
         return data, traces
 
+    # ── Top-level list: apply rules to each item individually ────────────
+    # When data is a list of objects the caller is passing records, not a
+    # single document.  Rules describe per-record field renames, so we map
+    # each item and merge the traces.
+    if isinstance(data, list):
+        result: list[Any] = []
+        for item in data:
+            mapped_item, item_traces = apply_mapping(
+                item, pairs,
+                strict_mode=strict_mode,
+                multi_match_rule=multi_match_rule,
+            )
+            result.append(mapped_item)
+            traces.extend(item_traces)
+        return result, traces
+
     # ── Pre-scan 1: find duplicate source paths ───────────────────────────
     # A source that appears in N rules will be MOVEd on the first occurrence
     # and COPYed (value retained) on all subsequent occurrences.
