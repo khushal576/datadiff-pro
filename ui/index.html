@@ -464,8 +464,30 @@ user.address.city,person.location.city"></textarea>
     <span style="font-weight:400; font-size:0.78rem; margin-left:4px;">(optional — equivalence rules &amp; list keys)</span>
   </div>
   <div class="collapsible-body" id="body-env">
+    <!-- Record key shortcut -->
+    <div style="display:flex; gap:12px; margin-bottom:10px; flex-wrap:wrap;">
+      <div style="flex:1; min-width:180px; display:flex; flex-direction:column; gap:4px;">
+        <label style="text-transform:none; letter-spacing:0; font-size:0.78rem; font-weight:600; color:var(--muted);">
+          Source Record Key <span style="font-weight:400;">(optional)</span>
+        </label>
+        <input type="text" id="source-record-key"
+               placeholder="e.g. user_id, id, sku"
+               style="font-size:0.85rem; padding:6px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--fg); width:100%; box-sizing:border-box;" />
+      </div>
+      <div style="flex:1; min-width:180px; display:flex; flex-direction:column; gap:4px;">
+        <label style="text-transform:none; letter-spacing:0; font-size:0.78rem; font-weight:600; color:var(--muted);">
+          Target Record Key <span style="font-weight:400;">(optional)</span>
+        </label>
+        <input type="text" id="target-record-key"
+               placeholder="e.g. uid, id, sku"
+               style="font-size:0.85rem; padding:6px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--fg); width:100%; box-sizing:border-box;" />
+      </div>
+    </div>
+    <p class="hint" style="margin-top:0; margin-bottom:10px;">
+      Field that uniquely identifies each record in a list. If source and target use different names, enter both — the rename rule is added to the field mapper automatically.
+    </p>
     <p class="hint">
-      Paste a YAML config. See the <code>environments/example.yaml</code> in the repo for the full format.
+      Advanced: paste a full YAML config below. See the <code>environments/example.yaml</code> in the repo for the full format.
     </p>
     <textarea id="env-yaml" placeholder="# Example:
 equivalence_rules:
@@ -572,17 +594,46 @@ list_keys:
     const spinner = document.getElementById('spinner');
 
     // Collect inputs
+    const srcKey    = document.getElementById('source-record-key').value.trim();
+    const tgtKey    = document.getElementById('target-record-key').value.trim();
+    let envYaml     = document.getElementById('env-yaml').value || '';
+    let mapperCsv   = document.getElementById('mapper-csv').value || '';
+
+    if (srcKey || tgtKey) {
+      // The post-mapping key name is the target key (or source key if only one given)
+      const resolvedKey = tgtKey || srcKey;
+
+      // Inject list_keys into YAML unless the user already wrote it manually
+      if (!envYaml.includes('list_keys:')) {
+        const keys    = resolvedKey.split(',').map(k => k.trim()).filter(Boolean);
+        const keyLine = `list_keys:\n  records: [${keys.join(', ')}]`;
+        envYaml = envYaml ? envYaml + '\n' + keyLine : keyLine;
+      }
+
+      // If keys differ, auto-add the rename rule to mapper_csv
+      if (srcKey && tgtKey && srcKey !== tgtKey) {
+        const srcKeys = srcKey.split(',').map(k => k.trim()).filter(Boolean);
+        const tgtKeys = tgtKey.split(',').map(k => k.trim()).filter(Boolean);
+        const newRules = srcKeys
+          .map((s, i) => `${s},${tgtKeys[i] || tgtKeys[0]}`)
+          .filter(rule => !mapperCsv.includes(rule));
+        if (newRules.length) {
+          mapperCsv = mapperCsv ? mapperCsv + '\n' + newRules.join('\n') : newRules.join('\n');
+        }
+      }
+    }
+
     const payload = {
       left_data:        document.getElementById('left-data').value,
       right_data:       document.getElementById('right-data').value,
       left_format:      document.getElementById('left-format').value,
       right_format:     document.getElementById('right-format').value,
-      mapper_csv:       document.getElementById('mapper-csv').value       || null,
+      mapper_csv:       mapperCsv   || null,
       mapper_direction: document.getElementById('mapper-direction').value,
       strict_mode:      document.getElementById('strict-mode').checked,
       multi_match_rule: document.getElementById('multi-match-rule').value,
       deep_mode:        document.getElementById('deep-mode').checked,
-      environment_yaml: document.getElementById('env-yaml').value         || null,
+      environment_yaml: envYaml     || null,
     };
 
     // UI: loading state
