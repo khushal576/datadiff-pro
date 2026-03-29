@@ -192,6 +192,14 @@ async def compare(req: CompareRequest) -> JSONResponse:
             f"Use 'left_to_right' or 'right_to_left'."
         )
 
+    # ------------------------------------------------------------------
+    # Step 3a — Deep Mode: expand string-encoded JSON/XML values BEFORE
+    # mapping so the mapper can navigate into expanded fields.
+    # ------------------------------------------------------------------
+    if req.deep_mode:
+        left_data  = deep_expand(left_data)
+        right_data = deep_expand(right_data)
+
     map_traces: list[MapTrace] = []
     validation: ValidationResult | None = None
     mapping_pairs: list = []
@@ -235,13 +243,6 @@ async def compare(req: CompareRequest) -> JSONResponse:
                     "Mapping validation failed:\n"
                     + "\n".join(f"  • {e}" for e in validation.errors)
                 )
-
-    # ------------------------------------------------------------------
-    # Step 3b — Deep Mode: expand string-encoded JSON/XML values (optional)
-    # ------------------------------------------------------------------
-    if req.deep_mode:
-        left_data  = deep_expand(left_data)
-        right_data = deep_expand(right_data)
 
     # ------------------------------------------------------------------
     # Step 4 — Build engines from environment YAML
