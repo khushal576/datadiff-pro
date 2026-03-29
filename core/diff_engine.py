@@ -110,10 +110,12 @@ class DiffEngine:
         equivalence_engine: EquivalenceEngine,
         list_resolver: ListResolver,
         deep_mode: bool = False,
+        null_missing_equivalent: bool = False,
     ) -> None:
         self._eq = equivalence_engine
         self._lr = list_resolver
         self._deep = deep_mode
+        self._null_missing_eq = null_missing_equivalent
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -241,23 +243,45 @@ class DiffEngine:
 
             elif in_left:
                 # Only on the left
-                result.records.append(DiffRecord(
-                    path=child_path,
-                    left_value=_serialisable(left[key]),
-                    right_value=None,
-                    status="EXTRA_LEFT",
-                    trace=_list_trace,
-                ))
+                left_val = left[key]
+                if self._null_missing_eq and _is_null_or_empty(left_val):
+                    _trace = {**((_list_trace or {})), "equivalence_rule": "null_or_empty_vs_missing"}
+                    result.records.append(DiffRecord(
+                        path=child_path,
+                        left_value=_serialisable(left_val),
+                        right_value=None,
+                        status="EQUIVALENT",
+                        trace=_trace,
+                    ))
+                else:
+                    result.records.append(DiffRecord(
+                        path=child_path,
+                        left_value=_serialisable(left_val),
+                        right_value=None,
+                        status="EXTRA_LEFT",
+                        trace=_list_trace,
+                    ))
 
             else:
                 # Only on the right
-                result.records.append(DiffRecord(
-                    path=child_path,
-                    left_value=None,
-                    right_value=_serialisable(right[key]),
-                    status="EXTRA_RIGHT",
-                    trace=_list_trace,
-                ))
+                right_val = right[key]
+                if self._null_missing_eq and _is_null_or_empty(right_val):
+                    _trace = {**((_list_trace or {})), "equivalence_rule": "null_or_empty_vs_missing"}
+                    result.records.append(DiffRecord(
+                        path=child_path,
+                        left_value=None,
+                        right_value=_serialisable(right_val),
+                        status="EQUIVALENT",
+                        trace=_trace,
+                    ))
+                else:
+                    result.records.append(DiffRecord(
+                        path=child_path,
+                        left_value=None,
+                        right_value=_serialisable(right_val),
+                        status="EXTRA_RIGHT",
+                        trace=_list_trace,
+                    ))
 
     def _compare_lists(
         self,
@@ -367,6 +391,15 @@ class DiffEngine:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _is_null_or_empty(v: Any) -> bool:
+    """Return True if *v* is None or an empty/whitespace-only string."""
+    if v is None:
+        return True
+    if isinstance(v, str) and v.strip() == "":
+        return True
+    return False
+
 
 def _ordered_union(keys_a: Any, keys_b: Any) -> list[str]:
     """

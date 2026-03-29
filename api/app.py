@@ -112,6 +112,14 @@ class CompareRequest(BaseModel):
         default=None,
         description="Optional YAML config with equivalence_rules and list_keys.",
     )
+    null_missing_equivalent: bool = Field(
+        default=False,
+        description=(
+            "When True, a field that is null or empty string on one side and "
+            "completely absent on the other is treated as EQUIVALENT instead of "
+            "EXTRA_LEFT / EXTRA_RIGHT."
+        ),
+    )
 
 
 class ErrorResponse(BaseModel):
@@ -261,7 +269,8 @@ async def compare(req: CompareRequest) -> JSONResponse:
     # ------------------------------------------------------------------
     # Step 5 — Run the diff
     # ------------------------------------------------------------------
-    engine = DiffEngine(eq_engine, list_resolver, deep_mode=req.deep_mode)
+    engine = DiffEngine(eq_engine, list_resolver, deep_mode=req.deep_mode,
+                        null_missing_equivalent=req.null_missing_equivalent)
     try:
         diff_result: DiffResult = engine.compare(left_data, right_data)
     except Exception as exc:
