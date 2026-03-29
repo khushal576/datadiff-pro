@@ -825,7 +825,8 @@ list_keys:
         tr.className = rowClass(status);
         tr.dataset.member = groupKey;
 
-        const depth = pathDepth(rec.path);
+        const fieldPath = stripGroupPrefix(rec.path, groupKey);
+        const depth = pathDepth(fieldPath);
         const indent = depth > 0 ? `style="padding-left:${6 + depth * 14}px"` : '';
 
         const traceCell = showTrace
@@ -833,7 +834,7 @@ list_keys:
           : `<td class="trace-col" style="display:none"></td>`;
 
         tr.innerHTML =
-          `<td class="path" ${indent}>${escHtml(rec.path)}</td>` +
+          `<td class="path" ${indent}>${escHtml(fieldPath)}</td>` +
           `<td class="value ${valueClass(status, 'left')}" style="border-right:1px solid var(--border)">${formatValue(rec.left_value, status, 'left')}</td>` +
           `<td class="value ${valueClass(status, 'right')}">${formatValue(rec.right_value, status, 'right')}</td>` +
           `<td><span class="badge badge-${escHtml(status)}">${escHtml(status.replace(/_/g, ' '))}</span></td>` +
@@ -900,6 +901,16 @@ list_keys:
       else if (ch === '.' && inBracket === 0) depth++;
     }
     return depth;
+  }
+
+  function stripGroupPrefix(path, groupKey) {
+    // Remove the record-group prefix from a path so data rows show only the
+    // field path.  e.g. "[uid=101].profile_info.name" → "profile_info.name"
+    if (groupKey === '(root)') return path;
+    if (path.startsWith(groupKey)) {
+      return path.slice(groupKey.length).replace(/^\./, '');
+    }
+    return path;
   }
 
   // ── Filter / toggle listeners ─────────────────────────────────────────
