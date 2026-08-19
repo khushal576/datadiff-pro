@@ -101,14 +101,41 @@ class ListResolver:
         *list_name* is the dot-notation path of the list (e.g. "nominees")
         used to look up environment keys.
         """
-        # Filter to only dict items; pass scalars through index-based
+        # Filter to only dict items; non-dict items are paired separately by
+        # index below so a mixed list never silently drops them.
         left_dicts  = [i for i in left_items  if isinstance(i, dict)]
         right_dicts = [i for i in right_items if isinstance(i, dict)]
+        left_scalars  = [i for i in left_items  if not isinstance(i, dict)]
+        right_scalars = [i for i in right_items if not isinstance(i, dict)]
 
         if not left_dicts and not right_dicts:
             # Both are scalar lists — pair by index
             return self._index_pair(left_items, right_items, "index (scalar list)")
 
+        dict_result = self._resolve_dict_items(list_name, left_dicts, right_dicts)
+
+        if not left_scalars and not right_scalars:
+            return dict_result
+
+        # Mixed list: pair the non-dict items by index too, so they always
+        # show up in the diff (MATCH / MISMATCH / EXTRA) instead of vanishing.
+        scalar_result = self._index_pair(left_scalars, right_scalars, "index (scalar items)")
+        strategy = dict_result.strategy_used
+        if scalar_result.pairs:
+            strategy = f"{strategy} + index (scalar items)" if strategy else "index (scalar items)"
+        return ResolvedPairs(
+            pairs=dict_result.pairs + scalar_result.pairs,
+            strategy_used=strategy,
+            key_fields=dict_result.key_fields,
+        )
+
+    def _resolve_dict_items(
+        self,
+        list_name: str,
+        left_dicts: list[dict],
+        right_dicts: list[dict],
+    ) -> ResolvedPairs:
+        """Pair dict-only items using the environment key / auto-detect / index strategies."""
         # Strategy 1 — environment-specified key
         env_key = self._env_keys.get(list_name.lower())
         if env_key:

@@ -681,9 +681,16 @@ def _apply_single(
         if not tgt_segs:
             return data
         value = data.pop(head_src)
-        # Use the *last* target segment so container-hint segments that have
-        # already been consumed as list-entry wrappers don't clobber the name.
-        data[tgt_segs[-1]] = value
+        # tgt_segs may still have more than one segment left here (when the
+        # target path is deeper than the source path, e.g. "a" -> "x.y").
+        # Walk/create every intermediate segment so the value lands at the
+        # full target path instead of just under its last segment.
+        node = data
+        for seg in tgt_segs[:-1]:
+            if not isinstance(node.get(seg), dict):
+                node[seg] = {}
+            node = node[seg]
+        node[tgt_segs[-1]] = value
         return data
 
     # ---- Intermediate segment rename + recurse ------------------------------
