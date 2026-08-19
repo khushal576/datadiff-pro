@@ -1,7 +1,9 @@
 # =============================================================================
-# DataDiff Pro — Dockerfile
+# Toolbox — Dockerfile
 # =============================================================================
-# Build:   docker build -t datadiff-pro .
+# One image, one container, one process: serves the home page (main.py) and
+# every tool mounted inside it (currently just DataDiff Pro).
+# Build:   docker build -t toolbox .
 # Run:     docker-compose up
 # =============================================================================
 
@@ -19,13 +21,25 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # --- Copy application code ---------------------------------------------------
+# DataDiff Pro (tool #1) — uses the un-namespaced "core"/"api" top-level
+# packages. Grandfathered as-is; any NEW tool must NOT reuse these two
+# names (see encode_decode/ below for the pattern new tools should follow:
+# each gets its own uniquely-named top-level package).
 COPY core/ ./core/
 COPY api/   ./api/
 COPY ui/    ./ui/
 COPY environments/ ./environments/
 
-# Create empty __init__.py files so Python treats core/ and api/ as packages.
-RUN touch core/__init__.py api/__init__.py
+# Encode/Decode (tool #2) — namespaced under its own package so it can
+# never collide with another tool's "core"/"api"/etc.
+COPY encode-decode/server.py ./encode_decode/server.py
+COPY encode-decode/ui/       ./encode_decode/ui/
+
+COPY main.py .
+COPY registry.yaml .
+
+# Create empty __init__.py files so Python treats these as packages.
+RUN touch core/__init__.py api/__init__.py encode_decode/__init__.py
 
 # --- Runtime config ----------------------------------------------------------
 # Tell Python not to write .pyc files and not to buffer stdout/stderr.
@@ -36,7 +50,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 EXPOSE 8080
 
-# Start the FastAPI app with uvicorn.
+# Start the toolbox app (main.py) with uvicorn — this is the one process
+# that serves the home page and every mounted tool.
 # --host 0.0.0.0  makes it reachable from outside the container.
 # --workers 2     handles two concurrent requests (plenty for a local tool).
-CMD ["uvicorn", "api.app:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "2"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "2"]

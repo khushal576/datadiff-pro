@@ -664,7 +664,7 @@ list_keys:
     hideResults();
 
     try {
-      const res  = await fetch('/compare', {
+      const res  = await fetch('compare', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify(payload),

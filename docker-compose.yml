@@ -1,27 +1,27 @@
 # =============================================================================
-# DataDiff Pro — docker-compose.yml
+# Toolbox — docker-compose.yml
 # =============================================================================
+# One service, one container: home page + every mounted tool (main.py).
+#
 # Usage:
-#   Start:   docker-compose up --build
+#   Start:   docker-compose up --build -d
 #   Stop:    docker-compose down
 #   Logs:    docker-compose logs -f
 #
-# Open in browser: http://localhost:8080
+# Open in browser: http://localhost:8000
+# (8080 is deliberately avoided as the host port — commonly taken by other
+# local services such as Jenkins.)
 # =============================================================================
 
-version: "3.9"
-
 services:
-  datadiff-pro:
+  toolbox:
     build:
       context: .
       dockerfile: Dockerfile
 
-    # Map host port 8080 → container port 8080.
-    # To use a different host port (e.g. 9090), change the left side:
-    #   ports: ["9090:8080"]
+    # Map host port 8000 → container port 8080.
     ports:
-      - "8089:8080"
+      - "8000:8080"
 
     # Restart the container automatically if it crashes.
     restart: unless-stopped

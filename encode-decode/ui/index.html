@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Encode / Decode</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f4f6fb; --surface: #ffffff; --border: #dde1ef;
+    --text: #1c2035; --muted: #6b7180; --accent: #4f5ef0;
+    --ok-bg: rgba(21,128,61,0.08); --ok-text: #15803d; --ok-border: rgba(21,128,61,0.3);
+    --err-bg: rgba(220,38,38,0.06); --err-text: #b91c1c; --err-border: rgba(220,38,38,0.3);
+  }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; padding: 24px 20px 60px;
+  }
+  header { max-width: 980px; margin: 0 auto 20px; }
+  header h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.5px; }
+  header h1 span { color: var(--accent); }
+  header p { color: var(--muted); font-size: 0.85rem; margin-top: 2px; }
+  .trust-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--ok-bg); color: var(--ok-text);
+    border: 1px solid var(--ok-border); border-radius: 20px;
+    padding: 5px 12px; font-size: 0.78rem; font-weight: 600; margin-top: 10px;
+  }
+
+  .wrap { max-width: 980px; margin: 0 auto; }
+
+  .tabs {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px;
+    border-bottom: 1px solid var(--border); padding-bottom: 0;
+  }
+  .tab-btn {
+    background: none; border: none; cursor: pointer;
+    padding: 10px 16px; font-size: 0.85rem; font-weight: 600;
+    color: var(--muted); border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 18px; margin-bottom: 16px;
+  }
+  .card h2 { font-size: 1rem; font-weight: 700; margin-bottom: 4px; }
+  .card .hint { font-size: 0.78rem; color: var(--muted); margin-bottom: 12px; line-height: 1.5; }
+
+  label {
+    font-size: 0.78rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.5px; color: var(--muted); display: block; margin-bottom: 6px;
+  }
+  select, input[type="text"], input[type="password"] {
+    background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 7px 10px; font-size: 0.85rem; width: 100%;
+  }
+  select { cursor: pointer; width: auto; }
+  textarea {
+    width: 100%; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px;
+    font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
+    font-size: 0.82rem; resize: vertical; min-height: 90px; line-height: 1.5;
+  }
+  textarea:focus, select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  textarea[readonly] { background: #eef0f7; }
+
+  .field { margin-bottom: 12px; }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; }
+  .row > .field { flex: 1; min-width: 220px; }
+
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; align-items: center; }
+  button.action {
+    cursor: pointer; border: none; border-radius: 7px;
+    background: var(--accent); color: #fff; font-weight: 600;
+    font-size: 0.82rem; padding: 8px 16px;
+  }
+  button.action:hover { opacity: 0.88; }
+  button.action.secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+  button.action.secondary:hover { border-color: var(--accent); color: var(--accent); }
+  button.copy-btn {
+    cursor: pointer; border: 1px solid var(--border); background: var(--surface);
+    border-radius: 6px; font-size: 0.72rem; padding: 3px 9px; color: var(--muted);
+    float: right; margin-bottom: 4px;
+  }
+  button.copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .msg { font-size: 0.8rem; border-radius: 7px; padding: 9px 12px; margin: 10px 0; display: none; white-space: pre-wrap; }
+  .msg.error { display: block; background: var(--err-bg); color: var(--err-text); border: 1px solid var(--err-border); }
+  .msg.ok    { display: block; background: var(--ok-bg);  color: var(--ok-text);  border: 1px solid var(--ok-border); }
+
+  .out-label-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .out-label-row label { margin-bottom: 0; }
+
+  .divider { border-top: 1px dashed var(--border); margin: 18px 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Encode<span>/</span>Decode</h1>
+  <p>Base64, URL, Hex, HTML entities, Gzip, AES, RSA, JWT, hashing — all in one place</p>
+  <div class="trust-badge">🔒 100% client-side — nothing you type here is ever sent to a server</div>
+</header>
+
+<div class="wrap">
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="text">Text Encoding</button>
+    <button class="tab-btn" data-tab="gzip">Compression</button>
+    <button class="tab-btn" data-tab="aes">Symmetric (AES)</button>
+    <button class="tab-btn" data-tab="rsa">Asymmetric (RSA)</button>
+    <button class="tab-btn" data-tab="jwt">JWT</button>
+    <button class="tab-btn" data-tab="hash">Hash</button>
+  </div>
+
+  <!-- ══════════════════ TEXT ENCODING ══════════════════ -->
+  <div class="panel active" id="panel-text">
+    <div class="card">
+      <h2>Text Encoding</h2>
+      <p class="hint">Reversible, no key needed. Works on any text; binary-looking output that isn't valid UTF-8 text will say so instead of showing garbage.</p>
+
+      <div class="field">
+        <label>Format</label>
+        <select id="text-format">
+          <option value="base64">Base64</option>
+          <option value="base64url">Base64 (URL-safe)</option>
+          <option value="url">URL / Percent Encoding</option>
+          <option value="hex">Hex</option>
+          <option value="html">HTML Entities</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Input</label>
+        <textarea id="text-input" placeholder="Paste text to encode, or encoded text to decode…"></textarea>
+      </div>
+
+      <div class="btn-row">
+        <button class="action" id="text-encode-btn">Encode →</button>
+        <button class="action secondary" id="text-decode-btn">← Decode</button>
+      </div>
+
+      <div class="msg" id="text-msg"></div>
+
+      <div class="out-label-row">
+        <label>Output</label>
+        <button class="copy-btn" data-copy="text-output">Copy</button>
+      </div>
+      <textarea id="text-output" readonly></textarea>
+    </div>
+  </div>
+
+  <!-- ══════════════════ COMPRESSION ══════════════════ -->
+  <div class="panel" id="panel-gzip">
+    <div class="card">
+      <h2>Gzip Compression</h2>
+      <p class="hint">Compress text to Gzip bytes (shown as Base64 so it's copy-pasteable), or decompress a Base64 Gzip blob back to text.</p>
+
+      <div class="field">
+        <label>Input</label>
+        <textarea id="gzip-input" placeholder="Text to compress, or Base64-encoded Gzip data to decompress…"></textarea>
+      </div>
+
+      <div class="btn-row">
+        <button class="action" id="gzip-compress-btn">Compress →</button>
+        <button class="action secondary" id="gzip-decompress-btn">← Decompress</button>
+      </div>
+
+      <div class="msg" id="gzip-msg"></div>
+
+      <div class="out-label-row">
+        <label>Output</label>
+        <button class="copy-btn" data-copy="gzip-output">Copy</button>
+      </div>
+      <textarea id="gzip-output" readonly></textarea>
+    </div>
+  </div>
+
+  <!-- ══════════════════ AES ══════════════════ -->
+  <div class="panel" id="panel-aes">
+    <div class="card">
+      <h2>Symmetric Encryption — AES-GCM</h2>
+      <p class="hint">
+        A passphrase derives a 256-bit key (PBKDF2, 100,000 iterations). Each encryption uses a
+        fresh random salt + IV, packed together with the ciphertext into one Base64 blob — paste
+        that whole blob back in with the same passphrase to decrypt. Same passphrase in and out.
+      </p>
+
+      <div class="row">
+        <div class="field">
+          <label>Passphrase</label>
+          <input type="password" id="aes-pass" placeholder="Shared secret used for both encrypt and decrypt" />
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Input</label>
+        <textarea id="aes-input" placeholder="Plaintext to encrypt, or a Base64 blob to decrypt…"></textarea>
+      </div>
+
+      <div class="btn-row">
+        <button class="action" id="aes-encrypt-btn">Encrypt →</button>
+        <button class="action secondary" id="aes-decrypt-btn">← Decrypt</button>
+      </div>
+
+      <div class="msg" id="aes-msg"></div>
+
+      <div class="out-label-row">
+        <label>Output</label>
+        <button class="copy-btn" data-copy="aes-output">Copy</button>
+      </div>
+      <textarea id="aes-output" readonly></textarea>
+    </div>
+  </div>
+
+  <!-- ══════════════════ RSA ══════════════════ -->
+  <div class="panel" id="panel-rsa">
+    <div class="card">
+      <h2>Generate an RSA Key Pair</h2>
+      <p class="hint">2048-bit RSA-OAEP (SHA-256). Generated entirely in your browser — the private key is never transmitted anywhere.</p>
+      <div class="btn-row">
+        <button class="action" id="rsa-gen-btn">Generate Key Pair</button>
+      </div>
+      <div class="msg" id="rsa-gen-msg"></div>
+
+      <div class="row">
+        <div class="field">
+          <div class="out-label-row"><label>Public Key (PEM)</label><button class="copy-btn" data-copy="rsa-pub">Copy</button></div>
+          <textarea id="rsa-pub" readonly placeholder="Click Generate Key Pair above…"></textarea>
+        </div>
+        <div class="field">
+          <div class="out-label-row"><label>Private Key (PEM)</label><button class="copy-btn" data-copy="rsa-priv">Copy</button></div>
+          <textarea id="rsa-priv" readonly placeholder="Click Generate Key Pair above…"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Encrypt</h2>
+      <p class="hint">
+        Encrypts with a Public Key. RSA can only encrypt small payloads directly — with a 2048-bit
+        key that's roughly 190 bytes max. For larger data, encrypt it with AES instead and use RSA
+        just to protect the AES passphrase.
+      </p>
+      <div class="field">
+        <label>Public Key (PEM)</label>
+        <textarea id="rsa-enc-pub" placeholder="Paste a public key, or use one generated above…"></textarea>
+      </div>
+      <div class="field">
+        <label>Plaintext</label>
+        <textarea id="rsa-enc-input" placeholder="Short message to encrypt…"></textarea>
+      </div>
+      <div class="btn-row"><button class="action" id="rsa-encrypt-btn">Encrypt →</button></div>
+      <div class="msg" id="rsa-enc-msg"></div>
+      <div class="out-label-row"><label>Ciphertext (Base64)</label><button class="copy-btn" data-copy="rsa-enc-output">Copy</button></div>
+      <textarea id="rsa-enc-output" readonly></textarea>
+    </div>
+
+    <div class="card">
+      <h2>Decrypt</h2>
+      <p class="hint">Decrypts with a Private Key.</p>
+      <div class="field">
+        <label>Private Key (PEM)</label>
+        <textarea id="rsa-dec-priv" placeholder="Paste a private key, or use one generated above…"></textarea>
+      </div>
+      <div class="field">
+        <label>Ciphertext (Base64)</label>
+        <textarea id="rsa-dec-input" placeholder="Base64 ciphertext to decrypt…"></textarea>
+      </div>
+      <div class="btn-row"><button class="action" id="rsa-decrypt-btn">Decrypt →</button></div>
+      <div class="msg" id="rsa-dec-msg"></div>
+      <div class="out-label-row"><label>Plaintext</label><button class="copy-btn" data-copy="rsa-dec-output">Copy</button></div>
+      <textarea id="rsa-dec-output" readonly></textarea>
+    </div>
+  </div>
+
+  <!-- ══════════════════ JWT ══════════════════ -->
+  <div class="panel" id="panel-jwt">
+    <div class="card">
+      <h2>Encode (Sign)</h2>
+      <div class="row">
+        <div class="field" style="max-width:180px;">
+          <label>Algorithm</label>
+          <select id="jwt-enc-alg">
+            <option value="HS256">HS256 (secret)</option>
+            <option value="RS256">RS256 (private key)</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Payload (JSON)</label>
+        <textarea id="jwt-enc-payload" placeholder='{&#10;  "sub": "1234567890",&#10;  "name": "Alice"&#10;}'></textarea>
+      </div>
+      <div class="field">
+        <label id="jwt-enc-key-label">Secret</label>
+        <textarea id="jwt-enc-key" placeholder="HS256: any shared secret string.  RS256: paste a private key PEM."></textarea>
+      </div>
+      <div class="btn-row"><button class="action" id="jwt-encode-btn">Generate JWT →</button></div>
+      <div class="msg" id="jwt-enc-msg"></div>
+      <div class="out-label-row"><label>Token</label><button class="copy-btn" data-copy="jwt-enc-output">Copy</button></div>
+      <textarea id="jwt-enc-output" readonly></textarea>
+    </div>
+
+    <div class="card">
+      <h2>Decode (Verify)</h2>
+      <p class="hint">Header and payload are always decoded and shown, even without a key. Signature verification is optional — supply a secret/public key to check it.</p>
+      <div class="field">
+        <label>Token</label>
+        <textarea id="jwt-dec-input" placeholder="Paste a JWT (header.payload.signature)…"></textarea>
+      </div>
+      <div class="row">
+        <div class="field" style="max-width:180px;">
+          <label>Verify as</label>
+          <select id="jwt-dec-alg">
+            <option value="HS256">HS256 (secret)</option>
+            <option value="RS256">RS256 (public key)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label id="jwt-dec-key-label">Secret (optional)</label>
+          <input type="text" id="jwt-dec-key" placeholder="Leave blank to just decode without verifying" />
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="action" id="jwt-decode-btn">Decode →</button>
+        <button class="action secondary" id="jwt-verify-btn">Verify Signature</button>
+      </div>
+      <div class="msg" id="jwt-dec-msg"></div>
+      <div class="out-label-row"><label>Header</label><button class="copy-btn" data-copy="jwt-dec-header">Copy</button></div>
+      <textarea id="jwt-dec-header" readonly></textarea>
+      <div style="height:10px;"></div>
+      <div class="out-label-row"><label>Payload</label><button class="copy-btn" data-copy="jwt-dec-payload">Copy</button></div>
+      <textarea id="jwt-dec-payload-out" readonly></textarea>
+    </div>
+  </div>
+
+  <!-- ══════════════════ HASH ══════════════════ -->
+  <div class="panel" id="panel-hash">
+    <div class="card">
+      <h2>Hash</h2>
+      <p class="hint">One-way — there is no "decode" for a hash. Useful for checksums / integrity checks, not for secrets (use AES/RSA for anything that needs to come back).</p>
+      <div class="field">
+        <label>Algorithm</label>
+        <select id="hash-alg">
+          <option value="SHA-1">SHA-1</option>
+          <option value="SHA-256" selected>SHA-256</option>
+          <option value="SHA-384">SHA-384</option>
+          <option value="SHA-512">SHA-512</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Input</label>
+        <textarea id="hash-input" placeholder="Text to hash…"></textarea>
+      </div>
+      <div class="btn-row"><button class="action" id="hash-btn">Hash →</button></div>
+      <div class="msg" id="hash-msg"></div>
+      <div class="out-label-row"><label>Digest (Hex)</label><button class="copy-btn" data-copy="hash-output">Copy</button></div>
+      <textarea id="hash-output" readonly></textarea>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════
+// Byte / encoding utilities shared by every tab
+// ═══════════════════════════════════════════════════════════════════════
+
+function utf8Encode(str) { return new TextEncoder().encode(str); }
+function utf8Decode(bytes) { return new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
+
+function bytesToBase64(bytes) {
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+function base64ToBytes(b64) {
+  const binary = atob(b64.trim());
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+function bytesToBase64Url(bytes) {
+  return bytesToBase64(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function base64UrlToBytes(str) {
+  let s = str.replace(/-/g, '+').replace(/_/g, '/');
+  while (s.length % 4) s += '=';
+  return base64ToBytes(s);
+}
+function bytesToHex(bytes) {
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+function hexToBytes(hex) {
+  const clean = hex.trim().replace(/\s+/g, '');
+  if (clean.length % 2 !== 0) throw new Error('Hex string must have an even number of characters.');
+  const bytes = new Uint8Array(clean.length / 2);
+  for (let i = 0; i < clean.length; i += 2) {
+    const byte = parseInt(clean.substr(i, 2), 16);
+    if (Number.isNaN(byte)) throw new Error('Invalid hex character near position ' + i + '.');
+    bytes[i / 2] = byte;
+  }
+  return bytes;
+}
+function concatBytes(...arrays) {
+  const total = arrays.reduce((n, a) => n + a.length, 0);
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const a of arrays) { out.set(a, offset); offset += a.length; }
+  return out;
+}
+function randomBytes(n) { return crypto.getRandomValues(new Uint8Array(n)); }
+
+function pemToBytes(pem) {
+  const b64 = pem.replace(/-----BEGIN [^-]+-----/, '').replace(/-----END [^-]+-----/, '').replace(/\s+/g, '');
+  if (!b64) throw new Error('That doesn\'t look like a PEM key — expected a -----BEGIN...----- block.');
+  return base64ToBytes(b64);
+}
+function bytesToPem(bytes, label) {
+  const b64 = bytesToBase64(bytes);
+  const lines = b64.match(/.{1,64}/g) || [];
+  return `-----BEGIN ${label}-----\n${lines.join('\n')}\n-----END ${label}-----`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// UI helpers
+// ═══════════════════════════════════════════════════════════════════════
+
+function showMsg(id, text, isError) {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className = 'msg ' + (isError ? 'error' : 'ok');
+}
+function clearMsg(id) {
+  const el = document.getElementById(id);
+  el.textContent = '';
+  el.className = 'msg';
+}
+function setOut(id, value) { document.getElementById(id).value = value; }
+
+document.querySelectorAll('.copy-btn').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const target = document.getElementById(btn.dataset.copy);
+    if (!target.value) return;
+    await navigator.clipboard.writeText(target.value);
+    const original = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = original; }, 1200);
+  });
+});
+
+// Tabs
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// Text Encoding tab
+// ═══════════════════════════════════════════════════════════════════════
+
+function htmlEncode(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+function htmlDecode(str) {
+  const div = document.createElement('div');
+  div.innerHTML = str;
+  return div.textContent;
+}
+
+document.getElementById('text-encode-btn').addEventListener('click', () => {
+  clearMsg('text-msg');
+  const fmt = document.getElementById('text-format').value;
+  const input = document.getElementById('text-input').value;
+  try {
+    let out;
+    if (fmt === 'base64') out = bytesToBase64(utf8Encode(input));
+    else if (fmt === 'base64url') out = bytesToBase64Url(utf8Encode(input));
+    else if (fmt === 'url') out = encodeURIComponent(input);
+    else if (fmt === 'hex') out = bytesToHex(utf8Encode(input));
+    else if (fmt === 'html') out = htmlEncode(input);
+    setOut('text-output', out);
+  } catch (e) { showMsg('text-msg', 'Encode failed: ' + e.message, true); }
+});
+
+document.getElementById('text-decode-btn').addEventListener('click', () => {
+  clearMsg('text-msg');
+  const fmt = document.getElementById('text-format').value;
+  const input = document.getElementById('text-input').value;
+  try {
+    let out;
+    if (fmt === 'base64') out = utf8Decode(base64ToBytes(input));
+    else if (fmt === 'base64url') out = utf8Decode(base64UrlToBytes(input));
+    else if (fmt === 'url') out = decodeURIComponent(input);
+    else if (fmt === 'hex') out = utf8Decode(hexToBytes(input));
+    else if (fmt === 'html') out = htmlDecode(input);
+    setOut('text-output', out);
+  } catch (e) {
+    showMsg('text-msg', 'Decode failed: ' + e.message + ' (the decoded bytes may not be valid UTF-8 text.)', true);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// Gzip tab
+// ═══════════════════════════════════════════════════════════════════════
+
+async function gzipCompress(str) {
+  const stream = new Blob([utf8Encode(str)]).stream().pipeThrough(new CompressionStream('gzip'));
+  const buf = await new Response(stream).arrayBuffer();
+  return new Uint8Array(buf);
+}
+async function gzipDecompress(bytes) {
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+  const buf = await new Response(stream).arrayBuffer();
+  return new Uint8Array(buf);
+}
+
+document.getElementById('gzip-compress-btn').addEventListener('click', async () => {
+  clearMsg('gzip-msg');
+  try {
+    const bytes = await gzipCompress(document.getElementById('gzip-input').value);
+    setOut('gzip-output', bytesToBase64(bytes));
+  } catch (e) { showMsg('gzip-msg', 'Compress failed: ' + e.message, true); }
+});
+
+document.getElementById('gzip-decompress-btn').addEventListener('click', async () => {
+  clearMsg('gzip-msg');
+  try {
+    const bytes = base64ToBytes(document.getElementById('gzip-input').value);
+    const out = await gzipDecompress(bytes);
+    setOut('gzip-output', utf8Decode(out));
+  } catch (e) { showMsg('gzip-msg', 'Decompress failed: ' + e.message + ' (make sure the input is a Base64 Gzip blob.)', true); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// AES-GCM tab
+// ═══════════════════════════════════════════════════════════════════════
+
+const PBKDF2_ITERATIONS = 100000;
+
+async function deriveAesKey(passphrase, salt) {
+  const baseKey = await crypto.subtle.importKey('raw', utf8Encode(passphrase), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
+    baseKey,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+document.getElementById('aes-encrypt-btn').addEventListener('click', async () => {
+  clearMsg('aes-msg');
+  const pass = document.getElementById('aes-pass').value;
+  const input = document.getElementById('aes-input').value;
+  if (!pass) return showMsg('aes-msg', 'Enter a passphrase first.', true);
+  try {
+    const salt = randomBytes(16);
+    const iv = randomBytes(12);
+    const key = await deriveAesKey(pass, salt);
+    const ciphertext = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, utf8Encode(input)));
+    const packed = concatBytes(salt, iv, ciphertext);
+    setOut('aes-output', bytesToBase64(packed));
+  } catch (e) { showMsg('aes-msg', 'Encrypt failed: ' + e.message, true); }
+});
+
+document.getElementById('aes-decrypt-btn').addEventListener('click', async () => {
+  clearMsg('aes-msg');
+  const pass = document.getElementById('aes-pass').value;
+  const input = document.getElementById('aes-input').value;
+  if (!pass) return showMsg('aes-msg', 'Enter the passphrase used to encrypt this.', true);
+  try {
+    const packed = base64ToBytes(input);
+    if (packed.length < 16 + 12) throw new Error('Input is too short to be a valid AES-GCM blob from this tool.');
+    const salt = packed.slice(0, 16);
+    const iv = packed.slice(16, 28);
+    const ciphertext = packed.slice(28);
+    const key = await deriveAesKey(pass, salt);
+    const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+    setOut('aes-output', utf8Decode(new Uint8Array(plaintext)));
+  } catch (e) {
+    showMsg('aes-msg', 'Decrypt failed: ' + e.message + ' (wrong passphrase, or the input wasn\'t produced by this tool.)', true);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// RSA-OAEP tab
+// ═══════════════════════════════════════════════════════════════════════
+
+document.getElementById('rsa-gen-btn').addEventListener('click', async () => {
+  clearMsg('rsa-gen-msg');
+  try {
+    const pair = await crypto.subtle.generateKey(
+      { name: 'RSA-OAEP', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
+      true,
+      ['encrypt', 'decrypt']
+    );
+    const pubBytes = new Uint8Array(await crypto.subtle.exportKey('spki', pair.publicKey));
+    const privBytes = new Uint8Array(await crypto.subtle.exportKey('pkcs8', pair.privateKey));
+    const pubPem = bytesToPem(pubBytes, 'PUBLIC KEY');
+    const privPem = bytesToPem(privBytes, 'PRIVATE KEY');
+    setOut('rsa-pub', pubPem);
+    setOut('rsa-priv', privPem);
+    setOut('rsa-enc-pub', pubPem);
+    setOut('rsa-dec-priv', privPem);
+    showMsg('rsa-gen-msg', 'Key pair generated.', false);
+  } catch (e) { showMsg('rsa-gen-msg', 'Key generation failed: ' + e.message, true); }
+});
+
+async function importRsaPublicKey(pem) {
+  return crypto.subtle.importKey('spki', pemToBytes(pem), { name: 'RSA-OAEP', hash: 'SHA-256' }, true, ['encrypt']);
+}
+async function importRsaPrivateKey(pem) {
+  return crypto.subtle.importKey('pkcs8', pemToBytes(pem), { name: 'RSA-OAEP', hash: 'SHA-256' }, true, ['decrypt']);
+}
+
+document.getElementById('rsa-encrypt-btn').addEventListener('click', async () => {
+  clearMsg('rsa-enc-msg');
+  try {
+    const pubPem = document.getElementById('rsa-enc-pub').value;
+    const plaintext = document.getElementById('rsa-enc-input').value;
+    if (!pubPem.trim()) throw new Error('Paste or generate a public key first.');
+    const key = await importRsaPublicKey(pubPem);
+    const ciphertext = new Uint8Array(await crypto.subtle.encrypt({ name: 'RSA-OAEP' }, key, utf8Encode(plaintext)));
+    setOut('rsa-enc-output', bytesToBase64(ciphertext));
+  } catch (e) { showMsg('rsa-enc-msg', 'Encrypt failed: ' + e.message + ' (message may be too long for this key size.)', true); }
+});
+
+document.getElementById('rsa-decrypt-btn').addEventListener('click', async () => {
+  clearMsg('rsa-dec-msg');
+  try {
+    const privPem = document.getElementById('rsa-dec-priv').value;
+    const ciphertextB64 = document.getElementById('rsa-dec-input').value;
+    if (!privPem.trim()) throw new Error('Paste or generate a private key first.');
+    const key = await importRsaPrivateKey(privPem);
+    const plaintext = await crypto.subtle.decrypt({ name: 'RSA-OAEP' }, key, base64ToBytes(ciphertextB64));
+    setOut('rsa-dec-output', utf8Decode(new Uint8Array(plaintext)));
+  } catch (e) { showMsg('rsa-dec-msg', 'Decrypt failed: ' + e.message + ' (wrong key, or the ciphertext is malformed.)', true); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// JWT tab
+// ═══════════════════════════════════════════════════════════════════════
+
+document.getElementById('jwt-enc-alg').addEventListener('change', (e) => {
+  document.getElementById('jwt-enc-key-label').textContent = e.target.value === 'HS256' ? 'Secret' : 'Private Key (PEM)';
+});
+document.getElementById('jwt-dec-alg').addEventListener('change', (e) => {
+  document.getElementById('jwt-dec-key-label').textContent = e.target.value === 'HS256' ? 'Secret (optional)' : 'Public Key (PEM, optional)';
+});
+
+async function hmacSha256Sign(secret, data) {
+  const key = await crypto.subtle.importKey('raw', utf8Encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return new Uint8Array(await crypto.subtle.sign('HMAC', key, data));
+}
+async function hmacSha256Verify(secret, data, signature) {
+  const key = await crypto.subtle.importKey('raw', utf8Encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']);
+  return crypto.subtle.verify('HMAC', key, signature, data);
+}
+async function rsaSha256Sign(privPem, data) {
+  const key = await crypto.subtle.importKey('pkcs8', pemToBytes(privPem), { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
+  return new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, data));
+}
+async function rsaSha256Verify(pubPem, data, signature) {
+  const key = await crypto.subtle.importKey('spki', pemToBytes(pubPem), { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+  return crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, signature, data);
+}
+
+document.getElementById('jwt-encode-btn').addEventListener('click', async () => {
+  clearMsg('jwt-enc-msg');
+  try {
+    const alg = document.getElementById('jwt-enc-alg').value;
+    const payloadRaw = document.getElementById('jwt-enc-payload').value;
+    const key = document.getElementById('jwt-enc-key').value;
+    if (!key.trim()) throw new Error(alg === 'HS256' ? 'Enter a secret.' : 'Paste a private key.');
+
+    let payloadObj;
+    try { payloadObj = JSON.parse(payloadRaw); }
+    catch { throw new Error('Payload must be valid JSON.'); }
+
+    const header = { alg, typ: 'JWT' };
+    const headerB64 = bytesToBase64Url(utf8Encode(JSON.stringify(header)));
+    const payloadB64 = bytesToBase64Url(utf8Encode(JSON.stringify(payloadObj)));
+    const signingInput = headerB64 + '.' + payloadB64;
+
+    const sig = alg === 'HS256'
+      ? await hmacSha256Sign(key, utf8Encode(signingInput))
+      : await rsaSha256Sign(key, utf8Encode(signingInput));
+
+    setOut('jwt-enc-output', signingInput + '.' + bytesToBase64Url(sig));
+  } catch (e) { showMsg('jwt-enc-msg', 'Generate failed: ' + e.message, true); }
+});
+
+function parseJwtParts(token) {
+  const parts = token.trim().split('.');
+  if (parts.length !== 3) throw new Error('A JWT has 3 dot-separated parts (header.payload.signature).');
+  return parts;
+}
+
+document.getElementById('jwt-decode-btn').addEventListener('click', () => {
+  clearMsg('jwt-dec-msg');
+  try {
+    const [h, p] = parseJwtParts(document.getElementById('jwt-dec-input').value);
+    const header = JSON.parse(utf8Decode(base64UrlToBytes(h)));
+    const payload = JSON.parse(utf8Decode(base64UrlToBytes(p)));
+    setOut('jwt-dec-header', JSON.stringify(header, null, 2));
+    setOut('jwt-dec-payload-out', JSON.stringify(payload, null, 2));
+    showMsg('jwt-dec-msg', 'Decoded (signature not checked — use Verify Signature for that).', false);
+  } catch (e) { showMsg('jwt-dec-msg', 'Decode failed: ' + e.message, true); }
+});
+
+document.getElementById('jwt-verify-btn').addEventListener('click', async () => {
+  clearMsg('jwt-dec-msg');
+  try {
+    const [h, p, s] = parseJwtParts(document.getElementById('jwt-dec-input').value);
+    const alg = document.getElementById('jwt-dec-alg').value;
+    const key = document.getElementById('jwt-dec-key').value;
+    if (!key.trim()) throw new Error(alg === 'HS256' ? 'Enter the secret to verify against.' : 'Paste the public key to verify against.');
+
+    const signingInput = utf8Encode(h + '.' + p);
+    const signature = base64UrlToBytes(s);
+    const valid = alg === 'HS256'
+      ? await hmacSha256Verify(key, signingInput, signature)
+      : await rsaSha256Verify(key, signingInput, signature);
+
+    const header = JSON.parse(utf8Decode(base64UrlToBytes(h)));
+    const payload = JSON.parse(utf8Decode(base64UrlToBytes(p)));
+    setOut('jwt-dec-header', JSON.stringify(header, null, 2));
+    setOut('jwt-dec-payload-out', JSON.stringify(payload, null, 2));
+    showMsg('jwt-dec-msg', valid ? '✅ Signature is valid.' : '❌ Signature is INVALID.', !valid);
+  } catch (e) { showMsg('jwt-dec-msg', 'Verify failed: ' + e.message, true); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// Hash tab
+// ═══════════════════════════════════════════════════════════════════════
+
+document.getElementById('hash-btn').addEventListener('click', async () => {
+  clearMsg('hash-msg');
+  try {
+    const alg = document.getElementById('hash-alg').value;
+    const input = document.getElementById('hash-input').value;
+    const digest = await crypto.subtle.digest(alg, utf8Encode(input));
+    setOut('hash-output', bytesToHex(new Uint8Array(digest)));
+  } catch (e) { showMsg('hash-msg', 'Hash failed: ' + e.message, true); }
+});
+</script>
+</body>
+</html>

@@ -8,6 +8,10 @@ nested objects and lists.
 Both sides can be **different formats** — compare a JSON API response against
 an XML export or a CSV file from the same dataset.
 
+This tool now ships as part of the **Toolbox** — one bundled website (see
+`main.py` and `CLAUDE.md`) that can host multiple internal tools behind one
+home page. DataDiff Pro is tool #1.
+
 ---
 
 ## Quick Start
@@ -16,22 +20,18 @@ an XML export or a CSV file from the same dataset.
 # 1. Clone the repo, then enter the project directory
 cd datadiff-pro
 
-# 2. Build and start
-docker-compose up --build
+# 2. Build and start (this builds the whole Toolbox image, not just this tool)
+docker-compose up --build -d
 
-# 3. Open in your browser
-http://localhost:8089
+# 3. Open the Toolbox home page, then click the DataDiff Pro card
+http://localhost:8000
 ```
+
+DataDiff Pro itself lives at `http://localhost:8000/tools/datadiff-pro/`.
 
 To stop:
 ```bash
 docker-compose down
-```
-
-To change the host port (e.g. use 8080 instead of 8089), edit `docker-compose.yml`:
-```yaml
-ports:
-  - "8080:8080"   # host:container
 ```
 
 ---
