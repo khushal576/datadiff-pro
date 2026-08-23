@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Subnet Calculator</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f4f6fb; --surface: #ffffff; --border: #dde1ef;
+    --text: #1c2035; --muted: #6b7180; --accent: #4f5ef0;
+    --net: #4f5ef0; --net-bg: rgba(79,94,240,0.12);
+    --host: #d97706; --host-bg: rgba(217,119,6,0.12);
+    --ok-bg: rgba(21,128,61,0.08); --ok-text: #15803d; --ok-border: rgba(21,128,61,0.3);
+    --err-bg: rgba(220,38,38,0.06); --err-text: #b91c1c; --err-border: rgba(220,38,38,0.3);
+  }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; padding: 24px 20px 60px;
+  }
+  header { max-width: 980px; margin: 0 auto 20px; }
+  header h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.5px; }
+  header h1 span { color: var(--accent); }
+  header p { color: var(--muted); font-size: 0.85rem; margin-top: 2px; }
+
+  .wrap { max-width: 980px; margin: 0 auto; }
+
+  .tabs {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px;
+    border-bottom: 1px solid var(--border); padding-bottom: 0;
+  }
+  .tab-btn {
+    background: none; border: none; cursor: pointer;
+    padding: 10px 16px; font-size: 0.85rem; font-weight: 600;
+    color: var(--muted); border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 18px; margin-bottom: 16px;
+  }
+  .card h2 { font-size: 1rem; font-weight: 700; margin-bottom: 4px; }
+  .card .hint { font-size: 0.78rem; color: var(--muted); margin-bottom: 12px; line-height: 1.5; }
+
+  label {
+    font-size: 0.78rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.5px; color: var(--muted); display: block; margin-bottom: 6px;
+  }
+  input[type="text"] {
+    background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 7px 10px; font-size: 0.85rem; width: 100%;
+    font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
+  }
+  input[type="text"]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  input[type="number"] {
+    background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 7px 8px; font-size: 0.85rem; width: 70px;
+  }
+  input[type="range"] { width: 100%; accent-color: var(--accent); cursor: pointer; }
+
+  .field { margin-bottom: 12px; }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; }
+  .row > .field { flex: 1; min-width: 200px; }
+
+  .prefix-row { display: flex; align-items: center; gap: 10px; }
+  .prefix-row input[type="range"] { flex: 1; }
+  .prefix-label { font-family: monospace; font-weight: 700; color: var(--accent); min-width: 34px; text-align: right; }
+
+  .divider { border-top: 1px dashed var(--border); margin: 16px 0; }
+
+  .msg { font-size: 0.8rem; border-radius: 7px; padding: 9px 12px; margin: 10px 0; display: none; white-space: pre-wrap; }
+  .msg.error { display: block; background: var(--err-bg); color: var(--err-text); border: 1px solid var(--err-border); }
+  .msg.ok    { display: block; background: var(--ok-bg);  color: var(--ok-text);  border: 1px solid var(--ok-border); }
+
+  /* ── Info icons + popover ─────────────────────────────────────────── */
+  .info-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 15px; height: 15px; border-radius: 50%; vertical-align: middle;
+    background: var(--border); color: var(--muted);
+    font-size: 0.65rem; font-weight: 700; cursor: pointer; margin-left: 5px;
+    user-select: none;
+  }
+  .info-icon:hover { background: var(--accent); color: #fff; }
+  .info-popover {
+    position: fixed; max-width: 300px; background: #10131f; color: #d7dcf0;
+    border-radius: 8px; padding: 12px 34px 12px 14px; font-size: 0.78rem;
+    line-height: 1.6; box-shadow: 0 8px 24px rgba(0,0,0,0.3); z-index: 1000;
+    display: none;
+  }
+  .info-popover .t { font-weight: 700; margin-bottom: 5px; color: #fff; font-size: 0.82rem; }
+  .info-popover .close {
+    position: absolute; top: 8px; right: 10px; cursor: pointer;
+    color: #8b93b8; font-size: 0.85rem; line-height: 1;
+  }
+  .info-popover .close:hover { color: #fff; }
+
+  /* ── IP type banner ───────────────────────────────────────────────── */
+  .ip-type-banner {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    background: var(--net-bg); border: 1px solid rgba(79,94,240,0.3);
+    border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 0.83rem;
+  }
+  .ip-type-banner.public { background: var(--ok-bg); border-color: var(--ok-border); }
+  .ip-type-banner .label { font-weight: 700; white-space: nowrap; }
+  .ip-type-banner .detail { color: var(--muted); font-size: 0.8rem; }
+
+  /* ── Bit grid ─────────────────────────────────────────────────────── */
+  .bitgrid-label { font-size: 0.72rem; color: var(--muted); margin-bottom: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .bitgrid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 4px; }
+  .octet-group { display: flex; gap: 1px; }
+  .bit {
+    width: 20px; height: 24px; display: flex; align-items: center; justify-content: center;
+    font-family: monospace; font-size: 0.78rem; font-weight: 700;
+    background: var(--host-bg); color: var(--host);
+  }
+  .bit.net { background: var(--net-bg); color: var(--net); }
+  .bit:first-child { border-radius: 4px 0 0 4px; }
+  .bit:last-child { border-radius: 0 4px 4px 0; }
+  .legend { display: flex; gap: 16px; font-size: 0.75rem; color: var(--muted); margin-top: 6px; margin-bottom: 14px; }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .legend .swatch { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+  .legend .swatch.net { background: var(--net); }
+  .legend .swatch.host { background: var(--host); }
+
+  /* ── Results table ────────────────────────────────────────────────── */
+  .results { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin: 14px 0; }
+  .result-tile {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+  }
+  .result-tile .k { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+  .result-tile .v { font-family: monospace; font-size: 0.95rem; font-weight: 700; margin-top: 3px; word-break: break-word; }
+  .result-tile .v.small { font-size: 0.8rem; font-weight: 600; }
+
+  /* ── Explanation block ────────────────────────────────────────────── */
+  .explain { background: #10131f; color: #d7dcf0; border-radius: 8px; padding: 14px 16px; font-family: monospace; font-size: 0.8rem; line-height: 1.7; overflow-x: auto; }
+  .explain .comment { color: #8b93b8; }
+  .explain .hl-net { color: #8ea3ff; }
+  .explain .hl-host { color: #f0b357; }
+  .explain-points { font-size: 0.82rem; line-height: 1.9; margin-bottom: 10px; }
+  .explain-points li { margin-left: 18px; }
+
+  @media (max-width: 700px) {
+    .row { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Subnet<span> </span>Calculator</h1>
+  <p>IPv4 subnetting made visible — binary breakdown + how each answer was derived, not just the answer</p>
+</header>
+
+<div class="wrap">
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="calc">Calculator</button>
+    <button class="tab-btn" data-tab="compare">Compare Two IPs</button>
+  </div>
+
+  <!-- ══════════════════════════ CALCULATOR TAB ══════════════════════════ -->
+  <div class="panel active" id="panel-calc">
+    <div class="card">
+      <h2>IP Address &amp; Prefix</h2>
+      <p class="hint">
+        Type an IP address (plain, or as <code>ip/prefix</code> e.g.
+        <code>192.168.1.10/26</code>) and drag the prefix slider, or type
+        a subnet mask directly — both stay in sync.
+      </p>
+
+      <div class="row">
+        <div class="field">
+          <label>IP Address</label>
+          <input type="text" id="calc-ip" value="192.168.1.10" placeholder="e.g. 192.168.1.10 or 192.168.1.10/26">
+        </div>
+        <div class="field">
+          <label>Subnet Mask (optional — auto-fills from prefix)</label>
+          <input type="text" id="calc-mask" placeholder="e.g. 255.255.255.192">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Prefix Length (CIDR)</label>
+        <div class="prefix-row">
+          <input type="range" id="calc-prefix-slider" min="0" max="32" value="26">
+          <input type="number" id="calc-prefix-num" min="0" max="32" value="26">
+          <span class="prefix-label" id="calc-prefix-display">/26</span>
+        </div>
+      </div>
+
+      <div id="calc-msg" class="msg"></div>
+    </div>
+
+    <div class="card" id="calc-results-card" style="display:none;">
+      <h2>Address Breakdown</h2>
+
+      <div class="ip-type-banner" id="calc-iptype"></div>
+
+      <div class="bitgrid-label">32-bit binary — network bits vs host bits</div>
+      <div class="bitgrid" id="calc-bitgrid"></div>
+      <div class="legend">
+        <span><span class="swatch net"></span> Network bits (fixed by the prefix)</span>
+        <span><span class="swatch host"></span> Host bits (identify a device within the subnet)</span>
+      </div>
+
+      <div class="results" id="calc-results"></div>
+
+      <div class="divider"></div>
+      <h2 style="margin-bottom:8px;">How this was calculated</h2>
+      <div class="explain-points" id="calc-points"></div>
+      <div class="explain" id="calc-explain"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════ COMPARE TAB ══════════════════════════ -->
+  <div class="panel" id="panel-compare">
+    <div class="card">
+      <h2>Same Subnet Check</h2>
+      <p class="hint">
+        Two devices can talk directly (no router needed) only if they land in
+        the same network. Enter both IPs and the mask/prefix they share.
+      </p>
+
+      <div class="row">
+        <div class="field">
+          <label>IP Address A</label>
+          <input type="text" id="cmp-ip-a" value="192.168.1.10" placeholder="e.g. 192.168.1.10">
+        </div>
+        <div class="field">
+          <label>IP Address B</label>
+          <input type="text" id="cmp-ip-b" value="192.168.1.70" placeholder="e.g. 192.168.1.70">
+        </div>
+      </div>
+
+      <div class="field" style="max-width:260px;">
+        <label>Prefix Length (CIDR)</label>
+        <div class="prefix-row">
+          <input type="range" id="cmp-prefix-slider" min="0" max="32" value="26">
+          <input type="number" id="cmp-prefix-num" min="0" max="32" value="26">
+          <span class="prefix-label" id="cmp-prefix-display">/26</span>
+        </div>
+      </div>
+
+      <div id="cmp-msg" class="msg"></div>
+    </div>
+
+    <div class="card" id="cmp-results-card" style="display:none;">
+      <h2 id="cmp-verdict"></h2>
+      <div class="row" style="margin-top:10px;">
+        <div class="ip-type-banner" id="cmp-iptype-a" style="flex:1;"></div>
+        <div class="ip-type-banner" id="cmp-iptype-b" style="flex:1;"></div>
+      </div>
+      <div class="explain" id="cmp-explain" style="margin-top:10px;"></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="info-popover" id="info-popover"></div>
+
+<script>
+/* =============================================================================
+ * CALCULATION ENGINE — pure functions, no DOM access.
+ * This is the "backend" of the tool: get this right first, then the UI
+ * below is just wiring these functions to inputs/outputs.
+ * ========================================================================== */
+
+function parseIp(str) {
+  const parts = String(str).trim().split('.');
+  if (parts.length !== 4) return null;
+  const octets = [];
+  for (const p of parts) {
+    if (!/^\d{1,3}$/.test(p)) return null;
+    const n = parseInt(p, 10);
+    if (n < 0 || n > 255) return null;
+    octets.push(n);
+  }
+  return octets;
+}
+
+// Splits "192.168.1.10/26" into { ip: "192.168.1.10", prefix: 26 } (prefix null if absent).
+function splitIpPrefix(str) {
+  const s = String(str).trim();
+  const slash = s.indexOf('/');
+  if (slash === -1) return { ip: s, prefix: null };
+  return { ip: s.slice(0, slash), prefix: parseInt(s.slice(slash + 1), 10) };
+}
+
+function octetsToBinary(octets) {
+  return octets.map(o => o.toString(2).padStart(8, '0'));
+}
+
+function octetsToInt(octets) {
+  return ((octets[0] << 24) | (octets[1] << 16) | (octets[2] << 8) | octets[3]) >>> 0;
+}
+
+function intToOctets(n) {
+  return [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255];
+}
+
+function cidrToMaskOctets(prefix) {
+  if (prefix <= 0) return [0, 0, 0, 0];
+  if (prefix >= 32) return [255, 255, 255, 255];
+  const maskInt = (~0 << (32 - prefix)) >>> 0;
+  return intToOctets(maskInt);
+}
+
+// Returns the prefix length for a valid mask (contiguous 1s then 0s), or null if invalid.
+function maskOctetsToCidr(octets) {
+  const bin = octetsToBinary(octets).join('');
+  const firstZero = bin.indexOf('0');
+  const ones = firstZero === -1 ? 32 : firstZero;
+  if (/1/.test(bin.slice(ones))) return null; // a 1 appears after a 0 — not a valid mask
+  return ones;
+}
+
+function andOctets(a, b) { return a.map((v, i) => v & b[i]); }
+function orOctets(a, b) { return a.map((v, i) => v | b[i]); }
+function invertOctets(a) { return a.map(v => 255 - v); }
+function fmtIp(octets) { return octets.join('.'); }
+
+function addToInt(octets, delta) {
+  return intToOctets((octetsToInt(octets) + delta) >>> 0);
+}
+
+function networkAddress(ipOctets, maskOctets) { return andOctets(ipOctets, maskOctets); }
+function broadcastAddress(networkOctets, wildcardOctets) { return orOctets(networkOctets, wildcardOctets); }
+
+// Classifies an IP into its reserved-range category (or "Public" if none apply).
+// Checked in order from most specific to least specific.
+function classifyIp(octets) {
+  const [a, b, c] = octets;
+  if (a === 255 && b === 255 && c === 255 && octets[3] === 255) {
+    return { type: 'Limited Broadcast', detail: 'Always means "every device on this local network" — never a specific host. Reserved, never routed beyond the local link.' };
+  }
+  if (a === 0) {
+    return { type: '"This Network" (RFC 1122)', detail: 'The 0.0.0.0/8 block refers to the current network itself, not a real destination — mostly seen as a placeholder (e.g. a route\'s default target), not an assignable address.' };
+  }
+  if (a === 10) {
+    return { type: 'Private (RFC 1918)', detail: 'Part of the 10.0.0.0/8 block reserved for private networks. Not routable on the public internet — devices behind a router/NAT use ranges like this internally.' };
+  }
+  if (a === 127) {
+    return { type: 'Loopback', detail: 'The 127.0.0.0/8 block always refers back to the same machine ("localhost") — used for testing a service against your own device.' };
+  }
+  if (a === 100 && b >= 64 && b <= 127) {
+    return { type: 'Carrier-Grade NAT (RFC 6598)', detail: 'Part of the 100.64.0.0/10 block reserved for ISP-internal NAT, between customer devices and the public internet — not typically seen on home networks.' };
+  }
+  if (a === 169 && b === 254) {
+    return { type: 'Link-Local (APIPA)', detail: 'A device assigns itself an address like this (169.254.0.0/16) when it can\'t reach a DHCP server — usually a sign of a network problem, not a normally-assigned address.' };
+  }
+  if (a === 172 && b >= 16 && b <= 31) {
+    return { type: 'Private (RFC 1918)', detail: 'Part of the 172.16.0.0/12 block reserved for private networks — common in office/corporate networks. Not routable on the public internet.' };
+  }
+  if (a === 192 && b === 0 && c === 0) {
+    return { type: 'IETF Protocol Assignments', detail: 'The 192.0.0.0/24 block is reserved for special protocol use, not general device addressing.' };
+  }
+  if (a === 192 && b === 0 && c === 2) {
+    return { type: 'Documentation (TEST-NET-1)', detail: 'The 192.0.2.0/24 block is reserved specifically for examples in documentation and books — it will never appear on a real network.' };
+  }
+  if (a === 192 && b === 88 && c === 99) {
+    return { type: '6to4 Relay Anycast', detail: 'The 192.88.99.0/24 block is reserved for IPv6-to-IPv4 relay — rarely seen today.' };
+  }
+  if (a === 192 && b === 168) {
+    return { type: 'Private (RFC 1918)', detail: 'Part of the 192.168.0.0/16 block reserved for private networks — the most common range for home routers/Wi-Fi. Not routable on the public internet.' };
+  }
+  if (a === 198 && (b === 18 || b === 19)) {
+    return { type: 'Benchmarking (RFC 2544)', detail: 'The 198.18.0.0/15 block is reserved for network equipment performance testing.' };
+  }
+  if (a === 198 && b === 51 && c === 100) {
+    return { type: 'Documentation (TEST-NET-2)', detail: 'The 198.51.100.0/24 block is reserved for documentation examples.' };
+  }
+  if (a === 203 && b === 0 && c === 113) {
+    return { type: 'Documentation (TEST-NET-3)', detail: 'The 203.0.113.0/24 block is reserved for documentation examples.' };
+  }
+  if (a >= 224 && a <= 239) {
+    return { type: 'Multicast (Class D)', detail: 'The 224.0.0.0/4 block is reserved for one-to-many delivery (e.g. streaming, routing protocols) — never assigned to a single device.' };
+  }
+  if (a >= 240) {
+    return { type: 'Reserved (Class E)', detail: 'The 240.0.0.0/4 block is reserved for future/experimental use — not usable on real networks.' };
+  }
+  return { type: 'Public', detail: 'Not in any reserved block — a globally-routable internet address (assuming it has actually been allocated to someone by a regional registry).' };
+}
+
+function hostInfo(prefix, networkOctets, broadcastOctets) {
+  if (prefix === 32) {
+    return { first: networkOctets, last: networkOctets, count: 1,
+             note: '/32 identifies a single host — there is no separate network or broadcast address.' };
+  }
+  if (prefix === 31) {
+    return { first: networkOctets, last: broadcastOctets, count: 2,
+             note: '/31 is a point-to-point link (RFC 3021) — both addresses are usable; there is no network/broadcast address at this size.' };
+  }
+  const first = addToInt(networkOctets, 1);
+  const last = addToInt(broadcastOctets, -1);
+  const count = Math.pow(2, 32 - prefix) - 2;
+  return { first, last, count, note: '' };
+}
+
+/* =============================================================================
+ * UI WIRING
+ * ========================================================================== */
+
+// ── Tabs ──────────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+function showMsg(el, text, ok) {
+  el.textContent = text;
+  el.className = 'msg ' + (ok ? 'ok' : 'error');
+}
+function hideMsg(el) { el.className = 'msg'; el.textContent = ''; }
+
+function bitGridHtml(octets, prefix) {
+  const binOctets = octetsToBinary(octets);
+  let bitIndex = 0;
+  let html = '';
+  for (const byteStr of binOctets) {
+    html += '<div class="octet-group">';
+    for (const bit of byteStr) {
+      const isNet = bitIndex < prefix;
+      html += `<div class="bit ${isNet ? 'net' : ''}">${bit}</div>`;
+      bitIndex++;
+    }
+    html += '</div>';
+  }
+  return html;
+}
+
+// ── Click-to-explain popovers ───────────────────────────────────────────
+const TERM_INFO = {
+  cidr: {
+    title: 'CIDR Prefix (/n)',
+    text: 'How many of the 32 bits (counting from the left) are reserved for the network portion of the address. A smaller number means a bigger network (more possible hosts); a bigger number means a smaller, more specific network. This one number is what everything else on this page is calculated from.',
+  },
+  mask: {
+    title: 'Subnet Mask',
+    text: "The same information as the CIDR prefix, written as a dotted-decimal number instead of a slash. A device ANDs its own IP with this mask to work out which network it's on — this is literally how your computer decides \"is this destination on my local network, or do I need to send it to my router?\"",
+  },
+  wildcard: {
+    title: 'Wildcard Mask',
+    text: 'The exact inverse of the subnet mask (255 minus each octet). Used mainly in Cisco ACLs and OSPF configuration instead of the subnet mask — a very common source of mix-ups because the two masks look similar but mean opposite things.',
+  },
+  network: {
+    title: 'Network Address',
+    text: "The \"name\" of the subnet itself — the IP with every host bit set to 0. It identifies the subnet as a whole (this is what shows up in routing tables), but it can never be assigned to an actual device.",
+  },
+  broadcast: {
+    title: 'Broadcast Address',
+    text: 'The IP with every host bit set to 1. A packet sent to this address is delivered to every device in the subnet at once (used for things like DHCP discovery). Like the network address, it can never be assigned to a single device.',
+  },
+  firstHost: {
+    title: 'First Usable Host',
+    text: 'The first address in the subnet that can actually be given to a device — one above the network address. Very commonly reserved for the default gateway/router by convention.',
+  },
+  lastHost: {
+    title: 'Last Usable Host',
+    text: 'The last address that can be given to a device — one below the broadcast address.',
+  },
+  usableHosts: {
+    title: 'Usable Hosts',
+    text: "How many devices this subnet can actually hold. It's 2 less than the raw address count, because the network and broadcast addresses are reserved and unusable — except at /31 and /32, which are special cases with their own rules (see the note above if you're viewing one of those).",
+  },
+};
+
+function showInfoPopover(anchorEl, key) {
+  const info = TERM_INFO[key];
+  if (!info) return;
+  const pop = document.getElementById('info-popover');
+  pop.innerHTML = `<span class="close" onclick="hideInfoPopover()">✕</span><div class="t">${info.title}</div><div>${info.text}</div>`;
+  pop.style.display = 'block';
+  const rect = anchorEl.getBoundingClientRect();
+  const popWidth = 300;
+  let left = Math.min(rect.left, window.innerWidth - popWidth - 16);
+  left = Math.max(left, 8);
+  let top = rect.bottom + 6;
+  pop.style.left = left + 'px';
+  pop.style.top = top + 'px';
+  // If it would overflow the bottom of the viewport, show it above the icon instead.
+  requestAnimationFrame(() => {
+    const popRect = pop.getBoundingClientRect();
+    if (popRect.bottom > window.innerHeight) {
+      pop.style.top = (rect.top - popRect.height - 6) + 'px';
+    }
+  });
+}
+function hideInfoPopover() {
+  document.getElementById('info-popover').style.display = 'none';
+}
+document.addEventListener('click', (e) => {
+  if (!e.target.classList.contains('info-icon') && !e.target.closest('#info-popover')) {
+    hideInfoPopover();
+  }
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideInfoPopover(); });
+
+function tile(label, value, infoKey, small) {
+  const icon = infoKey ? `<span class="info-icon" onclick="showInfoPopover(this, '${infoKey}')">?</span>` : '';
+  return `<div class="result-tile"><div class="k">${label}${icon}</div><div class="v${small ? ' small' : ''}">${value}</div></div>`;
+}
+
+function renderIpTypeBanner(elId, octets) {
+  const info = classifyIp(octets);
+  const isPublic = info.type === 'Public';
+  const el = document.getElementById(elId);
+  el.className = 'ip-type-banner' + (isPublic ? ' public' : '');
+  el.innerHTML =
+    `<span class="label">${isPublic ? '🌐' : '🔒'} ${info.type}</span>` +
+    `<span class="detail">${info.detail}</span>`;
+}
+
+// ── Calculator tab ────────────────────────────────────────────────────────
+
+const calcIpInput     = document.getElementById('calc-ip');
+const calcMaskInput   = document.getElementById('calc-mask');
+const calcSlider      = document.getElementById('calc-prefix-slider');
+const calcNum         = document.getElementById('calc-prefix-num');
+const calcPrefixLabel = document.getElementById('calc-prefix-display');
+const calcMsg         = document.getElementById('calc-msg');
+const calcResultsCard = document.getElementById('calc-results-card');
+
+let _suppressMaskSync = false;
+
+function syncPrefixControls(prefix) {
+  calcSlider.value = prefix;
+  calcNum.value = prefix;
+  calcPrefixLabel.textContent = '/' + prefix;
+}
+
+calcSlider.addEventListener('input', () => { syncPrefixControls(+calcSlider.value); runCalculator(); });
+calcNum.addEventListener('input', () => {
+  let v = Math.max(0, Math.min(32, +calcNum.value || 0));
+  syncPrefixControls(v);
+  runCalculator();
+});
+calcIpInput.addEventListener('input', () => {
+  // Allow typing "ip/prefix" directly — split it live.
+  const { ip, prefix } = splitIpPrefix(calcIpInput.value);
+  if (prefix !== null && !Number.isNaN(prefix) && prefix >= 0 && prefix <= 32) {
+    syncPrefixControls(prefix);
+  }
+  runCalculator();
+});
+calcMaskInput.addEventListener('input', () => {
+  if (_suppressMaskSync) return;
+  const raw = calcMaskInput.value.trim();
+  if (!raw) { runCalculator(); return; }
+  const maskOctets = parseIp(raw);
+  if (!maskOctets) return; // let them keep typing
+  const prefix = maskOctetsToCidr(maskOctets);
+  if (prefix === null) return; // invalid mask so far, don't fight the user mid-typing
+  syncPrefixControls(prefix);
+  runCalculator();
+});
+
+function runCalculator() {
+  const { ip: ipRaw } = splitIpPrefix(calcIpInput.value);
+  const prefix = +calcNum.value;
+  const ipOctets = parseIp(ipRaw);
+
+  if (!ipOctets) {
+    if (calcIpInput.value.trim()) showMsg(calcMsg, 'Enter a valid IPv4 address, e.g. 192.168.1.10', false);
+    else hideMsg(calcMsg);
+    calcResultsCard.style.display = 'none';
+    return;
+  }
+  hideMsg(calcMsg);
+
+  const maskOctets = cidrToMaskOctets(prefix);
+  const wildcardOctets = invertOctets(maskOctets);
+  _suppressMaskSync = true;
+  calcMaskInput.value = fmtIp(maskOctets);
+  _suppressMaskSync = false;
+
+  const netOctets = networkAddress(ipOctets, maskOctets);
+  const bcastOctets = broadcastAddress(netOctets, wildcardOctets);
+  const hosts = hostInfo(prefix, netOctets, bcastOctets);
+
+  // ---- Bit grid (drawn against the network address so boundary reads clean)
+  document.getElementById('calc-bitgrid').innerHTML = bitGridHtml(ipOctets, prefix);
+
+  // ---- IP type banner (public / private / reserved, and why it matters)
+  renderIpTypeBanner('calc-iptype', ipOctets);
+
+  // ---- Result tiles
+  const results = document.getElementById('calc-results');
+  results.innerHTML =
+    tile('CIDR', '/' + prefix, 'cidr') +
+    tile('Subnet Mask', fmtIp(maskOctets), 'mask') +
+    tile('Wildcard Mask', fmtIp(wildcardOctets), 'wildcard') +
+    tile('Network Address', fmtIp(netOctets), 'network') +
+    tile('Broadcast Address', fmtIp(bcastOctets), 'broadcast') +
+    tile('First Usable Host', fmtIp(hosts.first), 'firstHost') +
+    tile('Last Usable Host', fmtIp(hosts.last), 'lastHost') +
+    tile('Usable Hosts', hosts.count.toLocaleString(), 'usableHosts');
+
+  // ---- Key points (concise, not a full tutorial)
+  const points = document.getElementById('calc-points');
+  const pts = [
+    `A /${prefix} mask means the first ${prefix} bits are "network" (fixed for every device in this subnet) and the remaining ${32 - prefix} bits are "host" (free to vary).`,
+    `Network address = IP address with every host bit forced to 0. Broadcast address = every host bit forced to 1.`,
+  ];
+  if (hosts.note) pts.push(hosts.note);
+  else pts.push(`Usable host count = 2^(host bits) − 2 → 2^${32 - prefix} − 2 = ${hosts.count.toLocaleString()} (the network and broadcast addresses themselves aren't assignable to a device).`);
+  document.getElementById('calc-points').innerHTML = '<ul>' + pts.map(p => `<li>${p}</li>`).join('') + '</ul>';
+
+  // ---- Worked binary example (the "with code" explanation)
+  const ipBin = octetsToBinary(ipOctets).join('.');
+  const maskBin = octetsToBinary(maskOctets).join('.');
+  const netBin = octetsToBinary(netOctets).join('.');
+  document.getElementById('calc-explain').innerHTML =
+`<span class="comment">// network address = IP AND mask, bit by bit</span>
+  <span class="hl-net">${ipBin}</span>   <span class="comment">(${fmtIp(ipOctets)})</span>
+&amp; ${maskBin}   <span class="comment">(${fmtIp(maskOctets)} = /${prefix})</span>
+= ${netBin}   <span class="comment">(${fmtIp(netOctets)} ← network address)</span>`;
+
+  calcResultsCard.style.display = 'block';
+}
+
+// ── Compare tab ───────────────────────────────────────────────────────────
+
+const cmpIpA     = document.getElementById('cmp-ip-a');
+const cmpIpB     = document.getElementById('cmp-ip-b');
+const cmpSlider  = document.getElementById('cmp-prefix-slider');
+const cmpNum     = document.getElementById('cmp-prefix-num');
+const cmpLabel   = document.getElementById('cmp-prefix-display');
+const cmpMsg     = document.getElementById('cmp-msg');
+const cmpCard    = document.getElementById('cmp-results-card');
+
+function syncCmpPrefix(v) { cmpSlider.value = v; cmpNum.value = v; cmpLabel.textContent = '/' + v; }
+cmpSlider.addEventListener('input', () => { syncCmpPrefix(+cmpSlider.value); runCompare(); });
+cmpNum.addEventListener('input', () => { syncCmpPrefix(Math.max(0, Math.min(32, +cmpNum.value || 0))); runCompare(); });
+[cmpIpA, cmpIpB].forEach(el => el.addEventListener('input', runCompare));
+
+function runCompare() {
+  const aOctets = parseIp(cmpIpA.value);
+  const bOctets = parseIp(cmpIpB.value);
+  const prefix = +cmpNum.value;
+
+  if (!aOctets || !bOctets) {
+    if (cmpIpA.value.trim() || cmpIpB.value.trim()) showMsg(cmpMsg, 'Enter two valid IPv4 addresses.', false);
+    else hideMsg(cmpMsg);
+    cmpCard.style.display = 'none';
+    return;
+  }
+  hideMsg(cmpMsg);
+
+  const maskOctets = cidrToMaskOctets(prefix);
+  const netA = networkAddress(aOctets, maskOctets);
+  const netB = networkAddress(bOctets, maskOctets);
+  const same = fmtIp(netA) === fmtIp(netB);
+
+  const verdictEl = document.getElementById('cmp-verdict');
+  verdictEl.innerHTML = same
+    ? `✅ Same subnet — these can reach each other directly, no router needed.`
+    : `🚧 Different subnets — traffic between them has to go through a router.`;
+  verdictEl.style.color = same ? 'var(--ok-text)' : 'var(--err-text)';
+
+  renderIpTypeBanner('cmp-iptype-a', aOctets);
+  renderIpTypeBanner('cmp-iptype-b', bOctets);
+
+  const aBin = octetsToBinary(aOctets).join('.');
+  const bBin = octetsToBinary(bOctets).join('.');
+  const maskBin = octetsToBinary(maskOctets).join('.');
+  const netABin = octetsToBinary(netA).join('.');
+  const netBBin = octetsToBinary(netB).join('.');
+
+  document.getElementById('cmp-explain').innerHTML =
+`<span class="comment">// same subnet ⇔ both IPs AND the mask give the same network address</span>
+A:  <span class="hl-net">${aBin}</span>   <span class="comment">(${fmtIp(aOctets)})</span>
+&amp;   ${maskBin}   <span class="comment">(mask /${prefix})</span>
+=   ${netABin}   <span class="comment">(${fmtIp(netA)})</span>
+
+B:  <span class="hl-host">${bBin}</span>   <span class="comment">(${fmtIp(bOctets)})</span>
+&amp;   ${maskBin}   <span class="comment">(mask /${prefix})</span>
+=   ${netBBin}   <span class="comment">(${fmtIp(netB)})</span>
+
+${same ? fmtIp(netA) + ' == ' + fmtIp(netB) + '  →  same subnet' : fmtIp(netA) + ' != ' + fmtIp(netB) + '  →  different subnets'}`;
+
+  cmpCard.style.display = 'block';
+}
+
+// ── Initial render ────────────────────────────────────────────────────────
+runCalculator();
+runCompare();
+</script>
+</body>
+</html>

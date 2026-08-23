@@ -26,6 +26,7 @@ from fastapi.responses import HTMLResponse
 
 from api.app import app as datadiff_pro_app
 from encode_decode.server import app as encode_decode_app
+from subnet_calc.server import app as subnet_calc_app
 
 app = FastAPI(title="Toolbox", description="One-stop access to internal tools.")
 
@@ -125,3 +126,4 @@ _HOME_TEMPLATE = """<!DOCTYPE html>
 
 app.mount("/tools/datadiff-pro", datadiff_pro_app)
 app.mount("/tools/encode-decode", encode_decode_app)
+app.mount("/tools/subnet-calc", subnet_calc_app)

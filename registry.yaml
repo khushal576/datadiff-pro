@@ -19,3 +19,8 @@ tools:
     title: "Encode/Decode"
     description: "Base64, URL, Hex, HTML entities, Gzip, AES, RSA, JWT, hashing — all client-side, nothing leaves your browser"
     icon: "🔐"
+
+  - name: subnet-calc
+    title: "Subnet Calculator"
+    description: "Interactive IPv4 subnetting — binary bit visualization and a worked explanation for every answer"
+    icon: "🧮"

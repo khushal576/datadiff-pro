@@ -35,11 +35,15 @@ COPY environments/ ./environments/
 COPY encode-decode/server.py ./encode_decode/server.py
 COPY encode-decode/ui/       ./encode_decode/ui/
 
+# Subnet Calculator (tool #3) — same namespacing pattern.
+COPY subnet-calc/server.py ./subnet_calc/server.py
+COPY subnet-calc/ui/       ./subnet_calc/ui/
+
 COPY main.py .
 COPY registry.yaml .
 
 # Create empty __init__.py files so Python treats these as packages.
-RUN touch core/__init__.py api/__init__.py encode_decode/__init__.py
+RUN touch core/__init__.py api/__init__.py encode_decode/__init__.py subnet_calc/__init__.py
 
 # --- Runtime config ----------------------------------------------------------
 # Tell Python not to write .pyc files and not to buffer stdout/stderr.
