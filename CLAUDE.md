@@ -68,7 +68,10 @@ repo has 10+ tools instead of 1. If you change what a file is responsible
 for, update its row in that file in the same commit — a stale map actively
 misleads, which is worse than no map.
 
-## Adding tool #2 (when it happens)
+## Adding a new tool
+
+(Followed twice already — Encode/Decode and Subnet Calculator — this is the
+tested checklist, not a guess.)
 
 1. New top-level folder for the tool's own code (its own `core`/`api`/`ui`
    equivalent — organize however fits that tool, doesn't need to mirror
@@ -97,7 +100,14 @@ misleads, which is worse than no map.
    beyond what's already there (e.g. a pure client-side tool like
    Encode/Decode), this step is a no-op — nothing to add.
 7. Update `KNOWLEDGE_MAP.md` with this tool's section.
-8. Rebuild the one image: `docker-compose up --build -d`.
+8. **Add a `CLAUDE.md` inside the tool's own folder** — short, scoped to
+   just that tool (what it does, where each piece of logic lives, its own
+   gotchas), pointing back to this file and `KNOWLEDGE_MAP.md` for anything
+   repo-wide. This is what lets a future session opened directly inside
+   `<tool>/` get oriented without pulling in every other tool's context
+   first. See `encode-decode/CLAUDE.md` or `subnet-calc/CLAUDE.md` for the
+   shape to copy.
+9. Rebuild the one image: `docker-compose up --build -d`.
 
 ## Operating notes (the owner is not a developer)
 

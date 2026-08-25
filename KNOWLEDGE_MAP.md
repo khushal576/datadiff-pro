@@ -41,6 +41,7 @@ client-side keeps it instant and consistent with the rest of the Toolbox.
 | The Compare-Two-IPs tab                                          | `index.html` — "Compare tab" section of "UI WIRING" |
 | Public/private/reserved IP classification (the colored banner)   | `index.html` — `classifyIp()` (engine) + `renderIpTypeBanner()` (UI) |
 | The click-to-explain "?" popovers on each result tile             | `index.html` — `TERM_INFO` dict + `showInfoPopover()`/`hideInfoPopover()` |
+| VLSM planning — splitting a base block into per-department pools  | `index.html` — `minPrefixForHosts()` + `planVlsm()` (engine), "VLSM planner tab" section (UI) |
 | Whether the backend does anything beyond serving the page        | `subnet-calc/server.py` (currently: nothing else, by design) |
 
 ### Known non-obvious behavior
@@ -54,6 +55,15 @@ client-side keeps it instant and consistent with the rest of the Toolbox.
   concept) and `/31` (RFC 3021 point-to-point, both addresses usable) are
   handled explicitly in `hostInfo()` — don't let a generic "count − 2"
   formula regress onto these two sizes.
+- **`planVlsm()` sorts largest-requirement-first internally** to guarantee
+  correct address alignment (see the `vlsmOrder` popover for why), but
+  `allocations` is re-sorted back to the *input* order before being
+  returned/displayed — allocation order and display order are deliberately
+  different. Don't "simplify" this by displaying in allocation order; that's
+  the one thing users explicitly need to NOT have to think about.
+- **`minPrefixForHosts()` can return `/31`** for a 2-host request — that's
+  correct (RFC 3021: both addresses usable, zero waste), not a bug, even
+  though it looks unintuitive next to a "department pool" framing.
 - **`maskOctetsToCidr()` validates mask shape** (contiguous 1s then 0s) and
   returns `null` for anything else (e.g. `255.255.0.1`) — the UI relies on
   that `null` to avoid reacting to a mask the user hasn't finished typing.
