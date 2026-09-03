@@ -24,3 +24,18 @@ tools:
     title: "Subnet Calculator"
     description: "Interactive IPv4 subnetting — binary bit visualization and a worked explanation for every answer"
     icon: "🧮"
+
+  - name: dns-lookup
+    title: "DNS Lookup"
+    description: "Live DNS records for any domain — 14 record types (A through SSHFP), with a plain-language explanation of what each one means"
+    icon: "🌐"
+
+  - name: vlan-designer
+    title: "VLAN Designer"
+    description: "Design VLANs, switch ports, and inter-VLAN routing — see exactly why two devices can or can't reach each other"
+    icon: "🧩"
+
+  - name: packet-journey
+    title: "Packet Journey"
+    description: "One real HTTP request, traced layer by layer — what gets added, what it's called, and what it actually looks like"
+    icon: "📦"

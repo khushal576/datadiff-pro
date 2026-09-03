@@ -8,8 +8,10 @@ This file is just the fast-orientation version scoped to this one folder.
 
 Interactive IPv4 subnetting: a calculator that shows *how* every answer was
 derived (binary bit visualization, worked AND/OR math), not just the
-answer, plus a same-subnet checker and a VLSM planner for splitting one
-block into differently-sized department pools.
+answer — plus a same-subnet checker, a VLSM planner for uneven department
+pools, an equal-split calculator, and a supernet/summarization tool. This
+covers the full originally-planned scope (equal split + VLSM + supernetting
++ wildcard mask); quiz/practice mode and IPv6 were explicitly descoped.
 
 ## How it's built
 
@@ -26,7 +28,7 @@ block into differently-sized department pools.
   2. **`UI WIRING`** — tabs, inputs, rendering. Everything here just calls
      into the engine above it.
 
-## The three tabs
+## The five tabs
 
 - **Calculator** — IP + CIDR/mask (kept in sync both directions), live bit
   grid, IP-type classification banner, and a worked binary explanation.
@@ -38,6 +40,14 @@ block into differently-sized department pools.
   (`planVlsm()`/`minPrefixForHosts()`), but always displays results back in
   the order you typed them — allocation order and display order are
   deliberately different.
+- **Split Equal Subnets** — one base network + "how many subnets" → every
+  resulting same-size block (`prefixForEqualSplit()`/`splitEqualSubnets()`).
+  The complement to VLSM: use this when every pool should be the same size,
+  VLSM when they shouldn't.
+- **Supernet / Summarize** — the reverse direction: N networks in →
+  the one smallest CIDR block covering all of them
+  (`commonPrefixLength()`/`summarizeNetworks()`), with overlap detection
+  and a "how much unused space does this imply" figure.
 
 ## Things that will bite you if you don't know them
 
@@ -51,6 +61,14 @@ block into differently-sized department pools.
 - **All bitwise ops use `>>> 0`** to force unsigned 32-bit values — plain
   JS bitwise operators are signed, and dropping this silently breaks any IP
   ≥ `128.0.0.0`.
+- **`summarizeNetworks()`'s waste figure is measured against merged actual
+  coverage, not the min-to-max span** — a gap between two non-contiguous
+  networks correctly shows as waste, not just space beyond the outer edges.
+- **The `raw` (originally-typed) label must survive the merge step** in
+  `summarizeNetworks()` so overlap warnings can name both networks
+  involved — this was lost once during development (merged entries only
+  carried `start`/`end`) and produced a warning naming one side `null`.
+  If you touch that merge loop, keep `raw` on every merged entry.
 - Mounted at `/tools/subnet-calc/` by `main.py` in the repo root — this
   folder never needs to know that; it's a fully self-contained ASGI app
   either way.

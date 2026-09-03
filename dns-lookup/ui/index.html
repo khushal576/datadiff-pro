@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DNS Lookup</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f4f6fb; --surface: #ffffff; --border: #dde1ef;
+    --text: #1c2035; --muted: #6b7180; --accent: #4f5ef0;
+    --ok-bg: rgba(21,128,61,0.08); --ok-text: #15803d; --ok-border: rgba(21,128,61,0.3);
+    --err-bg: rgba(220,38,38,0.06); --err-text: #b91c1c; --err-border: rgba(220,38,38,0.3);
+    --warn-bg: rgba(180,83,9,0.08); --warn-text: #b45309; --warn-border: rgba(180,83,9,0.3);
+  }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; padding: 24px 20px 60px;
+  }
+  header { max-width: 980px; margin: 0 auto 20px; }
+  header h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.5px; }
+  header h1 span { color: var(--accent); }
+  header p { color: var(--muted); font-size: 0.85rem; margin-top: 2px; }
+
+  .wrap { max-width: 980px; margin: 0 auto; }
+
+  .tabs {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px;
+    border-bottom: 1px solid var(--border); padding-bottom: 0;
+  }
+  .tab-btn {
+    background: none; border: none; cursor: pointer;
+    padding: 10px 16px; font-size: 0.85rem; font-weight: 600;
+    color: var(--muted); border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 18px; margin-bottom: 16px;
+  }
+  .card h2 { font-size: 1rem; font-weight: 700; margin-bottom: 4px; }
+  .card .hint { font-size: 0.78rem; color: var(--muted); margin-bottom: 12px; line-height: 1.5; }
+
+  label {
+    font-size: 0.78rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.5px; color: var(--muted); display: block; margin-bottom: 6px;
+  }
+  input[type="text"], select {
+    background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 10px; font-size: 0.9rem; width: 100%;
+  }
+  input[type="text"] { font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace; }
+  input[type="text"]:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .field { margin-bottom: 12px; }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; }
+  .row > .field { flex: 1; min-width: 200px; }
+
+  button {
+    cursor: pointer; border: none; border-radius: 8px; font-size: 0.9rem;
+    font-weight: 600; padding: 10px 24px; background: var(--accent); color: #fff;
+    transition: opacity 0.15s;
+  }
+  button:hover { opacity: 0.88; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .msg { font-size: 0.8rem; border-radius: 7px; padding: 9px 12px; margin: 10px 0 0; display: none; white-space: pre-wrap; line-height: 1.6; }
+  .msg.error { display: block; background: var(--err-bg); color: var(--err-text); border: 1px solid var(--err-border); }
+  .msg.warn  { display: block; background: var(--warn-bg); color: var(--warn-text); border: 1px solid var(--warn-border); }
+  .msg.ok    { display: block; background: var(--ok-bg);  color: var(--ok-text);  border: 1px solid var(--ok-border); }
+
+  /* ── Info icons + popover (shared pattern across Toolbox tools) ──────── */
+  .info-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 15px; height: 15px; border-radius: 50%; vertical-align: middle;
+    background: var(--border); color: var(--muted);
+    font-size: 0.65rem; font-weight: 700; cursor: pointer; margin-left: 5px;
+    user-select: none;
+  }
+  .info-icon:hover { background: var(--accent); color: #fff; }
+  .info-popover {
+    position: fixed; max-width: 320px; background: #10131f; color: #d7dcf0;
+    border-radius: 8px; padding: 12px 34px 12px 14px; font-size: 0.78rem;
+    line-height: 1.6; box-shadow: 0 8px 24px rgba(0,0,0,0.3); z-index: 1000;
+    display: none;
+  }
+  .info-popover .t { font-weight: 700; margin-bottom: 5px; color: #fff; font-size: 0.82rem; }
+  .info-popover .close {
+    position: absolute; top: 8px; right: 10px; cursor: pointer;
+    color: #8b93b8; font-size: 0.85rem; line-height: 1;
+  }
+  .info-popover .close:hover { color: #fff; }
+
+  /* ── Record sections ──────────────────────────────────────────────── */
+  .record-section { margin-bottom: 18px; }
+  .record-section:last-child { margin-bottom: 0; }
+  .record-section h3 {
+    font-size: 0.85rem; font-weight: 700; margin-bottom: 8px;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .record-section .empty { font-size: 0.82rem; color: var(--muted); font-style: italic; }
+
+  .data-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  .data-table th { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.4px; }
+  .data-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .data-table td.mono { font-family: monospace; word-break: break-all; }
+  .type-badge {
+    display: inline-block; border-radius: 4px; padding: 2px 7px; font-size: 0.7rem;
+    font-weight: 700; letter-spacing: 0.3px; background: rgba(79,94,240,0.12); color: var(--accent);
+  }
+  .type-badge.chain { background: rgba(180,83,9,0.12); color: var(--warn-text); }
+  .ttl-cell { color: var(--muted); font-size: 0.78rem; white-space: nowrap; }
+
+  .nx-banner {
+    background: var(--err-bg); border: 1px solid var(--err-border); color: var(--err-text);
+    border-radius: 8px; padding: 14px 16px; font-size: 0.88rem; line-height: 1.6;
+  }
+
+  .provider-note { font-size: 0.75rem; color: var(--muted); margin-top: 10px; }
+
+  /* ── Reverse lookup: constructed query name ──────────────────────────── */
+  .query-trace {
+    background: #10131f; color: #d7dcf0; border-radius: 8px; padding: 12px 16px;
+    font-family: monospace; font-size: 0.82rem; line-height: 1.8; margin-bottom: 14px;
+  }
+  .query-trace .comment { color: #8b93b8; }
+  .query-trace .hl { color: #8ea3ff; }
+
+  /* ── SOA field-by-field breakdown ────────────────────────────────────── */
+  .soa-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; margin: 6px 0 4px; }
+  .soa-field {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+  }
+  .soa-field .k { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+  .soa-field .v { font-family: monospace; font-size: 0.88rem; font-weight: 700; margin-top: 3px; word-break: break-word; }
+
+  @media (max-width: 700px) { .row { flex-direction: column; align-items: stretch; } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>DNS<span> </span>Lookup</h1>
+  <p>Live DNS records for any domain — with a plain-language explanation of what each one means and why it matters</p>
+</header>
+
+<div class="wrap">
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="forward">Forward Lookup</button>
+    <button class="tab-btn" data-tab="reverse">Reverse Lookup (PTR)</button>
+  </div>
+
+  <!-- ══════════════════════════ FORWARD LOOKUP TAB ══════════════════════════ -->
+  <div class="panel active" id="panel-forward">
+    <div class="card">
+      <h2>Look Up a Domain</h2>
+      <p class="hint">Enter a domain (e.g. <code>example.com</code>) — pasting a full URL works too, the path/protocol is stripped automatically. Checks all 14 record types a domain could realistically have (A, AAAA, CNAME, MX, TXT, NS, SOA, CAA, SRV, NAPTR, DNSKEY, DS, TLSA, SSHFP) — most domains will show "no records found" for several of these, which is normal, not an error.</p>
+
+      <div class="row">
+        <div class="field" style="flex:2;">
+          <label>Domain</label>
+          <input type="text" id="domain-input" placeholder="e.g. example.com" value="example.com">
+        </div>
+        <div class="field" style="max-width:220px;">
+          <label>DNS Provider</label>
+          <select id="provider-select">
+            <option value="cloudflare">Cloudflare (1.1.1.1)</option>
+            <option value="google">Google (8.8.8.8)</option>
+          </select>
+        </div>
+        <div class="field" style="flex:0 0 auto; min-width:auto;">
+          <button id="btn-lookup">Look Up</button>
+        </div>
+      </div>
+
+      <div id="lookup-msg" class="msg"></div>
+      <p class="provider-note">Lookups are sent directly from your browser to the chosen provider's public DNS-over-HTTPS API — nothing passes through this server.</p>
+    </div>
+
+    <div id="results-card" class="card" style="display:none;">
+      <h2 id="results-heading"></h2>
+      <div id="results-body"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════ REVERSE LOOKUP TAB ══════════════════════════ -->
+  <div class="panel" id="panel-reverse">
+    <div class="card">
+      <h2>Reverse Lookup — IP → Hostname
+        <span class="info-icon" onclick="showInfoPopover(this, 'PTR')">?</span>
+      </h2>
+      <p class="hint">
+        Enter an IPv4 address to find what hostname (if any) it's registered to point back to.
+        Works for public IPs only — private ranges (like 192.168.x.x) aren't delegated in public DNS
+        and will correctly show no result.
+      </p>
+
+      <div class="row">
+        <div class="field" style="flex:2;">
+          <label>IP Address</label>
+          <input type="text" id="reverse-ip-input" placeholder="e.g. 8.8.8.8" value="8.8.8.8">
+        </div>
+        <div class="field" style="max-width:220px;">
+          <label>DNS Provider</label>
+          <select id="reverse-provider-select">
+            <option value="cloudflare">Cloudflare (1.1.1.1)</option>
+            <option value="google">Google (8.8.8.8)</option>
+          </select>
+        </div>
+        <div class="field" style="flex:0 0 auto; min-width:auto;">
+          <button id="btn-reverse-lookup">Look Up</button>
+        </div>
+      </div>
+
+      <div id="reverse-msg" class="msg"></div>
+    </div>
+
+    <div id="reverse-results-card" class="card" style="display:none;">
+      <h2 id="reverse-results-heading"></h2>
+      <div id="reverse-results-body"></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="info-popover" id="info-popover"></div>
+
+<script>
+/* =============================================================================
+ * ENGINE — pure functions, no DOM/network access. Verified standalone
+ * (node -e against the extracted engine code) before the fetch-based UI
+ * below was wired to them.
+ * ========================================================================== */
+
+const DNS_TYPE_NAMES = {
+  1: 'A', 2: 'NS', 5: 'CNAME', 6: 'SOA', 12: 'PTR', 15: 'MX', 16: 'TXT', 28: 'AAAA',
+  33: 'SRV', 35: 'NAPTR', 43: 'DS', 44: 'SSHFP', 48: 'DNSKEY', 52: 'TLSA', 257: 'CAA',
+};
+const DNS_STATUS_NAMES = { 0: 'NOERROR', 1: 'FORMERR', 2: 'SERVFAIL', 3: 'NXDOMAIN', 4: 'NOTIMP', 5: 'REFUSED' };
+
+// Accepts a bare domain, or a pasted URL, and returns just the hostname.
+function normalizeDomain(input) {
+  let s = String(input).trim();
+  s = s.replace(/^[a-z][a-z0-9+.-]*:\/\//i, ''); // strip any "scheme://"
+  s = s.split('/')[0];
+  s = s.split('?')[0];
+  s = s.split('#')[0];
+  s = s.split(':')[0]; // strip a trailing :port
+  s = s.replace(/\.$/, ''); // strip a trailing dot (valid DNS, but noisy to display)
+  return s.toLowerCase();
+}
+
+// Loose sanity check — just enough to reject empty/garbage input before
+// firing a network request, not a full RFC validator.
+function looksLikeDomain(s) {
+  return /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/i.test(s);
+}
+
+// Parses a plain IPv4 string into 4 octets, or null if invalid.
+function parseIpv4(str) {
+  const parts = String(str).trim().split('.');
+  if (parts.length !== 4) return null;
+  const octets = [];
+  for (const p of parts) {
+    if (!/^\d{1,3}$/.test(p)) return null;
+    const n = parseInt(p, 10);
+    if (n < 0 || n > 255) return null;
+    octets.push(n);
+  }
+  return octets;
+}
+
+// Builds the reverse-DNS query name for an IPv4 address: octets reversed,
+// then ".in-addr.arpa" appended. E.g. [8,8,4,4] -> "4.4.8.8.in-addr.arpa".
+// Getting this reversal wrong doesn't just return "no records" — public
+// resolvers return SERVFAIL for the un-reversed name, confirmed against
+// the real Cloudflare API before this was written.
+function ipToReverseArpaName(octets) {
+  return [...octets].reverse().join('.') + '.in-addr.arpa';
+}
+
+// Flags the common private/reserved IPv4 ranges that will never have a
+// public PTR record, so the UI can explain why upfront instead of just
+// showing a bare failure after a wasted network round-trip.
+function isPrivateOrReservedIpv4(octets) {
+  const [a, b] = octets;
+  if (a === 10) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 127) return true;
+  if (a === 169 && b === 254) return true;
+  return false;
+}
+
+function humanizeTtl(seconds) {
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)}m (${seconds}s)`;
+  if (seconds < 86400) return `${(seconds / 3600).toFixed(1)}h (${seconds}s)`;
+  return `${(seconds / 86400).toFixed(1)}d (${seconds}s)`;
+}
+
+// MX data comes back as "10 mail.example.com." — split into priority + host.
+function parseMx(rawData) {
+  const m = String(rawData).match(/^(\d+)\s+(.+)$/);
+  return m ? { priority: +m[1], host: m[2].replace(/\.$/, '') } : null;
+}
+
+// SOA data comes back as one string: "mname rname serial refresh retry expire minimum".
+function parseSoa(rawData) {
+  const parts = String(rawData).trim().split(/\s+/);
+  if (parts.length !== 7) return null;
+  const [mname, rname, serial, refresh, retry, expire, minimum] = parts;
+  return { mname: mname.replace(/\.$/, ''), rname: rname.replace(/\.$/, ''), serial, refresh, retry, expire, minimum };
+}
+
+// CAA data comes back as: flag tag "value" — e.g. 0 issue "pki.goog".
+function parseCaa(rawData) {
+  const m = String(rawData).match(/^(\d+)\s+(\w+)\s+"?([^"]*)"?$/);
+  return m ? { flag: m[1], tag: m[2], value: m[3] } : null;
+}
+
+// Presents a raw DNS-over-HTTPS "data" field for display, based on the
+// ACTUAL record type returned (not necessarily the type that was queried —
+// a CNAME chain means an A query can return CNAME rows too).
+function formatRecordData(typeName, rawData) {
+  if (typeName === 'TXT') return String(rawData).replace(/^"|"$/g, '').replace(/\\"/g, '"');
+  if (typeName === 'MX') {
+    const parsed = parseMx(rawData);
+    return parsed ? `priority ${parsed.priority} → ${parsed.host}` : rawData;
+  }
+  if (typeName === 'CNAME' || typeName === 'NS') return String(rawData).replace(/\.$/, '');
+  if (typeName === 'SOA') {
+    const parsed = parseSoa(rawData);
+    return parsed ? `primary ${parsed.mname}, serial ${parsed.serial}, refresh ${parsed.refresh}s / retry ${parsed.retry}s / expire ${parsed.expire}s` : rawData;
+  }
+  if (typeName === 'CAA') {
+    const parsed = parseCaa(rawData);
+    return parsed ? `${parsed.tag} → ${parsed.value}` : rawData;
+  }
+  return rawData;
+}
+
+/* =============================================================================
+ * UI WIRING
+ * ========================================================================== */
+
+const PROVIDERS = {
+  cloudflare: { label: 'Cloudflare (1.1.1.1)', url: 'https://cloudflare-dns.com/dns-query' },
+  google:     { label: 'Google (8.8.8.8)',     url: 'https://dns.google/resolve' },
+};
+const RECORD_TYPES = ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS', 'SOA', 'CAA', 'SRV', 'NAPTR', 'DNSKEY', 'DS', 'TLSA', 'SSHFP'];
+
+const TERM_INFO = {
+  A: { title: 'A Record', text: "Maps a domain name to an IPv4 address. This is the most basic DNS record — it's literally what a browser needs before it can connect to anything." },
+  AAAA: { title: 'AAAA Record', text: "The IPv6 equivalent of an A record — maps a domain to an IPv6 address instead. A domain can have both at once; modern browsers prefer IPv6 when both are available." },
+  CNAME: { title: 'CNAME Record (Alias)', text: "Points one domain name to ANOTHER domain name, not directly to an IP — \"resolve this by going and resolving that instead.\" A name with a CNAME can't have any other record type at the same name; mixing them is one of the most common real-world DNS misconfigurations." },
+  MX: { title: 'MX Record (Mail Exchange)', text: "Tells other mail servers which server(s) handle email for this domain, and in what priority order (lower number = tried first). Completely separate from the website — a domain's site and its email can be hosted in entirely different places, purely because of MX." },
+  TXT: { title: 'TXT Record', text: "A free-text field attached to a domain. Originally just notes, but now mostly used for domain-ownership verification and email authentication (SPF/DKIM/DMARC — rules telling other mail servers which senders are allowed to send email as this domain, to fight spoofing)." },
+  NS: { title: 'NS Record (Name Server)', text: "Lists which servers are authoritative for this domain — the ones that actually hold its real records and must be asked directly. This is how DNS delegation works: the .com registry doesn't know a site's IP, it only knows which name servers to point you at." },
+  SOA: { title: 'SOA Record (Start of Authority)', text: "Metadata about the DNS zone itself — every domain has exactly one. Click any field below the table for what it specifically controls." },
+  soaMname: { title: 'Primary Name Server (MNAME)', text: "The one server considered the master/authoritative source of truth for this zone — where changes are actually made. Every other name server for the domain (the secondaries) copies its data FROM this one." },
+  soaRname: { title: 'Responsible Party (RNAME)', text: "The zone administrator's contact, written in DNS's odd \"first dot means @\" format — \"dns.cloudflare.com\" means the email address dns@cloudflare.com. Rarely monitored in practice for large providers, but it's meant to be who to contact about the zone." },
+  soaSerial: { title: 'Serial Number', text: "A version number for this zone. It's supposed to increase every single time any record in the zone changes — secondary name servers compare this number to their own copy, and only pull a fresh copy when they see a higher number. If an admin forgets to bump it, secondaries won't notice the zone changed at all." },
+  soaRefresh: { title: 'Refresh Interval', text: "How often (in seconds) a secondary name server should check back with the primary to see if the serial number went up. Shorter = secondaries notice changes faster, at the cost of more frequent check-in traffic." },
+  soaRetry: { title: 'Retry Interval', text: "If a secondary's refresh check FAILS (primary unreachable), this is how long it waits before trying again — normally shorter than the refresh interval, so a temporary outage doesn't push back the check very long." },
+  soaExpire: { title: 'Expire Time', text: "If a secondary can't reach the primary for this many seconds straight, it stops treating its (increasingly stale) copy of the zone as valid at all and stops answering queries for it. This is the outer bound on \"how long can the primary be down before secondaries give up.\"" },
+  soaMinimum: { title: 'Minimum TTL (Negative Caching)', text: "Historically the default TTL for records in the zone; in modern DNS (RFC 2308) it specifically controls how long a NEGATIVE answer — \"this name doesn't exist\" — gets cached by resolvers, separate from the TTL used for real records." },
+  PTR: { title: 'PTR Record (Reverse Lookup)', text: "The reverse of an A record: instead of \"name → IP\", it answers \"IP → name.\" Queried via a special reversed name ending in .in-addr.arpa, not the IP directly. Not every IP has one — it has to be set up deliberately by whoever controls that IP block, and is most reliably present for mail servers (many receiving mail servers reject email from an IP with no PTR at all, as a basic spam check)." },
+  CAA: { title: 'CAA Record (Certificate Authority Authorization)', text: "Says which certificate authorities are ALLOWED to issue an HTTPS certificate for this domain. If a domain has a CAA record naming only \"pki.goog\", for example, any other certificate authority is supposed to refuse to issue a cert for it — a defense against someone tricking the wrong CA into issuing a fraudulent certificate." },
+  SRV: { title: 'SRV Record (Service Location)', text: "Points to the specific host and port that handles a particular service for this domain (format: priority, weight, port, target) — used by protocols like SIP (VoIP) or XMPP (chat) to find the right server without hardcoding it. Most ordinary websites have none at all, which is completely normal." },
+  NAPTR: { title: 'NAPTR Record (Naming Authority Pointer)', text: "A more flexible, rule-based version of SRV, mostly seen in telephony (SIP/ENUM) setups for translating phone numbers or service names into the right server via a chain of rewrite rules. Rare outside telecom infrastructure." },
+  DNSKEY: { title: 'DNSKEY Record', text: "Part of DNSSEC — publishes the public key(s) used to cryptographically sign this domain's DNS records, so a resolver can verify the answers haven't been tampered with in transit. Only present if the domain has DNSSEC enabled." },
+  DS: { title: 'DS Record (Delegation Signer)', text: "Also part of DNSSEC — sits in the PARENT zone (e.g. \".com\") and holds a hash of the child domain's DNSKEY, forming a chain of trust from the root down to this specific domain. Only present if DNSSEC is enabled and properly delegated." },
+  TLSA: { title: 'TLSA Record', text: "Part of DANE (DNS-based Authentication of Named Entities) — pins exactly which TLS certificate (or public key) is expected for this domain, as an extra layer on top of the normal certificate-authority system. Uncommon outside of email server hardening (SMTP) and a handful of security-conscious sites." },
+  SSHFP: { title: 'SSHFP Record', text: "Publishes a fingerprint of this host's SSH public key in DNS, so an SSH client (if configured to check) can verify it's connecting to the right server on first login instead of blindly trusting whatever key it's shown. Mostly seen on servers, not typical websites." },
+  ttl: { title: 'TTL (Time To Live)', text: "How many seconds a resolver may cache this record before asking again. Short TTL → changes propagate fast, but the authoritative server gets asked more often. Long TTL → better caching, but a change you make today may not be visible everywhere until the old TTL expires. This is exactly why DNS changes don't show up instantly for everyone." },
+  chain: { title: 'Why is there more than one type here?', text: "This domain's answer includes a CNAME — an alias pointing to another name. The resolver automatically followed it and included the final record too, so you're seeing the whole chain: alias → real record, in one answer." },
+  nxdomain: { title: 'NXDOMAIN', text: "The DNS equivalent of \"this address doesn't exist.\" It means no domain by this name is registered anywhere — a stronger statement than \"has no records of this type,\" which is a completely normal, healthy result for plenty of query types on a real domain." },
+};
+
+function showInfoPopover(anchorEl, key) {
+  const info = TERM_INFO[key];
+  if (!info) return;
+  const pop = document.getElementById('info-popover');
+  pop.innerHTML = `<span class="close" onclick="hideInfoPopover()">✕</span><div class="t">${info.title}</div><div>${info.text}</div>`;
+  pop.style.display = 'block';
+  const rect = anchorEl.getBoundingClientRect();
+  const popWidth = 320;
+  let left = Math.min(rect.left, window.innerWidth - popWidth - 16);
+  left = Math.max(left, 8);
+  pop.style.left = left + 'px';
+  pop.style.top = (rect.bottom + 6) + 'px';
+  requestAnimationFrame(() => {
+    const popRect = pop.getBoundingClientRect();
+    if (popRect.bottom > window.innerHeight) pop.style.top = (rect.top - popRect.height - 6) + 'px';
+  });
+}
+function hideInfoPopover() { document.getElementById('info-popover').style.display = 'none'; }
+document.addEventListener('click', (e) => {
+  if (!e.target.classList.contains('info-icon') && !e.target.closest('#info-popover')) hideInfoPopover();
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideInfoPopover(); });
+
+function escHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function showMsg(el, text, kind) {
+  el.textContent = text;
+  el.className = 'msg ' + kind;
+}
+function hideMsg(el) { el.className = 'msg'; el.textContent = ''; }
+
+async function dohQuery(providerKey, name, type) {
+  const provider = PROVIDERS[providerKey];
+  const url = `${provider.url}?name=${encodeURIComponent(name)}&type=${type}`;
+  const res = await fetch(url, { headers: { 'Accept': 'application/dns-json' } });
+  if (!res.ok) throw new Error(`HTTP ${res.status} from ${provider.label}`);
+  return res.json();
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+// ── Forward lookup tab ──────────────────────────────────────────────────
+const domainInput   = document.getElementById('domain-input');
+const providerSelect = document.getElementById('provider-select');
+const lookupMsg     = document.getElementById('lookup-msg');
+const btnLookup     = document.getElementById('btn-lookup');
+const resultsCard   = document.getElementById('results-card');
+
+btnLookup.addEventListener('click', runLookup);
+domainInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') runLookup(); });
+
+async function runLookup() {
+  const domain = normalizeDomain(domainInput.value);
+  if (!domain || !looksLikeDomain(domain)) {
+    showMsg(lookupMsg, 'Enter a valid domain, e.g. example.com', 'error');
+    resultsCard.style.display = 'none';
+    return;
+  }
+  hideMsg(lookupMsg);
+  btnLookup.disabled = true;
+  btnLookup.textContent = 'Looking up…';
+  const providerKey = providerSelect.value;
+
+  try {
+    const responses = await Promise.all(
+      RECORD_TYPES.map(type =>
+        dohQuery(providerKey, domain, type)
+          .then(data => ({ type, data }))
+          .catch(err => ({ type, fetchError: err.message }))
+      )
+    );
+
+    // If EVERY successful response says NXDOMAIN, the domain itself doesn't
+    // exist — show one clear banner instead of six confusing empty sections.
+    const withData = responses.filter(r => r.data);
+    const allNxdomain = withData.length > 0 && withData.every(r => r.data.Status === 3);
+    if (allNxdomain) {
+      renderNxdomain(domain);
+      return;
+    }
+
+    renderResults(domain, providerKey, responses);
+  } catch (err) {
+    showMsg(lookupMsg, `Lookup failed: ${err.message}\nTry the other DNS provider, or check your internet connection.`, 'error');
+    resultsCard.style.display = 'none';
+  } finally {
+    btnLookup.disabled = false;
+    btnLookup.textContent = 'Look Up';
+  }
+}
+
+function renderNxdomain(domain) {
+  document.getElementById('results-heading').textContent = `Results for ${domain}`;
+  document.getElementById('results-body').innerHTML = `
+    <div class="nx-banner">
+      <strong>NXDOMAIN</strong> — "${escHtml(domain)}" doesn't exist anywhere in DNS.
+      <span class="info-icon" onclick="showInfoPopover(this, 'nxdomain')">?</span>
+      <br><br>
+      This isn't "no records found" — it means the name itself isn't registered at all.
+      Double-check the spelling, or that the domain hasn't expired.
+    </div>`;
+  resultsCard.style.display = 'block';
+}
+
+function renderSoaFieldGrid(rawData) {
+  const parsed = parseSoa(rawData);
+  if (!parsed) return `<p class="empty">Couldn't parse SOA data: ${escHtml(rawData)}</p>`;
+  const rnameEmail = parsed.rname.replace('.', '@');
+  const fields = [
+    ['Primary Name Server', parsed.mname, 'soaMname'],
+    ['Responsible Party', rnameEmail, 'soaRname'],
+    ['Serial Number', parsed.serial, 'soaSerial'],
+    ['Refresh', humanizeTtl(+parsed.refresh), 'soaRefresh'],
+    ['Retry', humanizeTtl(+parsed.retry), 'soaRetry'],
+    ['Expire', humanizeTtl(+parsed.expire), 'soaExpire'],
+    ['Minimum (Negative TTL)', humanizeTtl(+parsed.minimum), 'soaMinimum'],
+  ];
+  return `<div class="soa-grid">` + fields.map(([label, value, key]) => `
+    <div class="soa-field">
+      <div class="k">${escHtml(label)} <span class="info-icon" onclick="showInfoPopover(this, '${key}')">?</span></div>
+      <div class="v">${escHtml(value)}</div>
+    </div>`).join('') + `</div>`;
+}
+
+function renderResults(domain, providerKey, responses) {
+  document.getElementById('results-heading').innerHTML =
+    `Results for <span style="font-family:monospace;">${escHtml(domain)}</span> — via ${escHtml(PROVIDERS[providerKey].label)}`;
+
+  const sections = responses.map(({ type, data, fetchError }) => {
+    if (fetchError) {
+      return `<div class="record-section">
+        <h3>${type} Records <span class="info-icon" onclick="showInfoPopover(this, '${type}')">?</span></h3>
+        <p class="empty" style="color:var(--err-text);">Query failed: ${escHtml(fetchError)}</p>
+      </div>`;
+    }
+
+    const answers = data.Answer || [];
+    if (answers.length === 0) {
+      const statusNote = data.Status !== 0 ? ` (${DNS_STATUS_NAMES[data.Status] || 'status ' + data.Status})` : '';
+      return `<div class="record-section">
+        <h3>${type} Records <span class="info-icon" onclick="showInfoPopover(this, '${type}')">?</span></h3>
+        <p class="empty">No ${type} records found${statusNote}.</p>
+      </div>`;
+    }
+
+    if (type === 'SOA') {
+      return `<div class="record-section">
+        <h3>SOA Record <span class="info-icon" onclick="showInfoPopover(this, 'SOA')">?</span></h3>
+        ${renderSoaFieldGrid(answers[0].data)}
+      </div>`;
+    }
+
+    const hasChain = answers.some(a => DNS_TYPE_NAMES[a.type] !== type);
+    const rows = answers.map(a => {
+      const actualType = DNS_TYPE_NAMES[a.type] || `TYPE${a.type}`;
+      const isChainHop = actualType !== type;
+      return `<tr>
+        <td><span class="type-badge${isChainHop ? ' chain' : ''}">${actualType}</span></td>
+        <td class="mono">${escHtml(formatRecordData(actualType, a.data))}</td>
+        <td class="ttl-cell">${humanizeTtl(a.TTL)}</td>
+      </tr>`;
+    }).join('');
+
+    return `<div class="record-section">
+      <h3>${type} Records <span class="info-icon" onclick="showInfoPopover(this, '${type}')">?</span>${hasChain ? ` <span class="info-icon" onclick="showInfoPopover(this, 'chain')" title="Why more than one type?">?</span>` : ''}</h3>
+      <table class="data-table">
+        <tr><th>Type</th><th>Value</th><th>TTL <span class="info-icon" onclick="showInfoPopover(this, 'ttl')">?</span></th></tr>
+        ${rows}
+      </table>
+    </div>`;
+  }).join('');
+
+  document.getElementById('results-body').innerHTML = sections;
+  resultsCard.style.display = 'block';
+}
+
+// ── Reverse lookup tab ───────────────────────────────────────────────────
+
+const reverseIpInput      = document.getElementById('reverse-ip-input');
+const reverseProviderSelect = document.getElementById('reverse-provider-select');
+const reverseMsg          = document.getElementById('reverse-msg');
+const btnReverseLookup    = document.getElementById('btn-reverse-lookup');
+const reverseResultsCard  = document.getElementById('reverse-results-card');
+
+btnReverseLookup.addEventListener('click', runReverseLookup);
+reverseIpInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') runReverseLookup(); });
+
+async function runReverseLookup() {
+  const octets = parseIpv4(reverseIpInput.value);
+  if (!octets) {
+    showMsg(reverseMsg, 'Enter a valid IPv4 address, e.g. 8.8.8.8', 'error');
+    reverseResultsCard.style.display = 'none';
+    return;
+  }
+
+  const arpaName = ipToReverseArpaName(octets);
+  const providerKey = reverseProviderSelect.value;
+
+  if (isPrivateOrReservedIpv4(octets)) {
+    showMsg(reverseMsg,
+      `${octets.join('.')} is a private/reserved address (not routable on the public internet) — ` +
+      `public DNS has no delegation for it, so a reverse lookup here will correctly find nothing. ` +
+      `This is expected, not a tool error.`, 'warn');
+    reverseResultsCard.style.display = 'none';
+    return;
+  }
+  hideMsg(reverseMsg);
+
+  btnReverseLookup.disabled = true;
+  btnReverseLookup.textContent = 'Looking up…';
+
+  try {
+    const data = await dohQuery(providerKey, arpaName, 'PTR');
+    renderReverseResults(octets, arpaName, providerKey, data);
+  } catch (err) {
+    showMsg(reverseMsg, `Lookup failed: ${err.message}\nTry the other DNS provider, or check your internet connection.`, 'error');
+    reverseResultsCard.style.display = 'none';
+  } finally {
+    btnReverseLookup.disabled = false;
+    btnReverseLookup.textContent = 'Look Up';
+  }
+}
+
+function renderReverseResults(octets, arpaName, providerKey, data) {
+  const ip = octets.join('.');
+  document.getElementById('reverse-results-heading').innerHTML =
+    `Results for <span style="font-family:monospace;">${escHtml(ip)}</span> — via ${escHtml(PROVIDERS[providerKey].label)}`;
+
+  const trace = `<div class="query-trace">
+<span class="comment">// reverse-DNS query name: octets reversed, ".in-addr.arpa" appended</span>
+${ip} <span class="comment">→</span> <span class="hl">${escHtml(arpaName)}</span> <span class="comment">(type=PTR)</span>
+  </div>`;
+
+  const answers = data.Answer || [];
+  let body;
+  if (answers.length === 0) {
+    const statusNote = data.Status !== 0 ? ` (${DNS_STATUS_NAMES[data.Status] || 'status ' + data.Status})` : '';
+    body = `<p class="empty">No PTR record found for ${escHtml(ip)}${statusNote} — this IP has no reverse-DNS entry configured. Common for ordinary client IPs; expected to be present for mail servers.</p>`;
+  } else {
+    const rows = answers.map(a => `
+      <tr>
+        <td class="mono">${escHtml(String(a.data).replace(/\.$/, ''))}</td>
+        <td class="ttl-cell">${humanizeTtl(a.TTL)}</td>
+      </tr>`).join('');
+    body = `<table class="data-table">
+      <tr><th>Hostname</th><th>TTL <span class="info-icon" onclick="showInfoPopover(this, 'ttl')">?</span></th></tr>
+      ${rows}
+    </table>`;
+  }
+
+  document.getElementById('reverse-results-body').innerHTML = trace + body;
+  reverseResultsCard.style.display = 'block';
+}
+</script>
+</body>
+</html>

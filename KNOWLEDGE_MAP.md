@@ -26,6 +26,165 @@ misleads. If a file's job changes, update its row here in the same commit.
 
 ---
 
+## Tool: Packet Journey — mounted at `/tools/packet-journey/`
+
+Fully static, no calculation and no network calls — a narrow, concrete
+"watch one real request travel through the layers" tool, deliberately NOT
+a comprehensive reference (that was tried once as "Layer Explorer" and
+removed). One fixed scenario (HTTP/TCP/IPv4/Ethernet), walked Physical (1)
+→ Application (7).
+
+| If you need to change...                                    | Go to |
+|-----------------------------------------------------------------|-------|
+| The 7-step order, names, PDU labels, colors                      | `index.html` — `STEPS` array |
+| Any individual layer's content (header fields, sample values, explanation) | `index.html` — `RENDERERS.<layerkey>` (e.g. `RENDERERS.transport`) |
+| Step navigation / prev-next buttons                              | `index.html` — `goToStep()`, `renderStepsNav()` |
+| Click-to-explain glossary                                        | `index.html` — `TERM_INFO` |
+| The Wireshark correlation block per step (exact labels, filters) | `index.html` — the `.ws-block` markup inside each `RENDERERS.<layerkey>` |
+| The brief "other protocols at this layer" list                   | `index.html` — `PROTOCOLS_BY_LAYER` + `protocolListHtml()` |
+| Whether the backend does anything beyond serving the page        | `packet-journey/server.py` (currently: nothing else, by design) |
+
+### Known non-obvious behavior
+
+- **The scenario (HTTP GET over TCP/IPv4/Ethernet) is fixed, not
+  configurable** — adding a UDP/HTTPS/IPv6 variant is a real scope
+  decision, not a small tweak; check with the owner first, since the whole
+  point right now is depth on one example over breadth across variants.
+- **Steps 5 (Session) and 6 (Presentation) intentionally show NO header
+  field** — that absence is the actual teaching content at those two
+  steps (a real HTTP/TCP/IP packet has no Session or Presentation header
+  at all). Don't "complete the pattern" by inventing fake fields for them.
+- **Direction vs. framing are deliberately reconciled**: navigation goes
+  Physical→Application (matches what the owner asked for, reads as the
+  receiving side revealing headers one at a time), but each step's prose
+  still explains that header's job from the SENDING side (since that's
+  when it's actually added) — see `packet-journey/CLAUDE.md` for the full
+  reasoning if this looks contradictory at a glance.
+- **Every glossary reference was checked against `TERM_INFO` with a script
+  before shipping** (0 missing, 0 unused) — same convention as every other
+  tool here; re-run the same check after adding new content.
+- **Each step's `.ws-block` uses the exact same sample values as that
+  step's own field table** (same MACs/IPs/ports/TTL) — they're two
+  independent hand-written blocks, not generated from one source, so a
+  change to the scenario's values must be applied to both.
+- **`PROTOCOLS_BY_LAYER`'s per-layer lists are deliberately brief** (one
+  line each) — going deeper per protocol here would recreate the exact
+  scope that got the standalone "Layer Explorer" tool removed.
+
+---
+
+## Tool: VLAN Designer — mounted at `/tools/vlan-designer/`
+
+Entirely client-side, same pattern as Subnet Calculator — pure logic, no
+secrets, no network calls. Built as one connected scenario (VLANs → switch
+ports → router → reachability), not a reference tool. Phases 1-2 built;
+see `vlan-designer/CLAUDE.md` for the phases still open (DHCP relay, ARP).
+
+| If you need to change...                                    | Go to |
+|-----------------------------------------------------------------|-------|
+| VLAN-to-subnet allocation (largest-first, with gateway IP)       | `index.html` — `planVlans()` |
+| The shared state driving tabs 1-4                                | `index.html` — `VLAN_PLAN` + `refreshDependentTabs()` |
+| Switch access/trunk port planning + the 802.1Q frame diagram      | `index.html` — `renderPortsTab()`, "Tab 2" section |
+| Router-on-a-stick sub-interfaces + generated CLI config           | `index.html` — `renderRouterTab()`, "Tab 3" section |
+| The reachability checker (same-VLAN vs cross-VLAN path)           | `index.html` — `runReachCheck()`, "Tab 4" section |
+| ACL rules blocking otherwise-valid routes                         | `index.html` — `checkAcl()` (engine), ACL rows card + `getAclRules()` (Tab 4 UI) |
+| STP root-bridge election / port roles (fixed 2-switch topology)   | `index.html` — `computeStp()` (engine), `runStp()`, "Tab 5" section |
+| Click-to-explain popovers                                        | `index.html` — `TERM_INFO` dict |
+| Whether the backend does anything beyond serving the page        | `vlan-designer/server.py` (currently: nothing else, by design) |
+
+### Known non-obvious behavior
+
+- **IP-math functions are intentionally duplicated from Subnet Calculator**,
+  not imported/shared — tools never import each other's code (see root
+  `CLAUDE.md`). If a bug is found in one copy (e.g. `hostInfo()`'s /31//32
+  handling), check whether the same bug exists in the other tool's copy too.
+- **`planVlans()` sorts largest-first internally, re-sorts to input order
+  for display** — identical reasoning to Subnet Calculator's `planVlsm()`.
+  Don't display in allocation order.
+- **Tabs 2-4 have no state of their own** — they're pure re-renders of
+  `VLAN_PLAN`, called via `refreshDependentTabs()` whenever tab 1's plan
+  changes. There's no per-tab memory across a VLAN-plan edit.
+- **Every inline glossary reference was checked against `TERM_INFO` with a
+  script before shipping** — a dangling reference silently produces an
+  empty/broken popover, which is exactly the kind of thing easy to
+  introduce and easy to miss by eye. Re-run that check after adding new
+  inline `showInfoPopover(...)` references.
+- **`checkAcl()` has no implicit "deny everything else"** unlike a real
+  router ACL — only explicit rules matter, no match means permit. A
+  deliberate, documented simplification (see the ACL card's hint text),
+  not a bug to "fix" toward real Cisco behavior.
+- **`computeStp()` models exactly one fixed topology** (two switches, two
+  direct parallel links) — not a general spanning-tree algorithm. Tab 5 is
+  intentionally NOT wired into `VLAN_PLAN`/`refreshDependentTabs()`; it has
+  no relationship to the VLAN plan and was never meant to.
+
+---
+
+## Tool: DNS Lookup — mounted at `/tools/dns-lookup/`
+
+Client-side, but genuinely needs internet access (the one tool in the
+Toolbox that isn't fully offline) — `dns-lookup/server.py` only serves the
+static page; every actual DNS query is a `fetch()` from the browser
+straight to a public DNS-over-HTTPS provider (Cloudflare or Google).
+
+| If you need to change...                                    | Go to |
+|-----------------------------------------------------------------|-------|
+| Domain input parsing/validation (`normalizeDomain`, `looksLikeDomain`) | `index.html` — `ENGINE` block |
+| TTL formatting, MX/SOA/CAA parsing, TXT/CNAME cleanup for display | `index.html` — `humanizeTtl()` / `parseMx()` / `parseSoa()` / `parseCaa()` / `formatRecordData()` |
+| Which record types get queried (currently 14: A, AAAA, CNAME, MX, TXT, NS, SOA, CAA, SRV, NAPTR, DNSKEY, DS, TLSA, SSHFP) | `index.html` — `RECORD_TYPES` array |
+| Which DoH providers are offered                                  | `index.html` — `PROVIDERS` object |
+| The actual `fetch()` call to the DNS provider                    | `index.html` — `dohQuery()` |
+| CNAME-chain detection/labeling in results                        | `index.html` — `renderResults()` (`hasChain`, `DNS_TYPE_NAMES`) |
+| NXDOMAIN handling (domain doesn't exist at all)                  | `index.html` — `renderNxdomain()` + the `allNxdomain` check in `runLookup()` |
+| Click-to-explain popovers for each record type / TTL             | `index.html` — `TERM_INFO` dict |
+| SOA's field-by-field breakdown (mname/rname/serial/refresh/retry/expire/minimum) | `index.html` — `renderSoaFieldGrid()` + the `soaMname`/`soaRname`/etc. `TERM_INFO` entries |
+| Reverse DNS / PTR lookup (IP → hostname)                          | `index.html` — `ipToReverseArpaName()`, `parseIpv4()`, `runReverseLookup()`, "Reverse lookup tab" section |
+| Private/reserved-IP short-circuit for reverse lookups             | `index.html` — `isPrivateOrReservedIpv4()` |
+| Whether the backend does anything beyond serving the page        | `dns-lookup/server.py` (currently: nothing else, by design) |
+
+### Known non-obvious behavior
+
+- **An `A` query's answer can contain a `CNAME` row too** — DoH providers
+  follow aliases automatically and return the whole chain. The renderer
+  labels each row by its OWN type (not the queried type) specifically to
+  show this. Don't collapse it to "just show A records."
+- **NXDOMAIN (`Status: 3`) is checked separately from "no records of this
+  type"** (`Status: 0` with empty/missing `Answer`) — the second case is
+  normal and common (most domains lack a TXT record, say), the first means
+  the domain doesn't exist anywhere. Conflating them produces a false
+  "doesn't exist" for a perfectly real domain.
+- **The DoH response omits the `Answer` key entirely on NXDOMAIN** — code
+  relies on `data.Answer || []` for this; confirmed against the real
+  Cloudflare API, not assumed from docs.
+- **This tool's engine tests don't cover the network layer** (can't
+  `node -e` a real `fetch`) — only the pure parsing/formatting functions
+  are unit-tested that way. The `fetch`/response-shape assumptions were
+  instead verified by curling the real provider endpoints directly.
+- **Coverage was deliberately expanded from 6 to 14 record types** after
+  initial feedback that "all 14 record types" was the actual expectation,
+  not just the common six. Most domains will legitimately show "no records
+  found" for several of these (SRV/NAPTR/DNSKEY/DS/TLSA/SSHFP are all
+  niche) — that's the correct, honest result, not a sign the lookup missed
+  something. Don't hide empty sections to make the page look tidier; the
+  whole point is showing what was actually checked.
+- **SOA now gets a dedicated field-by-field breakdown** (`renderSoaFieldGrid()`)
+  instead of going through the generic per-record-type table — it's a
+  special case inside `renderResults()`'s loop. CAA still just gets light
+  inline formatting (`parseCaa()`), that wasn't upgraded to the same
+  treatment and there's no plan to.
+- **Reverse-DNS octet reversal is mandatory, not cosmetic** — confirmed by
+  querying the SAME real IP both reversed and un-reversed: reversed
+  succeeds, un-reversed returns `SERVFAIL` (Status 2), not just an empty
+  answer. `ipToReverseArpaName()` is the only place this should happen;
+  don't hand-construct an `.in-addr.arpa` name anywhere else.
+- **Private/reserved IPv4 ranges are rejected BEFORE the network call**
+  in the reverse-lookup tab (`isPrivateOrReservedIpv4()`) — querying public
+  DNS for `192.168.x.x`'s PTR would just return nothing, which reads as a
+  tool failure to someone who doesn't already know why; the upfront
+  explanation is deliberate, not an unnecessary guard.
+
+---
+
 ## Tool: Subnet Calculator — mounted at `/tools/subnet-calc/`
 
 Entirely client-side, same pattern as Encode/Decode — `subnet-calc/server.py`
@@ -42,6 +201,9 @@ client-side keeps it instant and consistent with the rest of the Toolbox.
 | Public/private/reserved IP classification (the colored banner)   | `index.html` — `classifyIp()` (engine) + `renderIpTypeBanner()` (UI) |
 | The click-to-explain "?" popovers on each result tile             | `index.html` — `TERM_INFO` dict + `showInfoPopover()`/`hideInfoPopover()` |
 | VLSM planning — splitting a base block into per-department pools  | `index.html` — `minPrefixForHosts()` + `planVlsm()` (engine), "VLSM planner tab" section (UI) |
+| Splitting a block into N *equal*-sized subnets                    | `index.html` — `prefixForEqualSplit()` + `splitEqualSubnets()` (engine), "Split Equal Subnets tab" section (UI) |
+| Supernetting / route summarization (many networks → one CIDR block) | `index.html` — `commonPrefixLength()` + `summarizeNetworks()` (engine), "Supernet / Summarize tab" section (UI) |
+| Shared widgets used by VLSM/Split/Supernet (proportional bar, results table, add/remove row buttons) | `index.html` — `.block-bar`/`.seg`, `.data-table`, `.add-row-btn`, `.row-remove-btn` CSS classes (generic on purpose — reused across all three dynamic-row tabs) |
 | Whether the backend does anything beyond serving the page        | `subnet-calc/server.py` (currently: nothing else, by design) |
 
 ### Known non-obvious behavior
@@ -64,6 +226,21 @@ client-side keeps it instant and consistent with the rest of the Toolbox.
 - **`minPrefixForHosts()` can return `/31`** for a 2-host request — that's
   correct (RFC 3021: both addresses usable, zero waste), not a bug, even
   though it looks unintuitive next to a "department pool" framing.
+- **`summarizeNetworks()` measures waste against actual merged coverage**,
+  not just the min-to-max address span — a gap between two non-contiguous
+  input networks correctly counts as waste too, not just space beyond the
+  outer edges. If you touch the merge loop, keep the three test cases
+  (exact tiling / gapped / overlapping) passing, not just the simple one.
+- **Overlap detection carries the `raw` label through the merge step**
+  (`merged[...].raw`) specifically so overlap warnings can name both
+  networks involved — it's easy to "simplify" the merge loop and lose this,
+  producing a warning that says `null` instead of a network name (this
+  exact bug was caught and fixed once already during development).
+- All three of VLSM / Split / Supernet share the same dynamic-row-list
+  pattern (`addXRow()` appends a `.row` div with its own remove button,
+  wired to re-run that tab's calc function) and the same `.block-bar` /
+  `.data-table` CSS. Copy that pattern for any future tab needing a
+  variable-length input list instead of inventing a new one.
 - **`maskOctetsToCidr()` validates mask shape** (contiguous 1s then 0s) and
   returns `null` for anything else (e.g. `255.255.0.1`) — the UI relies on
   that `null` to avoid reacting to a mask the user hasn't finished typing.

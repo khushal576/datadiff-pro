@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VLAN Designer</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f4f6fb; --surface: #ffffff; --border: #dde1ef;
+    --text: #1c2035; --muted: #6b7180; --accent: #4f5ef0;
+    --ok-bg: rgba(21,128,61,0.08); --ok-text: #15803d; --ok-border: rgba(21,128,61,0.3);
+    --err-bg: rgba(220,38,38,0.06); --err-text: #b91c1c; --err-border: rgba(220,38,38,0.3);
+    --warn-bg: rgba(180,83,9,0.08); --warn-text: #b45309; --warn-border: rgba(180,83,9,0.3);
+  }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; padding: 24px 20px 60px;
+  }
+  header { max-width: 1000px; margin: 0 auto 20px; }
+  header h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.5px; }
+  header h1 span { color: var(--accent); }
+  header p { color: var(--muted); font-size: 0.85rem; margin-top: 2px; }
+
+  .wrap { max-width: 1000px; margin: 0 auto; }
+
+  .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+  .tab-btn {
+    background: none; border: none; cursor: pointer;
+    padding: 10px 16px; font-size: 0.85rem; font-weight: 600;
+    color: var(--muted); border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px; margin-bottom: 16px; }
+  .card h2 { font-size: 1rem; font-weight: 700; margin-bottom: 4px; }
+  .card .hint { font-size: 0.78rem; color: var(--muted); margin-bottom: 12px; line-height: 1.5; }
+
+  label { font-size: 0.78rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); display: block; margin-bottom: 6px; }
+  input[type="text"], input[type="number"], select {
+    background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 7px 10px; font-size: 0.85rem; width: 100%;
+  }
+  input[type="text"] { font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace; }
+  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .field { margin-bottom: 12px; }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; }
+  .row > .field { flex: 1; min-width: 160px; }
+  .prefix-row { display: flex; align-items: center; gap: 10px; }
+  .prefix-row input[type="range"] { flex: 1; accent-color: var(--accent); }
+  .prefix-label { font-family: monospace; font-weight: 700; color: var(--accent); min-width: 34px; text-align: right; }
+  .divider { border-top: 1px dashed var(--border); margin: 16px 0; }
+
+  .msg { font-size: 0.8rem; border-radius: 7px; padding: 9px 12px; margin: 10px 0; display: none; white-space: pre-wrap; line-height: 1.6; }
+  .msg.error { display: block; background: var(--err-bg); color: var(--err-text); border: 1px solid var(--err-border); }
+  .msg.warn  { display: block; background: var(--warn-bg); color: var(--warn-text); border: 1px solid var(--warn-border); }
+  .msg.ok    { display: block; background: var(--ok-bg);  color: var(--ok-text);  border: 1px solid var(--ok-border); }
+
+  .add-row-btn { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 7px 14px; font-size: 0.82rem; font-weight: 600; color: var(--text); cursor: pointer; }
+  .add-row-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .row-remove-btn { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; cursor: pointer; color: var(--err-text); font-size: 0.85rem; }
+
+  .data-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  .data-table th { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.4px; }
+  .data-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .data-table td.mono { font-family: monospace; }
+  .color-swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; }
+
+  .explain-points { font-size: 0.82rem; line-height: 1.9; margin-bottom: 4px; }
+  .explain-points li { margin-left: 18px; }
+
+  /* ── Info icons + popover (shared Toolbox pattern) ───────────────────── */
+  .info-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 15px; height: 15px; border-radius: 50%; vertical-align: middle;
+    background: var(--border); color: var(--muted);
+    font-size: 0.65rem; font-weight: 700; cursor: pointer; margin-left: 5px; user-select: none;
+  }
+  .info-icon:hover { background: var(--accent); color: #fff; }
+  .term { border-bottom: 1.5px dotted var(--accent); cursor: pointer; font-weight: 600; color: var(--accent); }
+  .info-popover {
+    position: fixed; max-width: 320px; background: #10131f; color: #d7dcf0;
+    border-radius: 8px; padding: 12px 34px 12px 14px; font-size: 0.78rem;
+    line-height: 1.6; box-shadow: 0 8px 24px rgba(0,0,0,0.3); z-index: 1000; display: none;
+  }
+  .info-popover .t { font-weight: 700; margin-bottom: 5px; color: #fff; font-size: 0.82rem; }
+  .info-popover .close { position: absolute; top: 8px; right: 10px; cursor: pointer; color: #8b93b8; font-size: 0.85rem; line-height: 1; }
+  .info-popover .close:hover { color: #fff; }
+
+  /* ── Topology / port diagrams ─────────────────────────────────────────── */
+  .topo { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 14px 0; }
+  .topo-box {
+    border-radius: 8px; padding: 10px 14px; font-size: 0.8rem; font-weight: 700; text-align: center;
+    min-width: 90px; border: 1px solid var(--border);
+  }
+  .topo-box.switch { background: rgba(79,94,240,0.1); border-color: var(--accent); color: var(--accent); }
+  .topo-box.router { background: rgba(217,119,6,0.1); border-color: #d97706; color: #d97706; }
+  .topo-arrow { color: var(--muted); font-size: 1.1rem; }
+  .port-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin: 10px 0; }
+  .port-chip {
+    border-radius: 8px; padding: 8px 10px; font-size: 0.78rem; border: 1px solid var(--border);
+  }
+  .port-chip .label { font-weight: 700; }
+  .port-chip .sub { color: var(--muted); font-size: 0.72rem; margin-top: 2px; }
+  .port-chip.trunk { background: rgba(124,58,237,0.08); border-color: #7c3aed; }
+
+  .frame-diagram { display: flex; flex-wrap: wrap; gap: 2px; margin: 10px 0; font-family: monospace; font-size: 0.72rem; }
+  .frame-part { padding: 8px 6px; text-align: center; color: #fff; border-radius: 3px; flex: 1; min-width: 70px; }
+
+  .cli-block {
+    background: #10131f; color: #d7dcf0; border-radius: 8px; padding: 14px 16px;
+    font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace; font-size: 0.8rem;
+    line-height: 1.7; overflow-x: auto; white-space: pre-wrap;
+  }
+  .cli-block .c { color: #8b93b8; }
+
+  .path-steps { list-style: none; }
+  .path-steps li {
+    padding: 8px 12px; border-left: 3px solid var(--accent); background: var(--bg);
+    margin-bottom: 6px; border-radius: 0 6px 6px 0; font-size: 0.85rem;
+  }
+  .path-steps li.hop { border-left-color: #d97706; }
+
+  @media (max-width: 700px) { .row { flex-direction: column; align-items: stretch; } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>VLAN<span> </span>Designer</h1>
+  <p>Design VLANs, switch ports, and inter-VLAN routing — see exactly why two devices can (or can't) reach each other</p>
+</header>
+
+<div class="wrap">
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="vlans">1. VLAN Planner</button>
+    <button class="tab-btn" data-tab="ports">2. Switch Ports</button>
+    <button class="tab-btn" data-tab="router">3. Inter-VLAN Routing</button>
+    <button class="tab-btn" data-tab="reach">4. Reachability Checker</button>
+    <button class="tab-btn" data-tab="stp">5. Redundancy (STP)</button>
+  </div>
+
+  <!-- ══════════════════════════ TAB 1: VLAN PLANNER ══════════════════════════ -->
+  <div class="panel active" id="panel-vlans">
+    <div class="card">
+      <h2>Base Network</h2>
+      <p class="hint">The address block you're carving into VLANs — e.g. everything this site/building was given to work with.</p>
+      <div class="row">
+        <div class="field">
+          <label>Base IP Address</label>
+          <input type="text" id="vlan-base-ip" value="192.168.0.0" placeholder="e.g. 192.168.0.0 or 192.168.0.0/22">
+        </div>
+        <div class="field" style="max-width:260px;">
+          <label>Prefix Length (CIDR)</label>
+          <div class="prefix-row">
+            <input type="range" id="vlan-base-slider" min="0" max="32" value="22">
+            <input type="number" id="vlan-base-num" min="0" max="32" value="22">
+            <span class="prefix-label" id="vlan-base-display">/22</span>
+          </div>
+        </div>
+      </div>
+      <div id="vlan-base-msg" class="msg"></div>
+    </div>
+
+    <div class="card">
+      <h2>VLANs Needed
+        <span class="info-icon" onclick="showInfoPopover(this, 'vlan')">?</span>
+      </h2>
+      <p class="hint">
+        One row per VLAN — a separate broadcast domain, usually one per department/purpose. The VLAN ID
+        (<span class="term" onclick="showInfoPopover(this, 'vlanId')">what's that?</span>) is independent
+        of the IP subnet — Layer 2 tag vs Layer 3 addressing, assigned together purely by convention.
+      </p>
+      <div id="vlan-rows"></div>
+      <button type="button" class="add-row-btn" id="vlan-add-row">+ Add VLAN</button>
+      <div id="vlan-msg" class="msg"></div>
+    </div>
+
+    <div class="card" id="vlan-results-card" style="display:none;">
+      <h2>VLAN Plan</h2>
+      <p class="hint" id="vlan-summary"></p>
+      <div style="overflow-x:auto;">
+        <table class="data-table" id="vlan-table"></table>
+      </div>
+      <div class="divider"></div>
+      <h2 style="margin-bottom:8px;">Why it's planned this way</h2>
+      <div class="explain-points" id="vlan-points"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════ TAB 2: SWITCH PORTS ══════════════════════════ -->
+  <div class="panel" id="panel-ports">
+    <div class="card" id="ports-need-vlans-msg">
+      <p class="hint">Plan your VLANs in tab 1 first — switch ports are assigned to VLANs planned there.</p>
+    </div>
+
+    <div id="ports-content" style="display:none;">
+      <div class="card">
+        <h2>Access Ports
+          <span class="info-icon" onclick="showInfoPopover(this, 'accessPort')">?</span>
+        </h2>
+        <p class="hint">One row per device plugged into the switch — pick which VLAN it belongs to.</p>
+        <div id="port-rows"></div>
+        <button type="button" class="add-row-btn" id="port-add-row">+ Add device</button>
+      </div>
+
+      <div class="card">
+        <h2>The Switch, Visualized</h2>
+        <div class="port-list" id="port-visual"></div>
+        <p class="hint" style="margin-top:10px; margin-bottom:0;">
+          Every VLAN present on an access port also needs to reach the router — so one port is automatically
+          a <span class="term" onclick="showInfoPopover(this, 'trunkPort')">trunk port</span>, carrying all of them at once.
+        </p>
+      </div>
+
+      <div class="card">
+        <h2>How a Trunk Actually Carries Multiple VLANs
+          <span class="info-icon" onclick="showInfoPopover(this, 'dot1q')">?</span>
+        </h2>
+        <p class="hint">A trunk port inserts a 4-byte 802.1Q tag into each Ethernet frame, recording which VLAN it belongs to — that's the entire mechanism:</p>
+        <div class="frame-diagram" id="frame-diagram"></div>
+        <div class="explain-points">
+          <ul>
+            <li>Access ports never see this tag — the switch adds it the instant a frame enters a trunk, and strips it the instant a frame leaves onto an access port. Only trunk links ever carry tagged frames.</li>
+            <li>This is exactly why a trunk can carry many VLANs on ONE physical cable: the tag is the only thing separating them.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════ TAB 3: INTER-VLAN ROUTING ══════════════════════════ -->
+  <div class="panel" id="panel-router">
+    <div class="card" id="router-need-vlans-msg">
+      <p class="hint">Plan your VLANs in tab 1 first — the router's sub-interfaces are generated from the VLANs planned there.</p>
+    </div>
+
+    <div id="router-content" style="display:none;">
+      <div class="card">
+        <h2>Router-on-a-Stick
+          <span class="info-icon" onclick="showInfoPopover(this, 'routerOnAStick')">?</span>
+        </h2>
+        <p class="hint">
+          One physical link from the router to the switch's trunk port — divided into one
+          <span class="term" onclick="showInfoPopover(this, 'subinterface')">sub-interface</span> per VLAN,
+          each using that VLAN's gateway IP from tab 1.
+        </p>
+        <div class="topo" id="router-topo"></div>
+        <div style="overflow-x:auto;">
+          <table class="data-table" id="router-table"></table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Generated Config (Cisco-style)</h2>
+        <p class="hint">Not copy-paste-ready for a real device, but structurally accurate — this is what the design above actually turns into.</p>
+        <div class="cli-block" id="router-cli"></div>
+      </div>
+
+      <div class="card">
+        <h2>The Alternative: an L3 Switch
+          <span class="info-icon" onclick="showInfoPopover(this, 'l3switch')">?</span>
+        </h2>
+        <p>
+          Instead of a separate router, a Layer 3 switch can do this routing internally using
+          <span class="term" onclick="showInfoPopover(this, 'svi')">SVIs (Switched Virtual Interfaces)</span> —
+          one virtual interface per VLAN, living inside the switch itself. No external router, no physical
+          trunk link needed just for routing. Faster (routing happens in hardware) and simpler to cable, but
+          requires L3-capable switch hardware, which costs more than a plain Layer 2 switch.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════ TAB 4: REACHABILITY CHECKER ══════════════════════════ -->
+  <div class="panel" id="panel-reach">
+    <div class="card" id="reach-need-vlans-msg">
+      <p class="hint">Plan your VLANs in tab 1 first — pick two devices' VLANs to check reachability between them.</p>
+    </div>
+
+    <div id="reach-content" style="display:none;">
+      <div class="card">
+        <h2>Can Device A Reach Device B?</h2>
+        <div class="row">
+          <div class="field">
+            <label>Device A — VLAN</label>
+            <select id="reach-vlan-a"></select>
+          </div>
+          <div class="field">
+            <label>Device B — VLAN</label>
+            <select id="reach-vlan-b"></select>
+          </div>
+        </div>
+        <div id="reach-msg" class="msg"></div>
+      </div>
+
+      <div class="card">
+        <h2>Router ACL Rules
+          <span class="info-icon" onclick="showInfoPopover(this, 'acl')">?</span>
+        </h2>
+        <p class="hint">
+          A route existing doesn't mean the router allows the traffic — a router can be explicitly
+          configured to block specific VLAN-to-VLAN traffic even when it's perfectly capable of routing it.
+          Add rules here to see that layered on top of the routing check above.
+          (Simplified: only rules you add here have any effect — real router ACLs also have an implicit
+          "deny everything else" once any ACL is applied at all; that extra complexity is left out on purpose.)
+        </p>
+        <div id="acl-rows"></div>
+        <button type="button" class="add-row-btn" id="acl-add-row">+ Add ACL rule</button>
+      </div>
+
+      <div class="card" id="reach-results-card" style="display:none;">
+        <h2 id="reach-verdict"></h2>
+        <ul class="path-steps" id="reach-path"></ul>
+        <div class="divider"></div>
+        <div class="explain-points" id="reach-points"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════ TAB 5: REDUNDANCY / STP ══════════════════════════ -->
+  <div class="panel" id="panel-stp">
+    <div class="card">
+      <h2>Why Redundant Links Need Something Like STP
+        <span class="info-icon" onclick="showInfoPopover(this, 'stp')">?</span>
+      </h2>
+      <p class="hint">
+        A fixed illustrative scenario: two switches connected by TWO links for redundancy — if either
+        cable fails, the other keeps things connected. But plugged in as-is, this creates a loop, and
+        unlike IP packets, Ethernet frames have no TTL to stop them circulating forever.
+      </p>
+      <div class="msg warn" id="stp-loop-warning" style="display:block; margin:0;"></div>
+    </div>
+
+    <div class="card">
+      <h2>Bridge Priority — Electing the Root Bridge
+        <span class="info-icon" onclick="showInfoPopover(this, 'rootBridge')">?</span>
+      </h2>
+      <p class="hint">Lower priority wins. Real switches use increments of 4096 (0–61440); ties are broken by the lowest MAC address — Switch A is fixed as the tiebreak-winner here for a predictable example.</p>
+      <div class="row">
+        <div class="field">
+          <label>Switch A Priority</label>
+          <input type="number" id="stp-priority-a" min="0" max="65535" step="4096" value="32768">
+        </div>
+        <div class="field">
+          <label>Switch B Priority</label>
+          <input type="number" id="stp-priority-b" min="0" max="65535" step="4096" value="32768">
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Resulting Port Roles</h2>
+      <div style="overflow-x:auto;">
+        <table class="data-table" id="stp-table"></table>
+      </div>
+      <div class="divider"></div>
+      <div class="explain-points" id="stp-points"></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="info-popover" id="info-popover"></div>
+
+<script>
+/* =============================================================================
+ * CALCULATION ENGINE — pure functions, no DOM access. Verified standalone
+ * (node -e against the extracted engine code) before the UI below was
+ * wired to them — same convention as Subnet Calculator.
+ * ========================================================================== */
+
+function parseIp(str) {
+  const parts = String(str).trim().split('.');
+  if (parts.length !== 4) return null;
+  const octets = [];
+  for (const p of parts) {
+    if (!/^\d{1,3}$/.test(p)) return null;
+    const n = parseInt(p, 10);
+    if (n < 0 || n > 255) return null;
+    octets.push(n);
+  }
+  return octets;
+}
+function splitIpPrefix(str) {
+  const s = String(str).trim();
+  const slash = s.indexOf('/');
+  if (slash === -1) return { ip: s, prefix: null };
+  return { ip: s.slice(0, slash), prefix: parseInt(s.slice(slash + 1), 10) };
+}
+function octetsToInt(octets) { return ((octets[0] << 24) | (octets[1] << 16) | (octets[2] << 8) | octets[3]) >>> 0; }
+function intToOctets(n) { return [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255]; }
+function cidrToMaskOctets(prefix) {
+  if (prefix <= 0) return [0, 0, 0, 0];
+  if (prefix >= 32) return [255, 255, 255, 255];
+  return intToOctets((~0 << (32 - prefix)) >>> 0);
+}
+function andOctets(a, b) { return a.map((v, i) => v & b[i]); }
+function orOctets(a, b) { return a.map((v, i) => v | b[i]); }
+function invertOctets(a) { return a.map(v => 255 - v); }
+function fmtIp(octets) { return octets.join('.'); }
+function addToInt(octets, delta) { return intToOctets((octetsToInt(octets) + delta) >>> 0); }
+function networkAddress(ipOctets, maskOctets) { return andOctets(ipOctets, maskOctets); }
+function broadcastAddress(networkOctets, wildcardOctets) { return orOctets(networkOctets, wildcardOctets); }
+
+function hostInfo(prefix, networkOctets, broadcastOctets) {
+  if (prefix === 32) return { first: networkOctets, last: networkOctets, count: 1 };
+  if (prefix === 31) return { first: networkOctets, last: broadcastOctets, count: 2 };
+  return { first: addToInt(networkOctets, 1), last: addToInt(broadcastOctets, -1), count: Math.pow(2, 32 - prefix) - 2 };
+}
+
+function minPrefixForHosts(hostsNeeded) {
+  if (hostsNeeded <= 0) return 32;
+  for (let prefix = 32; prefix >= 0; prefix--) {
+    const size = Math.pow(2, 32 - prefix);
+    const usable = prefix === 32 ? 1 : prefix === 31 ? 2 : size - 2;
+    if (usable >= hostsNeeded) return prefix;
+  }
+  return 0;
+}
+
+// Plans one subnet per VLAN from a base block — largest-requirement-first
+// internally (guarantees correct address alignment, same reasoning as
+// Subnet Calculator's VLSM planner), but returns results in the VLANs'
+// original input order. Each allocation also gets a "gateway" — the first
+// usable address in its subnet, which is what the router/L3 switch's
+// interface for that VLAN will use.
+function planVlans(baseOctets, basePrefix, vlans) {
+  const baseSize = Math.pow(2, 32 - basePrefix);
+  const baseStart = octetsToInt(networkAddress(baseOctets, cidrToMaskOctets(basePrefix)));
+
+  const withIndex = vlans.map((v, i) => ({ ...v, _idx: i }));
+  const sorted = [...withIndex].sort((a, b) => b.hosts - a.hosts || a._idx - b._idx);
+
+  let cursor = baseStart;
+  const placed = [];
+  sorted.forEach((v, allocOrder) => {
+    const prefix = minPrefixForHosts(v.hosts);
+    const size = Math.pow(2, 32 - prefix);
+    placed.push({ ...v, prefix, size, start: cursor, allocOrder });
+    cursor += size;
+  });
+
+  const totalUsed = cursor - baseStart;
+  if (totalUsed > baseSize) {
+    return {
+      ok: false,
+      error: `These VLANs need ${totalUsed.toLocaleString()} addresses in total, but /${basePrefix} only has ${baseSize.toLocaleString()} — short by ${(totalUsed - baseSize).toLocaleString()}. Use a bigger base block or shrink a VLAN's host count.`,
+    };
+  }
+
+  const allocations = [...placed].sort((a, b) => a._idx - b._idx).map(p => {
+    const netOctets = intToOctets(p.start);
+    const maskOctets = cidrToMaskOctets(p.prefix);
+    const bcastOctets = broadcastAddress(netOctets, invertOctets(maskOctets));
+    const hosts = hostInfo(p.prefix, netOctets, bcastOctets);
+    return {
+      id: p.id, name: p.name, requested: p.hosts, prefix: p.prefix, size: p.size,
+      network: netOctets, mask: maskOctets, broadcast: bcastOctets,
+      gateway: hosts.first, first: hosts.first, last: hosts.last, usable: hosts.count,
+      allocOrder: p.allocOrder,
+    };
+  });
+
+  const leftoverSize = baseSize - totalUsed;
+  const leftover = leftoverSize > 0 ? { start: intToOctets(cursor), size: leftoverSize } : null;
+
+  return { ok: true, allocations, leftover };
+}
+
+// VLAN IDs conventionally increment by 10 (10, 20, 30...) — leaves room to
+// insert one later without renumbering everything. Just a default suggestion,
+// always overridable.
+function suggestVlanId(index) { return (index + 1) * 10; }
+
+function escHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// Computes STP port roles for the tool's one fixed illustrative topology:
+// two switches (A, B) joined by exactly two direct links (Fa0/1 <-> Fa0/1,
+// Fa0/2 <-> Fa0/2). Real STP breaks priority ties by lowest MAC address;
+// this tool fixes Switch A as the deterministic tiebreak-winner so the same
+// inputs always produce the same, explainable result.
+//
+// Root bridge: every one of its active ports is Designated (Forwarding) —
+// by definition, the root has no better path to itself than itself.
+// Non-root bridge: with two equal-cost direct links to the same root, real
+// STP breaks the tie by the lowest port ID on the BPDU sender (the root) —
+// so the link touching the root's LOWER-numbered port becomes the Root
+// Port (Forwarding); the other link's port on the non-root switch becomes
+// Blocking (still physically connected, not carrying data traffic).
+function computeStp(priorityA, priorityB) {
+  const rootIsA = priorityA <= priorityB; // tie -> A wins (fixed tiebreak)
+  const root = rootIsA ? 'A' : 'B';
+  const other = rootIsA ? 'B' : 'A';
+  return {
+    root,
+    ports: {
+      [root]:  { 'Fa0/1': 'Designated (Forwarding)', 'Fa0/2': 'Designated (Forwarding)' },
+      [other]: { 'Fa0/1': 'Root Port (Forwarding)',   'Fa0/2': 'Blocking' },
+    },
+  };
+}
+
+// Checks a list of ACL rules ({srcVlanId, dstVlanId, action}) against one
+// specific (src, dst) VLAN pair. First matching rule wins, like a real ACL
+// evaluated top-to-bottom; no match at all means permitted by default (see
+// the UI's note on the simplification vs a real implicit deny-all).
+function checkAcl(rules, srcVlanId, dstVlanId) {
+  for (const rule of rules) {
+    if (rule.srcVlanId === srcVlanId && rule.dstVlanId === dstVlanId) {
+      return { blocked: rule.action === 'deny', rule };
+    }
+  }
+  return { blocked: false, rule: null };
+}
+
+/* =============================================================================
+ * UI WIRING
+ * ========================================================================== */
+
+// ── Shared state: the VLAN plan, once computed in tab 1, drives tabs 2-4 ──
+let VLAN_PLAN = null; // result of planVlans(), or null until tab 1 succeeds
+
+const VLAN_COLORS = ['#4f5ef0', '#d97706', '#15803d', '#dc2626', '#7c3aed', '#0891b2', '#be185d', '#65a30d'];
+
+// ── Tabs ──────────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+function showMsg(el, text, kind) { el.textContent = text; el.className = 'msg ' + kind; }
+function hideMsg(el) { el.className = 'msg'; el.textContent = ''; }
+
+// ── Click-to-explain popovers ────────────────────────────────────────────
+const TERM_INFO = {
+  vlan: {
+    title: 'VLAN (Virtual LAN)',
+    text: "A way to split ONE physical switch into multiple separate broadcast domains, as if they were on entirely different physical switches — without actually needing separate hardware. Devices in different VLANs can't see each other's broadcasts (or talk directly at all) even if plugged into the exact same switch, until a router connects them.",
+  },
+  vlanId: {
+    title: 'VLAN ID',
+    text: "A number (1-4094) identifying a VLAN — purely a Layer 2 label, completely independent of any IP subnet. Convention assigns each VLAN both an ID and a subnet together for organization, but the protocol itself doesn't require any relationship between the two — you could technically use any subnet with any VLAN ID.",
+  },
+  broadcastDomain: {
+    title: 'Broadcast Domain',
+    text: "The set of devices that receive each other's broadcast traffic (like ARP requests) directly. Every VLAN is its own broadcast domain — that's the entire point of VLANs: containing broadcast traffic to just the devices that need to see it, instead of every device on the whole physical network.",
+  },
+  gatewayIp: {
+    title: 'Gateway IP',
+    text: "The address a device sends traffic to when the destination is outside its own subnet/VLAN. Conventionally the first usable address in the subnet (e.g. .1), but that's just convention — any usable address works as long as every device is configured to use the same one.",
+  },
+  accessPort: {
+    title: 'Access Port',
+    text: "A switch port assigned to exactly ONE VLAN. Frames in and out are untagged — the connected device (a PC, printer, etc.) has no idea VLANs even exist; the switch handles the VLAN membership entirely on its own.",
+  },
+  trunkPort: {
+    title: 'Trunk Port',
+    text: "A switch port that carries traffic for MULTIPLE VLANs at once over a single physical link — typically connecting to a router, another switch, or a server that itself understands VLAN tags. Distinguished from an access port by tagging every frame with its VLAN ID (802.1Q).",
+  },
+  dot1q: {
+    title: '802.1Q (Dot1Q)',
+    text: "The IEEE standard defining how a VLAN tag gets inserted into an Ethernet frame — a 4-byte field added right after the source MAC address, containing (among other things) the 12-bit VLAN ID. This is the entire technical mechanism that makes trunking possible.",
+  },
+  nativeVlan: {
+    title: 'Native VLAN',
+    text: "On a trunk port, traffic for ONE specific VLAN is allowed to pass untagged (for compatibility with older equipment) — that's the native VLAN. A common real-world misconfiguration is mismatched native VLANs on two ends of a trunk, which silently leaks traffic between VLANs. Covered in more detail in a later addition to this tool.",
+  },
+  routerOnAStick: {
+    title: 'Router-on-a-Stick',
+    text: "A router with just ONE physical connection to the network, doing inter-VLAN routing entirely through sub-interfaces on that single link — nicknamed for the router looking like it's stuck on the end of one cable ('a stick') despite serving many VLANs.",
+  },
+  subinterface: {
+    title: 'Sub-interface',
+    text: "A logical division of one physical router interface into multiple virtual ones (e.g. GigabitEthernet0/0.10, .20, .30) — each configured with its own IP address and VLAN tag, so one physical port can act as the gateway for many separate VLANs simultaneously.",
+  },
+  l3switch: {
+    title: 'Layer 3 Switch',
+    text: "A switch that can also route between VLANs internally, blurring the traditional switch/router distinction. Cheaper per-port and faster than a separate router (routing happens in hardware, called ASIC-based routing) for LAN-to-LAN traffic, but typically lacks a full router's WAN features (e.g. NAT, VPN termination).",
+  },
+  svi: {
+    title: 'SVI (Switched Virtual Interface)',
+    text: "A virtual interface INSIDE an L3 switch representing a VLAN's gateway — functionally the same job as a router's sub-interface in router-on-a-stick, just implemented inside the switch itself instead of requiring an external router and a dedicated trunk link just for routing.",
+  },
+  macTable: {
+    title: 'MAC Address Table',
+    text: "The switch's memory of which MAC address is reachable out of which port, learned automatically by watching source addresses on incoming frames. Within a single VLAN, this is ALL a switch needs to deliver a frame directly — no IP addressing or routing involved at all.",
+  },
+  acl: {
+    title: 'ACL (Access Control List)',
+    text: "A router (or switch) can be configured with explicit rules about which traffic to allow or block, checked in order, top to bottom, on top of whatever routing already exists. A route to a destination existing doesn't mean traffic is actually allowed to go there — the ACL is a separate, deliberate policy decision layered on top.",
+  },
+  stp: {
+    title: 'STP (Spanning Tree Protocol)',
+    text: "Prevents Ethernet loops by having switches negotiate which redundant links to actively block, keeping only one loop-free path active at a time — while still monitoring the blocked link(s) so they can take over automatically if the active path fails. Without it, a physical loop between switches causes a broadcast storm: frames circulate and get duplicated forever, since Ethernet frames (unlike IP packets) have no TTL to eventually expire them.",
+  },
+  rootBridge: {
+    title: 'Root Bridge',
+    text: "The one switch every other switch in the STP topology measures its path against — elected by lowest Bridge ID (Priority first, then lowest MAC address as a tiebreak). Every other switch then figures out its own best (lowest-cost) path back to the root, and blocks any redundant path that isn't needed.",
+  },
+};
+
+function showInfoPopover(anchorEl, key) {
+  const info = TERM_INFO[key];
+  if (!info) return;
+  const pop = document.getElementById('info-popover');
+  pop.innerHTML = `<span class="close" onclick="hideInfoPopover()">✕</span><div class="t">${escHtml(info.title)}</div><div>${info.text}</div>`;
+  pop.style.display = 'block';
+  const rect = anchorEl.getBoundingClientRect();
+  const popWidth = 320;
+  let left = Math.min(rect.left, window.innerWidth - popWidth - 16);
+  left = Math.max(left, 8);
+  pop.style.left = left + 'px';
+  pop.style.top = (rect.bottom + 6) + 'px';
+  requestAnimationFrame(() => {
+    const popRect = pop.getBoundingClientRect();
+    if (popRect.bottom > window.innerHeight) pop.style.top = Math.max(8, rect.top - popRect.height - 6) + 'px';
+  });
+}
+function hideInfoPopover() { document.getElementById('info-popover').style.display = 'none'; }
+document.addEventListener('click', (e) => {
+  if (!e.target.classList.contains('info-icon') && !e.target.classList.contains('term') && !e.target.closest('#info-popover')) hideInfoPopover();
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideInfoPopover(); });
+
+/* ── Tab 1: VLAN Planner ─────────────────────────────────────────────── */
+
+const vlanBaseIp = document.getElementById('vlan-base-ip');
+const vlanSlider = document.getElementById('vlan-base-slider');
+const vlanNum = document.getElementById('vlan-base-num');
+const vlanLabel = document.getElementById('vlan-base-display');
+const vlanBaseMsg = document.getElementById('vlan-base-msg');
+const vlanMsg = document.getElementById('vlan-msg');
+const vlanResultsCard = document.getElementById('vlan-results-card');
+const vlanRowsEl = document.getElementById('vlan-rows');
+
+function syncVlanPrefix(v) { vlanSlider.value = v; vlanNum.value = v; vlanLabel.textContent = '/' + v; }
+vlanSlider.addEventListener('input', () => { syncVlanPrefix(+vlanSlider.value); runVlanPlan(); });
+vlanNum.addEventListener('input', () => { syncVlanPrefix(Math.max(0, Math.min(32, +vlanNum.value || 0))); runVlanPlan(); });
+vlanBaseIp.addEventListener('input', () => {
+  const { ip, prefix } = splitIpPrefix(vlanBaseIp.value);
+  if (prefix !== null && !Number.isNaN(prefix) && prefix >= 0 && prefix <= 32) syncVlanPrefix(prefix);
+  runVlanPlan();
+});
+
+let _vlanRowCounter = 0;
+function addVlanRow(name, id, hosts) {
+  const idx = _vlanRowCounter++;
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.id = 'vlan-row-' + idx;
+  row.innerHTML = `
+    <div class="field" style="flex:2;">
+      <label>Name</label>
+      <input type="text" class="vlan-name" placeholder="e.g. Sales" value="${escHtml(name || '')}">
+    </div>
+    <div class="field" style="max-width:100px;">
+      <label>VLAN ID</label>
+      <input type="number" class="vlan-id" min="1" max="4094" value="${id != null ? id : suggestVlanId(idx)}">
+    </div>
+    <div class="field" style="max-width:140px;">
+      <label>Hosts Needed</label>
+      <input type="number" class="vlan-hosts" min="0" value="${hosts || ''}">
+    </div>
+    <div class="field" style="flex:0 0 auto; min-width:auto;">
+      <button type="button" class="row-remove-btn">✕</button>
+    </div>`;
+  vlanRowsEl.appendChild(row);
+  row.querySelectorAll('input').forEach(el => el.addEventListener('input', runVlanPlan));
+  row.querySelector('.row-remove-btn').addEventListener('click', () => { row.remove(); runVlanPlan(); });
+}
+document.getElementById('vlan-add-row').addEventListener('click', () => addVlanRow('', null, ''));
+
+function runVlanPlan() {
+  const baseOctets = parseIp(splitIpPrefix(vlanBaseIp.value).ip);
+  const basePrefix = +vlanNum.value;
+
+  if (!baseOctets) {
+    if (vlanBaseIp.value.trim()) showMsg(vlanBaseMsg, 'Enter a valid IPv4 base address, e.g. 192.168.0.0', 'error');
+    else hideMsg(vlanBaseMsg);
+    vlanResultsCard.style.display = 'none';
+    VLAN_PLAN = null;
+    refreshDependentTabs();
+    return;
+  }
+  hideMsg(vlanBaseMsg);
+
+  const rows = Array.from(vlanRowsEl.querySelectorAll('.row'));
+  const vlanIds = new Set();
+  let dupId = null;
+  const vlans = rows.map(row => {
+    const id = parseInt(row.querySelector('.vlan-id').value, 10);
+    if (vlanIds.has(id)) dupId = id;
+    vlanIds.add(id);
+    return {
+      name: row.querySelector('.vlan-name').value.trim(),
+      id: id,
+      hosts: Math.max(0, parseInt(row.querySelector('.vlan-hosts').value, 10) || 0),
+    };
+  }).filter(v => v.name && v.hosts > 0);
+
+  if (vlans.length === 0) {
+    showMsg(vlanMsg, 'Add at least one VLAN with a name and a host count above 0.', 'error');
+    vlanResultsCard.style.display = 'none';
+    VLAN_PLAN = null;
+    refreshDependentTabs();
+    return;
+  }
+  if (dupId != null) {
+    showMsg(vlanMsg, `VLAN ID ${dupId} is used more than once — each VLAN needs a unique ID.`, 'error');
+    vlanResultsCard.style.display = 'none';
+    VLAN_PLAN = null;
+    refreshDependentTabs();
+    return;
+  }
+  hideMsg(vlanMsg);
+
+  const plan = planVlans(baseOctets, basePrefix, vlans);
+  if (!plan.ok) {
+    showMsg(vlanMsg, plan.error, 'error');
+    vlanResultsCard.style.display = 'none';
+    VLAN_PLAN = null;
+    refreshDependentTabs();
+    return;
+  }
+
+  VLAN_PLAN = plan;
+  const baseSize = Math.pow(2, 32 - basePrefix);
+
+  document.getElementById('vlan-summary').innerHTML =
+    `Base block <strong>${fmtIp(baseOctets)}/${basePrefix}</strong> holds ${baseSize.toLocaleString()} addresses across ${vlans.length} VLAN${vlans.length > 1 ? 's' : ''}` +
+    (plan.leftover ? `, ${plan.leftover.size.toLocaleString()} addresses left free for a future VLAN.` : ', using the entire block.');
+
+  const table = document.getElementById('vlan-table');
+  const header = `<tr><th>VLAN ID</th><th>Name</th><th>Subnet</th><th>Gateway <span class="info-icon" onclick="showInfoPopover(this, 'gatewayIp')">?</span></th><th>Usable Range</th><th>Usable</th></tr>`;
+  const rowsHtml = plan.allocations.map((a, i) => `
+    <tr>
+      <td><span class="color-swatch" style="background:${VLAN_COLORS[i % VLAN_COLORS.length]}"></span>${a.id}</td>
+      <td>${escHtml(a.name)}</td>
+      <td class="mono">${fmtIp(a.network)}/${a.prefix}</td>
+      <td class="mono">${fmtIp(a.gateway)}</td>
+      <td class="mono">${fmtIp(a.first)} – ${fmtIp(a.last)}</td>
+      <td>${a.usable.toLocaleString()}${a.usable > a.requested ? ` <span style="color:var(--muted); font-size:0.75rem;">(+${(a.usable-a.requested).toLocaleString()} spare)</span>` : ''}</td>
+    </tr>`).join('');
+  table.innerHTML = header + rowsHtml;
+
+  const orderedNames = [...plan.allocations].sort((a,b) => a.allocOrder - b.allocOrder).map(a => `${escHtml(a.name)} (/${a.prefix})`);
+  const pts = [
+    `Subnets allocated <strong>largest requirement first</strong> (${orderedNames.join(' → ')}) so every block lands on a correctly aligned address boundary automatically — same method as the Subnet Calculator's VLSM planner.`,
+    `Each VLAN's <strong>gateway</strong> is the first usable address in its subnet — this is the IP the router (tab 3) will use to be that VLAN's way out.`,
+    `VLAN ID and subnet are assigned together here for organization, but they're independent concepts — the VLAN ID is a Layer 2 tag, the subnet is Layer 3 addressing.`,
+  ];
+  document.getElementById('vlan-points').innerHTML = '<ul>' + pts.map(p => `<li>${p}</li>`).join('') + '</ul>';
+
+  vlanResultsCard.style.display = 'block';
+  refreshDependentTabs();
+}
+
+// Seed with a worked example.
+addVlanRow('Sales', 10, 50);
+addVlanRow('Engineering', 20, 25);
+addVlanRow('Guest Wi-Fi', 30, 20);
+
+/* ── Tab 2: Switch Ports ─────────────────────────────────────────────── */
+
+let _portRowCounter = 0;
+const portRowsEl = document.getElementById('port-rows');
+
+function addPortRow(name, vlanId) {
+  const idx = _portRowCounter++;
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.id = 'port-row-' + idx;
+  const options = VLAN_PLAN ? VLAN_PLAN.allocations.map(a => `<option value="${a.id}" ${a.id === vlanId ? 'selected' : ''}>VLAN ${a.id} — ${escHtml(a.name)}</option>`).join('') : '';
+  row.innerHTML = `
+    <div class="field" style="flex:2;">
+      <label>Device</label>
+      <input type="text" class="port-name" placeholder="e.g. PC-1" value="${escHtml(name || '')}">
+    </div>
+    <div class="field">
+      <label>VLAN</label>
+      <select class="port-vlan">${options}</select>
+    </div>
+    <div class="field" style="flex:0 0 auto; min-width:auto;">
+      <button type="button" class="row-remove-btn">✕</button>
+    </div>`;
+  portRowsEl.appendChild(row);
+  row.querySelectorAll('input,select').forEach(el => el.addEventListener('input', renderPortsTab));
+  row.querySelector('.row-remove-btn').addEventListener('click', () => { row.remove(); renderPortsTab(); });
+}
+document.getElementById('port-add-row').addEventListener('click', () => addPortRow('', VLAN_PLAN ? VLAN_PLAN.allocations[0].id : null));
+
+function renderPortsTab() {
+  const hasVlans = !!VLAN_PLAN;
+  document.getElementById('ports-need-vlans-msg').style.display = hasVlans ? 'none' : 'block';
+  document.getElementById('ports-content').style.display = hasVlans ? 'block' : 'none';
+  if (!hasVlans) return;
+
+  // Keep every port row's VLAN dropdown in sync with the current plan.
+  document.querySelectorAll('#port-rows .row').forEach(row => {
+    const sel = row.querySelector('.port-vlan');
+    const current = sel.value;
+    sel.innerHTML = VLAN_PLAN.allocations.map(a => `<option value="${a.id}">VLAN ${a.id} — ${escHtml(a.name)}</option>`).join('');
+    if ([...sel.options].some(o => o.value === current)) sel.value = current;
+  });
+
+  const visual = document.getElementById('port-visual');
+  const ports = Array.from(document.querySelectorAll('#port-rows .row')).map(row => ({
+    name: row.querySelector('.port-name').value.trim() || '(unnamed)',
+    vlanId: +row.querySelector('.port-vlan').value,
+  }));
+  const vlanColor = (id) => {
+    const i = VLAN_PLAN.allocations.findIndex(a => a.id === id);
+    return VLAN_COLORS[i % VLAN_COLORS.length];
+  };
+  let html = ports.map(p => {
+    const vlan = VLAN_PLAN.allocations.find(a => a.id === p.vlanId);
+    return `<div class="port-chip" style="border-color:${vlanColor(p.vlanId)};">
+      <div class="label">${escHtml(p.name)}</div>
+      <div class="sub">Access · VLAN ${p.vlanId}${vlan ? ' (' + escHtml(vlan.name) + ')' : ''}</div>
+    </div>`;
+  }).join('');
+  const allVlanNames = VLAN_PLAN.allocations.map(a => a.id).join(', ');
+  html += `<div class="port-chip trunk">
+    <div class="label">Uplink to Router</div>
+    <div class="sub">Trunk · carries VLANs ${allVlanNames}</div>
+  </div>`;
+  visual.innerHTML = html;
+
+  // 802.1Q frame diagram
+  const frame = document.getElementById('frame-diagram');
+  const parts = [
+    ['Dest MAC', 6, '#4f5ef0'], ['Src MAC', 6, '#4f5ef0'],
+    ['802.1Q Tag (incl. VLAN ID)', 4, '#7c3aed'],
+    ['EtherType', 2, '#4f5ef0'], ['Payload', '46–1500', '#15803d'], ['FCS', 4, '#6b7280'],
+  ];
+  frame.innerHTML = parts.map(([label, bytes, color]) =>
+    `<div class="frame-part" style="background:${color};">${escHtml(label)}<br><span style="opacity:0.75;">${bytes} bytes</span></div>`
+  ).join('');
+}
+document.querySelectorAll('#panel-ports').forEach(() => {}); // (no-op; kept for clarity of intent)
+
+/* ── Tab 3: Inter-VLAN Routing ───────────────────────────────────────── */
+
+function renderRouterTab() {
+  const hasVlans = !!VLAN_PLAN;
+  document.getElementById('router-need-vlans-msg').style.display = hasVlans ? 'none' : 'block';
+  document.getElementById('router-content').style.display = hasVlans ? 'block' : 'none';
+  if (!hasVlans) return;
+
+  document.getElementById('router-topo').innerHTML = `
+    <div class="topo-box switch">Switch<br><span style="font-weight:400; font-size:0.72rem;">(trunk port)</span></div>
+    <span class="topo-arrow">──── 1 physical link ────▶</span>
+    <div class="topo-box router">Router<br><span style="font-weight:400; font-size:0.72rem;">(${VLAN_PLAN.allocations.length} sub-interfaces)</span></div>`;
+
+  const table = document.getElementById('router-table');
+  const header = `<tr><th>Sub-interface</th><th>VLAN</th><th>Encapsulation</th><th>IP Address (Gateway)</th></tr>`;
+  const rows = VLAN_PLAN.allocations.map((a, i) => `
+    <tr>
+      <td class="mono">GigabitEthernet0/0.${a.id}</td>
+      <td><span class="color-swatch" style="background:${VLAN_COLORS[i % VLAN_COLORS.length]}"></span>${a.id} (${escHtml(a.name)})</td>
+      <td class="mono">dot1Q ${a.id}</td>
+      <td class="mono">${fmtIp(a.gateway)}/${a.prefix}</td>
+    </tr>`).join('');
+  table.innerHTML = header + rows;
+
+  const cliLines = [`<span class="c">! One sub-interface per VLAN, on the single physical trunk link</span>`, `interface GigabitEthernet0/0`, ` no ip address`, ` no shutdown`, ``];
+  VLAN_PLAN.allocations.forEach(a => {
+    cliLines.push(`interface GigabitEthernet0/0.${a.id}`);
+    cliLines.push(` encapsulation dot1Q ${a.id}`);
+    cliLines.push(` ip address ${fmtIp(a.gateway)} ${fmtIp(a.mask)}`);
+    cliLines.push(``);
+  });
+  document.getElementById('router-cli').innerHTML = cliLines.join('\n');
+}
+
+/* ── Tab 4: Reachability Checker ─────────────────────────────────────── */
+
+const reachVlanA = document.getElementById('reach-vlan-a');
+const reachVlanB = document.getElementById('reach-vlan-b');
+const reachResultsCard = document.getElementById('reach-results-card');
+const aclRowsEl = document.getElementById('acl-rows');
+
+let _aclRowCounter = 0;
+function addAclRow(srcId, dstId, action) {
+  const idx = _aclRowCounter++;
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.id = 'acl-row-' + idx;
+  const vlanOptions = (selected) => VLAN_PLAN
+    ? VLAN_PLAN.allocations.map(a => `<option value="${a.id}" ${a.id === selected ? 'selected' : ''}>VLAN ${a.id} — ${escHtml(a.name)}</option>`).join('')
+    : '';
+  row.innerHTML = `
+    <div class="field">
+      <label>From VLAN</label>
+      <select class="acl-src">${vlanOptions(srcId)}</select>
+    </div>
+    <div class="field">
+      <label>To VLAN</label>
+      <select class="acl-dst">${vlanOptions(dstId)}</select>
+    </div>
+    <div class="field" style="max-width:120px;">
+      <label>Action</label>
+      <select class="acl-action">
+        <option value="deny" ${action === 'deny' ? 'selected' : ''}>Deny</option>
+        <option value="permit" ${action === 'permit' ? 'selected' : ''}>Permit</option>
+      </select>
+    </div>
+    <div class="field" style="flex:0 0 auto; min-width:auto;">
+      <button type="button" class="row-remove-btn">✕</button>
+    </div>`;
+  aclRowsEl.appendChild(row);
+  row.querySelectorAll('select').forEach(el => el.addEventListener('change', runReachCheck));
+  row.querySelector('.row-remove-btn').addEventListener('click', () => { row.remove(); runReachCheck(); });
+}
+document.getElementById('acl-add-row').addEventListener('click', () => addAclRow(null, null, 'deny'));
+
+function getAclRules() {
+  return Array.from(aclRowsEl.querySelectorAll('.row')).map(row => ({
+    srcVlanId: +row.querySelector('.acl-src').value,
+    dstVlanId: +row.querySelector('.acl-dst').value,
+    action: row.querySelector('.acl-action').value,
+  })).filter(r => !Number.isNaN(r.srcVlanId) && !Number.isNaN(r.dstVlanId));
+}
+
+function renderReachTab() {
+  const hasVlans = !!VLAN_PLAN;
+  document.getElementById('reach-need-vlans-msg').style.display = hasVlans ? 'none' : 'block';
+  document.getElementById('reach-content').style.display = hasVlans ? 'block' : 'none';
+  if (!hasVlans) return;
+
+  [reachVlanA, reachVlanB].forEach((sel, i) => {
+    const current = sel.value;
+    sel.innerHTML = VLAN_PLAN.allocations.map(a => `<option value="${a.id}">VLAN ${a.id} — ${escHtml(a.name)}</option>`).join('');
+    if ([...sel.options].some(o => o.value === current)) sel.value = current;
+    else sel.selectedIndex = Math.min(i, sel.options.length - 1);
+  });
+
+  document.querySelectorAll('#acl-rows .row').forEach(row => {
+    ['acl-src', 'acl-dst'].forEach(cls => {
+      const sel = row.querySelector('.' + cls);
+      const current = sel.value;
+      sel.innerHTML = VLAN_PLAN.allocations.map(a => `<option value="${a.id}">VLAN ${a.id} — ${escHtml(a.name)}</option>`).join('');
+      if ([...sel.options].some(o => o.value === current)) sel.value = current;
+    });
+  });
+
+  runReachCheck();
+}
+[reachVlanA, reachVlanB].forEach(sel => sel.addEventListener('change', runReachCheck));
+
+function runReachCheck() {
+  if (!VLAN_PLAN) return;
+  const idA = +reachVlanA.value, idB = +reachVlanB.value;
+  const vlanA = VLAN_PLAN.allocations.find(a => a.id === idA);
+  const vlanB = VLAN_PLAN.allocations.find(a => a.id === idB);
+  if (!vlanA || !vlanB) return;
+
+  const verdict = document.getElementById('reach-verdict');
+  const path = document.getElementById('reach-path');
+  const points = document.getElementById('reach-points');
+
+  if (idA === idB) {
+    verdict.innerHTML = `✅ Yes — same VLAN, handled entirely by the switch`;
+    verdict.style.color = 'var(--ok-text)';
+    path.innerHTML = [
+      'Device A sends the frame with Device B\'s MAC address as the destination.',
+      `The switch looks up that MAC in its <span class="term" onclick="showInfoPopover(this, 'macTable')">MAC address table</span> and forwards the frame straight out the right access port.`,
+      'No IP routing, no router, no trunk hop involved — this never leaves the VLAN\'s broadcast domain.',
+    ].map(s => `<li>${s}</li>`).join('');
+    points.innerHTML = '<ul><li>Same-VLAN communication is a pure Layer 2 operation — it works even if there were no router in the design at all.</li></ul>';
+  } else {
+    const acl = checkAcl(getAclRules(), idA, idB);
+
+    if (acl.blocked) {
+      verdict.innerHTML = `🚫 Blocked by policy — a route exists, but the router's ACL denies it`;
+      verdict.style.color = 'var(--err-text)';
+      path.innerHTML = [
+        `Device A (VLAN ${vlanA.id}) sends the packet to its gateway, <strong>${fmtIp(vlanA.gateway)}</strong>.`,
+        `The frame is tagged VLAN ${vlanA.id} on the trunk and reaches the router's sub-interface for VLAN ${vlanA.id} — exactly as any cross-VLAN traffic would.`,
+        `The router checks its ACL before forwarding: rule "VLAN ${acl.rule.srcVlanId} → VLAN ${acl.rule.dstVlanId}: DENY" matches, and the packet is dropped right there.`,
+      ].map(s => `<li class="hop">${s}</li>`).join('');
+      points.innerHTML = '<ul>' +
+        `<li>The route exists and the router is fully capable of forwarding this traffic — the ACL is a separate, deliberate policy decision to block it anyway.</li>` +
+        `<li>Remove or edit that rule in the ACL card above and this same traffic would go through, with the routing completely unchanged.</li>` +
+        '</ul>';
+      reachResultsCard.style.display = 'block';
+      return;
+    }
+
+    verdict.innerHTML = `🚧 Yes, via the router — different VLANs, different broadcast domains`;
+    verdict.style.color = 'var(--warn-text)';
+    path.innerHTML = [
+      `Device A (VLAN ${vlanA.id}) sends the packet to its gateway, <strong>${fmtIp(vlanA.gateway)}</strong> — its default gateway, because Device B's IP is outside its own subnet.`,
+      `The frame goes out the access port untagged, gets tagged VLAN ${vlanA.id} the instant it enters the trunk.`,
+      `The router's sub-interface for VLAN ${vlanA.id} (GigabitEthernet0/0.${vlanA.id}) receives it, and looks up a route to VLAN ${vlanB.id}'s subnet.`,
+      acl.rule ? `The router's ACL has an explicit "VLAN ${acl.rule.srcVlanId} → VLAN ${acl.rule.dstVlanId}: PERMIT" rule matching this traffic, so it continues.` : `No ACL rule matches this direction, so it's forwarded by default.`,
+      `The router re-sends the packet out its sub-interface for VLAN ${vlanB.id} (GigabitEthernet0/0.${vlanB.id}), tagged accordingly.`,
+      `The trunk delivers it back to the switch, which strips the tag and forwards it out Device B's access port, untagged.`,
+    ].map(s => `<li class="hop">${s}</li>`).join('');
+    points.innerHTML = '<ul>' +
+      `<li>Take away either the trunk link or the router's sub-interfaces, and this communication stops completely — unlike the same-VLAN case, there is no fallback path.</li>` +
+      `<li>This is the exact same "different subnet ⇒ needs a router" idea as the Subnet Calculator's Compare-Two-IPs tab — VLANs just add the extra step of the trunk carrying the tagged traffic to get there.</li>` +
+      '</ul>';
+  }
+
+  reachResultsCard.style.display = 'block';
+}
+
+/* ── Tab 5: Redundancy / STP ──────────────────────────────────────────── */
+// Self-contained — this tab uses a fixed illustrative 2-switch topology,
+// independent of the VLAN plan, so it doesn't go through refreshDependentTabs().
+
+const stpPriorityA = document.getElementById('stp-priority-a');
+const stpPriorityB = document.getElementById('stp-priority-b');
+[stpPriorityA, stpPriorityB].forEach(el => el.addEventListener('input', runStp));
+
+function runStp() {
+  const priorityA = +stpPriorityA.value || 0;
+  const priorityB = +stpPriorityB.value || 0;
+  const result = computeStp(priorityA, priorityB);
+
+  document.getElementById('stp-loop-warning').textContent =
+    'Without STP: a frame sent by any device eventually loops back through both switches and gets ' +
+    'flooded out again — repeating forever and consuming all available bandwidth (a "broadcast storm"). ' +
+    'STP prevents this by blocking one of the two links below.';
+
+  const table = document.getElementById('stp-table');
+  const rowsHtml = ['A', 'B'].map(sw => {
+    const isRoot = result.root === sw;
+    return Object.entries(result.ports[sw]).map(([port, role]) => `
+      <tr>
+        <td>Switch ${sw}${isRoot ? ' <span style="color:var(--ok-text); font-weight:700;">(Root Bridge)</span>' : ''}</td>
+        <td class="mono">${port}</td>
+        <td>${role.includes('Blocking') ? `<span style="color:var(--err-text); font-weight:700;">${role}</span>` : `<span style="color:var(--ok-text); font-weight:700;">${role}</span>`}</td>
+      </tr>`).join('');
+  }).join('');
+  table.innerHTML = `<tr><th>Switch</th><th>Port</th><th>Role</th></tr>${rowsHtml}`;
+
+  const pts = [
+    `Switch ${result.root} is elected <strong>Root Bridge</strong> — ${priorityA === priorityB ? 'priorities are tied, so the fixed tiebreak (Switch A wins) applies' : 'it has the lower priority value'}.`,
+    `The Root Bridge's own ports are always Designated (Forwarding) — a switch never blocks its own path to itself.`,
+    `The other switch has two equal-cost direct links to the root, so it picks one Root Port (the lower-numbered link) and blocks the other — the block is what prevents the loop, while keeping that cable ready to take over automatically if the active link fails.`,
+  ];
+  document.getElementById('stp-points').innerHTML = '<ul>' + pts.map(p => `<li>${p}</li>`).join('') + '</ul>';
+}
+
+/* ── Cross-tab refresh ────────────────────────────────────────────────── */
+
+function refreshDependentTabs() {
+  renderPortsTab();
+  renderRouterTab();
+  renderReachTab();
+}
+
+// ── Initial render ────────────────────────────────────────────────────────
+runVlanPlan();
+runStp();
+</script>
+</body>
+</html>

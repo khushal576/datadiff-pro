@@ -39,11 +39,23 @@ COPY encode-decode/ui/       ./encode_decode/ui/
 COPY subnet-calc/server.py ./subnet_calc/server.py
 COPY subnet-calc/ui/       ./subnet_calc/ui/
 
+# DNS Lookup (tool #4) — same namespacing pattern.
+COPY dns-lookup/server.py ./dns_lookup/server.py
+COPY dns-lookup/ui/       ./dns_lookup/ui/
+
+# VLAN Designer (tool #5) — same namespacing pattern.
+COPY vlan-designer/server.py ./vlan_designer/server.py
+COPY vlan-designer/ui/       ./vlan_designer/ui/
+
+# Packet Journey (tool #6) — same namespacing pattern.
+COPY packet-journey/server.py ./packet_journey/server.py
+COPY packet-journey/ui/       ./packet_journey/ui/
+
 COPY main.py .
 COPY registry.yaml .
 
 # Create empty __init__.py files so Python treats these as packages.
-RUN touch core/__init__.py api/__init__.py encode_decode/__init__.py subnet_calc/__init__.py
+RUN touch core/__init__.py api/__init__.py encode_decode/__init__.py subnet_calc/__init__.py dns_lookup/__init__.py vlan_designer/__init__.py packet_journey/__init__.py
 
 # --- Runtime config ----------------------------------------------------------
 # Tell Python not to write .pyc files and not to buffer stdout/stderr.

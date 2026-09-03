@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Packet Journey</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f4f6fb; --surface: #ffffff; --border: #dde1ef;
+    --text: #1c2035; --muted: #6b7180; --accent: #4f5ef0;
+    --ok-bg: rgba(21,128,61,0.08); --ok-text: #15803d; --ok-border: rgba(21,128,61,0.3);
+    --warn-bg: rgba(180,83,9,0.08); --warn-text: #b45309; --warn-border: rgba(180,83,9,0.3);
+    /* One identity color per layer, consistent whichever tool shows layers. */
+    --l1: #6b7280; --l1-bg: rgba(107,114,128,0.10);
+    --l2: #dc2626; --l2-bg: rgba(220,38,38,0.10);
+    --l3: #15803d; --l3-bg: rgba(21,128,61,0.10);
+    --l4: #d97706; --l4-bg: rgba(217,119,6,0.10);
+    --l5: #0891b2; --l5-bg: rgba(8,145,178,0.10);
+    --l6: #7c3aed; --l6-bg: rgba(124,58,237,0.10);
+    --l7: #4f5ef0; --l7-bg: rgba(79,94,240,0.10);
+  }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; padding: 24px 20px 60px;
+  }
+  header { max-width: 900px; margin: 0 auto 20px; }
+  header h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.5px; }
+  header h1 span { color: var(--accent); }
+  header p { color: var(--muted); font-size: 0.85rem; margin-top: 2px; }
+
+  .wrap { max-width: 900px; margin: 0 auto; }
+
+  /* ── Step progress bar ────────────────────────────────────────────────── */
+  .steps { display: flex; gap: 4px; margin-bottom: 18px; }
+  .step-btn {
+    flex: 1; border: none; cursor: pointer; padding: 10px 4px; border-radius: 8px 8px 0 0;
+    font-size: 0.72rem; font-weight: 700; text-align: center; color: #fff; opacity: 0.35;
+    background: var(--step-color); transition: opacity 0.15s;
+  }
+  .step-btn:hover { opacity: 0.6; }
+  .step-btn.active { opacity: 1; }
+  .step-btn .n { display: block; font-size: 0.9rem; }
+
+  .scenario-banner {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 16px; margin-bottom: 16px; font-size: 0.83rem; color: var(--muted);
+  }
+  .scenario-banner strong { color: var(--text); }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+  .layer-head { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+  .layer-head .badge {
+    width: 36px; height: 36px; border-radius: 8px; color: #fff; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; font-size: 1.05rem; flex-shrink: 0;
+    background: var(--layer-color);
+  }
+  .layer-head h2 { font-size: 1.3rem; font-weight: 700; }
+  .pdu-label { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
+  .pdu-label .name { font-weight: 700; color: var(--layer-color); }
+
+  .card h3 { font-size: 0.95rem; font-weight: 700; margin: 18px 0 8px; }
+  .card h3:first-of-type { margin-top: 16px; }
+  .card p { font-size: 0.9rem; line-height: 1.7; margin-bottom: 8px; }
+  .card p:last-child { margin-bottom: 0; }
+
+  .callout { border-radius: 8px; padding: 14px 16px; font-size: 0.87rem; line-height: 1.65; margin: 12px 0; }
+  .callout.warn { background: var(--warn-bg); border: 1px solid var(--warn-border); color: var(--warn-text); }
+  .callout.ok { background: var(--ok-bg); border: 1px solid var(--ok-border); color: var(--ok-text); }
+  .callout strong { display: block; margin-bottom: 4px; }
+
+  .term { border-bottom: 1.5px dotted var(--accent); cursor: pointer; font-weight: 600; color: var(--accent); }
+  .info-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 15px; height: 15px; border-radius: 50%; vertical-align: middle;
+    background: var(--border); color: var(--muted);
+    font-size: 0.65rem; font-weight: 700; cursor: pointer; margin-left: 5px; user-select: none;
+  }
+  .info-icon:hover { background: var(--accent); color: #fff; }
+  .info-popover {
+    position: fixed; max-width: 320px; background: #10131f; color: #d7dcf0;
+    border-radius: 8px; padding: 12px 34px 12px 14px; font-size: 0.78rem;
+    line-height: 1.6; box-shadow: 0 8px 24px rgba(0,0,0,0.3); z-index: 1000; display: none;
+  }
+  .info-popover .t { font-weight: 700; margin-bottom: 5px; color: #fff; font-size: 0.82rem; }
+  .info-popover .close { position: absolute; top: 8px; right: 10px; cursor: pointer; color: #8b93b8; font-size: 0.85rem; line-height: 1; }
+  .info-popover .close:hover { color: #fff; }
+
+  /* ── Frame/header field diagram ───────────────────────────────────────── */
+  .field-diagram { display: flex; flex-wrap: wrap; gap: 2px; margin: 12px 0; font-family: monospace; font-size: 0.72rem; }
+  .field-part { padding: 10px 8px; text-align: center; color: #fff; border-radius: 3px; flex: 1; min-width: 80px; }
+
+  .field-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin: 10px 0; }
+  .field-table th { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.4px; }
+  .field-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .field-table td.mono { font-family: monospace; font-weight: 700; }
+
+  .raw-block {
+    background: #10131f; color: #d7dcf0; border-radius: 8px; padding: 14px 16px;
+    font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace; font-size: 0.8rem;
+    line-height: 1.7; overflow-x: auto; white-space: pre-wrap; word-break: break-all; margin: 10px 0;
+  }
+  .raw-block .c { color: #8b93b8; }
+  .raw-block .hl { color: #8ea3ff; }
+
+  /* ── Wireshark correlation block ──────────────────────────────────────── */
+  .ws-block {
+    background: rgba(79,94,240,0.06); border: 1px solid rgba(79,94,240,0.25);
+    border-radius: 8px; padding: 14px 16px; margin: 14px 0;
+  }
+  .ws-block .ws-title { font-size: 0.8rem; font-weight: 700; color: var(--accent); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.4px; }
+  .ws-block .ws-tree {
+    font-family: monospace; font-size: 0.8rem; background: #10131f; color: #d7dcf0;
+    border-radius: 6px; padding: 10px 12px; margin-bottom: 10px; overflow-x: auto; white-space: pre;
+  }
+  .ws-filter { font-family: monospace; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; font-size: 0.8rem; }
+
+  /* ── Other protocols at this layer (brief list) ───────────────────────── */
+  .protocol-mini-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin: 10px 0; }
+  .protocol-mini {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 0.8rem;
+  }
+  .protocol-mini .name { font-weight: 700; margin-bottom: 2px; }
+  .protocol-mini .desc { color: var(--muted); line-height: 1.5; }
+
+  .nav-buttons { display: flex; justify-content: space-between; margin-top: 4px; }
+  .nav-btn {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 9px 18px; font-size: 0.85rem; font-weight: 600; color: var(--text); cursor: pointer;
+  }
+  .nav-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .nav-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  @media (max-width: 700px) {
+    .steps { flex-wrap: wrap; }
+    .step-btn { flex: 1 1 40%; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Packet<span> </span>Journey</h1>
+  <p>One real request, traced layer by layer — what gets added, what it's called, and what it actually looks like</p>
+</header>
+
+<div class="wrap">
+  <div class="scenario-banner">
+    <strong>The scenario:</strong> a browser sending <code>GET /index.html HTTP/1.1</code> to <code>example.com</code> over
+    plain HTTP/TCP/IPv4/Ethernet. We start at Physical (raw bits) and reveal one more header at each step —
+    exactly what a receiving device actually does — until the plain HTTP request is fully exposed at the end.
+  </div>
+
+  <div class="steps" id="steps-nav"></div>
+  <div id="step-content"></div>
+
+  <div class="nav-buttons">
+    <button class="nav-btn" id="btn-prev">← Previous Layer</button>
+    <button class="nav-btn" id="btn-next">Next Layer →</button>
+  </div>
+</div>
+
+<div class="info-popover" id="info-popover"></div>
+
+<script>
+/* =============================================================================
+ * STEP DATA — one entry per OSI layer, Physical (1) through Application (7).
+ * Content-only (no calculation needed for this tool), but structured and
+ * verified the same way as every other Toolbox tool: a script checked every
+ * inline showInfoPopover() reference against TERM_INFO before this shipped.
+ * ========================================================================== */
+
+const STEPS = [
+  { num: 1, key: 'physical',    name: 'Physical',    pdu: 'Bits',                color: '--l1' },
+  { num: 2, key: 'datalink',    name: 'Data Link',   pdu: 'Frame',               color: '--l2' },
+  { num: 3, key: 'network',     name: 'Network',     pdu: 'Packet',              color: '--l3' },
+  { num: 4, key: 'transport',   name: 'Transport',   pdu: 'Segment',             color: '--l4' },
+  { num: 5, key: 'session',     name: 'Session',     pdu: 'Data (no header added here)', color: '--l5' },
+  { num: 6, key: 'presentation',name: 'Presentation',pdu: 'Data (no header added here)', color: '--l6' },
+  { num: 7, key: 'application', name: 'Application', pdu: 'Data / Message',      color: '--l7' },
+];
+
+function escHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/* =============================================================================
+ * CLICK-TO-EXPLAIN GLOSSARY
+ * ========================================================================== */
+
+const TERM_INFO = {
+  bits: {
+    title: 'Bits (Layer 1 PDU)',
+    text: "The rawest possible form of the data — a stream of 1s and 0s, physically represented as voltage changes (copper), light pulses (fiber), or radio wave changes (Wi-Fi). Physical doesn't add a header or understand any structure — it just encodes/decodes whatever frame it's handed.",
+  },
+  frame: {
+    title: 'Frame (Layer 2 PDU)',
+    text: "Data Link's unit: the Ethernet header and trailer wrapped around whatever the Network layer handed down. A switch reads only this header (source/destination MAC) to decide where to forward it — it never looks inside at the IP packet.",
+  },
+  macAddress: {
+    title: 'MAC Address',
+    text: "A hardware address burned into (or assigned to) a network interface — unique on the local network segment. Frames are addressed by MAC, not IP; a device only reads a frame if the destination MAC matches its own (or is a broadcast/multicast it's listening for).",
+  },
+  etherType: {
+    title: 'EtherType',
+    text: "A field in the Ethernet header saying what's carried inside — 0x0800 means \"an IPv4 packet is next,\" 0x86DD means IPv6. This is how the receiving device knows which layer-3 protocol to hand the payload to next.",
+  },
+  fcs: {
+    title: 'FCS (Frame Check Sequence)',
+    text: "A checksum trailer (not a header — it's added at the very END of the frame) letting the receiver detect if the frame got corrupted in transit. If it doesn't match, the frame is silently dropped — there's no built-in retransmission at this layer; that's left to higher layers like TCP.",
+  },
+  packet: {
+    title: 'Packet (Layer 3 PDU)',
+    text: "Network's unit: the IP header wrapped around whatever the Transport layer handed down. A router reads this header (source/destination IP) to decide which direction to forward it — routers don't look at MAC addresses beyond the current hop, and don't look inside at the TCP header at all for basic routing.",
+  },
+  ttl: {
+    title: 'TTL (Time To Live)',
+    text: "A countdown field in the IP header, decremented by 1 at every router hop. When it hits 0, the packet is discarded — this exists purely to stop a misrouted packet from circulating the internet forever. (This is a completely different TTL from DNS's cache-lifetime TTL, despite the same name.)",
+  },
+  ipProtocolField: {
+    title: 'IP Protocol Field',
+    text: "A number in the IP header stating what's inside — 6 means TCP, 17 means UDP, 1 means ICMP. This is how the receiving device's IP stack knows which transport protocol should receive the payload next.",
+  },
+  segment: {
+    title: 'Segment (Layer 4 PDU, TCP)',
+    text: "Transport's unit when using TCP: the TCP header wrapped around the actual application data. (If UDP were used instead, the equivalent unit is usually called a \"datagram.\") This is the first layer in this journey that understands the concept of a numbered, ordered, reliable stream of data.",
+  },
+  portNumber: {
+    title: 'Port Number',
+    text: "Identifies WHICH conversation on a device a segment belongs to — a single IP address can have many simultaneous connections, told apart by port numbers. Destination port 80 conventionally means HTTP, but that's a convention the sender chooses to follow, not something TCP itself enforces or guarantees.",
+  },
+  tcpFlags: {
+    title: 'TCP Flags',
+    text: "Control bits in the TCP header describing what this segment is doing — SYN starts a connection, ACK acknowledges received data, FIN closes a connection gracefully, PSH tells the receiver to pass the data up to the application immediately rather than buffering it.",
+  },
+  sessionLayer: {
+    title: 'Session Layer (OSI Layer 5)',
+    text: "Conceptually responsible for managing an ongoing dialogue between two programs. In this real HTTP-over-TCP stack, there's no dedicated Session header on the wire — that job is absorbed by TCP itself staying connected (a persistent connection) and, at the application level, things like session cookies. This is exactly why TCP/IP's model doesn't bother giving Session its own layer.",
+  },
+  presentationLayer: {
+    title: 'Presentation Layer (OSI Layer 6)',
+    text: "Conceptually responsible for data format and encryption. Plain HTTP has no dedicated Presentation header either — but if this were HTTPS, a TLS record would wrap the HTTP data at exactly this point, before it's ever handed to TCP. TLS is real and does real Presentation-layer work; it just isn't a distinct OSI-numbered layer in practice.",
+  },
+  httpMethod: {
+    title: 'HTTP Method',
+    text: "The verb at the start of the request line — GET asks for a resource without changing anything (safe, repeatable), POST typically submits data that changes something server-side. The method is the very first thing a server reads to decide how to handle the request.",
+  },
+  httpHeaders: {
+    title: 'HTTP Headers',
+    text: "Key: value metadata lines after the request line — Host tells a server which site you want (critical when one server hosts many domains), User-Agent identifies the client software, Accept says which response formats the client can handle, Connection: keep-alive requests that the underlying TCP connection stay open for more requests.",
+  },
+  wiresharkFrameMeta: {
+    title: '"Frame" in Wireshark — not a real protocol layer',
+    text: "The very first entry in Wireshark's tree (\"Frame 1: 74 bytes on wire...\") is Wireshark's OWN bookkeeping — capture timestamp, frame length, which interface it arrived on. It's not a header that was actually on the wire, and it's not the Physical layer either — it's metadata Wireshark itself attaches the moment it captures the frame.",
+  },
+  displayFilter: {
+    title: 'Wireshark Display Filter',
+    text: "The text box at the top of Wireshark's window where you type an expression (like ip.addr == 93.184.216.34) to show only matching packets out of everything captured. Field names in filters generally match the protocol tree names, lowercased with dots — this is exactly why knowing the exact field names shown here transfers directly into being able to filter for them.",
+  },
+  followTcpStream: {
+    title: 'Follow TCP Stream',
+    text: "A right-click option on any TCP packet that reassembles the entire back-and-forth conversation on that connection into one readable view — this is how you'd actually see the full HTTP request and response as plain text, instead of digging through each individual segment by hand.",
+  },
+};
+
+function showInfoPopover(anchorEl, key) {
+  const info = TERM_INFO[key];
+  if (!info) return;
+  const pop = document.getElementById('info-popover');
+  pop.innerHTML = `<span class="close" onclick="hideInfoPopover()">✕</span><div class="t">${escHtml(info.title)}</div><div>${info.text}</div>`;
+  pop.style.display = 'block';
+  const rect = anchorEl.getBoundingClientRect();
+  const popWidth = 320;
+  let left = Math.min(rect.left, window.innerWidth - popWidth - 16);
+  left = Math.max(left, 8);
+  pop.style.left = left + 'px';
+  pop.style.top = (rect.bottom + 6) + 'px';
+  requestAnimationFrame(() => {
+    const popRect = pop.getBoundingClientRect();
+    if (popRect.bottom > window.innerHeight) pop.style.top = Math.max(8, rect.top - popRect.height - 6) + 'px';
+  });
+}
+function hideInfoPopover() { document.getElementById('info-popover').style.display = 'none'; }
+document.addEventListener('click', (e) => {
+  if (!e.target.classList.contains('info-icon') && !e.target.classList.contains('term') && !e.target.closest('#info-popover')) hideInfoPopover();
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideInfoPopover(); });
+
+/* =============================================================================
+ * NAVIGATION
+ * ========================================================================== */
+
+let currentStep = 1;
+
+function renderStepsNav() {
+  const nav = document.getElementById('steps-nav');
+  const rootStyle = getComputedStyle(document.documentElement);
+  nav.innerHTML = STEPS.map(s => {
+    const color = rootStyle.getPropertyValue(s.color).trim();
+    return `<button class="step-btn${s.num === currentStep ? ' active' : ''}" style="--step-color:${color};" onclick="goToStep(${s.num})">
+      <span class="n">${s.num}</span>${s.name}
+    </button>`;
+  }).join('');
+}
+
+function goToStep(n) {
+  currentStep = n;
+  renderStepsNav();
+  document.getElementById('step-content').innerHTML = RENDERERS[STEPS[n - 1].key]();
+  document.getElementById('btn-prev').disabled = n === 1;
+  document.getElementById('btn-next').disabled = n === STEPS.length;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+document.getElementById('btn-prev').addEventListener('click', () => { if (currentStep > 1) goToStep(currentStep - 1); });
+document.getElementById('btn-next').addEventListener('click', () => { if (currentStep < STEPS.length) goToStep(currentStep + 1); });
+
+function layerHeader(step) {
+  const color = getComputedStyle(document.documentElement).getPropertyValue(step.color).trim();
+  return `
+    <div class="layer-head">
+      <div class="badge" style="--layer-color:${color};">${step.num}</div>
+      <div>
+        <h2>${escHtml(step.name)}</h2>
+        <div class="pdu-label">Called at this layer: <span class="name" style="--layer-color:${color}; color:${color};">${escHtml(step.pdu)}</span></div>
+      </div>
+    </div>`;
+}
+
+/* =============================================================================
+ * RENDERERS — one per layer
+ * ========================================================================== */
+
+/* =============================================================================
+ * OTHER PROTOCOLS AT EACH LAYER — brief, one line each. Deliberately NOT a
+ * deep-dive per protocol (that approach, tried once as "Layer Explorer" for
+ * all 19 Application-layer protocols, was scoped back) — just enough for
+ * "what else lives at this layer besides the one example in this journey."
+ * ========================================================================== */
+
+const PROTOCOLS_BY_LAYER = {
+  physical: [
+    { name: 'Ethernet (physical standards)', desc: 'Copper/fiber standards like 100BASE-TX, 1000BASE-T — voltage levels, cable types, connectors.' },
+    { name: 'Wi-Fi (802.11 PHY)', desc: 'The actual radio frequencies, channel widths, and modulation Wi-Fi uses to encode bits over the air.' },
+    { name: 'DSL / DOCSIS (cable)', desc: 'Carrying data over telephone lines / cable-TV infrastructure.' },
+    { name: 'Fiber (SONET/SDH, etc.)', desc: 'Carrying data as light pulses over optical fiber.' },
+  ],
+  datalink: [
+    { name: 'Ethernet (802.3)', desc: 'The frame format used in this journey — dominant wired LAN standard.' },
+    { name: 'Wi-Fi (802.11 MAC)', desc: "Wi-Fi's own frame format, adapted for a shared wireless medium." },
+    { name: 'PPP', desc: 'Point-to-point links (e.g. some DSL setups) — one device each end, no shared-medium addressing needed.' },
+    { name: 'ARP', desc: 'Finds the MAC address that owns a given IP on the local network — right at the Layer 2/3 boundary.' },
+    { name: '802.1Q (VLAN tagging)', desc: 'Tags a frame with a VLAN ID so one link can carry several broadcast domains — see the VLAN Designer tool.' },
+  ],
+  network: [
+    { name: 'IPv4 / IPv6', desc: 'Addresses and routes packets — the protocol used in this journey (IPv4); IPv6 is the larger-address-space successor.' },
+    { name: 'ICMP', desc: 'Diagnostic/error messages — what ping and traceroute are built on.' },
+    { name: 'IPsec', desc: 'Encrypts/authenticates IP packets themselves — common in VPNs.' },
+    { name: 'Routing protocols (OSPF, BGP, RIP)', desc: 'How routers tell each other which networks they can reach — not used by end devices.' },
+  ],
+  transport: [
+    { name: 'TCP', desc: 'The protocol used in this journey — reliable, ordered, connection-based.' },
+    { name: 'UDP', desc: 'No connection setup or delivery guarantee, lower overhead — used for DNS, streaming, gaming.' },
+    { name: 'SCTP', desc: 'Less common — mixes TCP-like reliability with UDP-like framing; telecom signaling, some WebRTC data channels.' },
+  ],
+  session: [
+    { name: 'RPC', desc: 'Calling a function on another machine — opens/maintains the session needed to do that.' },
+    { name: 'NetBIOS', desc: 'Older Windows session/name-resolution service, mostly superseded now.' },
+    { name: 'PPTP', desc: 'An older VPN protocol managing its own tunnel/session on top of a network connection.' },
+    { name: "SIP's session setup", desc: 'The part of SIP (an Application-layer protocol) that specifically manages call session state.' },
+  ],
+  presentation: [
+    { name: 'TLS / SSL', desc: "Encryption — the closest real-world stand-in for this layer's job. Used by HTTPS." },
+    { name: 'Character encoding (UTF-8)', desc: 'Agreed byte-to-character mapping — mismatches cause garbled "mojibake" text.' },
+    { name: 'Compression (gzip)', desc: 'Re-encodes data smaller before sending — most HTTP responses use this automatically.' },
+    { name: 'Media formats (JPEG, MPEG)', desc: 'Standardized ways to represent images/video as bytes, independent of the network carrying them.' },
+  ],
+  application: [
+    { name: 'HTTP / HTTPS', desc: 'Fetch/submit web content — the protocol used in this journey.' },
+    { name: 'DNS', desc: 'Translates domain names into IP addresses — see the DNS Lookup tool for live queries.' },
+    { name: 'SMTP / IMAP / POP3', desc: 'Sending and reading email.' },
+    { name: 'FTP / SFTP', desc: 'File transfer — unencrypted and SSH-encrypted respectively.' },
+    { name: 'SSH / Telnet', desc: 'Remote command-line access — encrypted and unencrypted respectively.' },
+    { name: 'DHCP', desc: "Automatically assigns a device an IP address and network settings on joining a network." },
+    { name: 'SNMP', desc: 'Monitors and manages network devices (routers, switches) remotely.' },
+  ],
+};
+
+function protocolListHtml(layerKey) {
+  const list = PROTOCOLS_BY_LAYER[layerKey] || [];
+  return `
+    <h3>Other protocols at this layer</h3>
+    <div class="protocol-mini-grid">
+      ${list.map(p => `<div class="protocol-mini"><div class="name">${escHtml(p.name)}</div><div class="desc">${escHtml(p.desc)}</div></div>`).join('')}
+    </div>`;
+}
+
+const RENDERERS = {
+  physical: () => `
+    <div class="card">
+      ${layerHeader(STEPS[0])}
+      <p>Everything below started as this: a stream of <span class="term" onclick="showInfoPopover(this,'bits')">bits</span> —
+      voltage changes on a copper cable, light pulses on fiber, or radio wave changes over Wi-Fi. Physical doesn't add a
+      header and doesn't understand structure at all — it just faithfully encodes whatever frame Data Link hands it,
+      and decodes it back into bits on the other end.</p>
+
+      <h3>What a receiving device actually sees first</h3>
+      <div class="raw-block">01010101 01010101 11010101 10101011 <span class="c">... (preamble — lets the receiver's clock sync up)</span>
+00000000 00011010 00101011 00111100 01001101 01011110  <span class="c">(destination MAC, revealed next step)</span>
+00000000 00011010 00101011 00111100 01001101 01011111  <span class="c">(source MAC, revealed next step)</span>
+<span class="c">... continues for the rest of the frame ...</span></div>
+
+      <div class="callout">
+        <strong>Nothing is "added" here</strong>
+        Physical is the one layer in this journey with no header of its own — it's pure signal encoding.
+        Everything meaningful starts becoming visible at the next step.
+      </div>
+
+      <div class="ws-block">
+        <div class="ws-title">How this looks in Wireshark</div>
+        <p>You will never see a "Physical Layer" entry in Wireshark. By the time a frame reaches Wireshark, your
+        network card has already decoded the signal back into bytes. The very first line you see —</p>
+        <div class="ws-tree">Frame 1: 74 bytes on wire (592 bits), 74 bytes captured (592 bits)</div>
+        <p>— is <span class="term" onclick="showInfoPopover(this,'wiresharkFrameMeta')">Wireshark's own capture metadata</span>, not a real header. There is nothing to filter for at this layer.</p>
+      </div>
+
+      ${protocolListHtml('physical')}
+    </div>`,
+
+  datalink: () => `
+    <div class="card">
+      ${layerHeader(STEPS[1])}
+      <p>Reading those bits in groups reveals the <span class="term" onclick="showInfoPopover(this,'frame')">Ethernet frame</span> —
+      the first real header in this journey.</p>
+
+      <div class="field-diagram">
+        <div class="field-part" style="background:#dc2626;">Dest MAC<br><span style="opacity:0.75;">6 bytes</span></div>
+        <div class="field-part" style="background:#dc2626;">Src MAC<br><span style="opacity:0.75;">6 bytes</span></div>
+        <div class="field-part" style="background:#b91c1c;">EtherType<br><span style="opacity:0.75;">2 bytes</span></div>
+        <div class="field-part" style="background:#15803d;">Payload (the IP packet)<br><span style="opacity:0.75;">46-1500 bytes</span></div>
+        <div class="field-part" style="background:#6b7280;">FCS<br><span style="opacity:0.75;">4 bytes</span></div>
+      </div>
+
+      <table class="field-table">
+        <tr><th>Field</th><th>Sample value</th><th></th></tr>
+        <tr><td>Destination <span class="term" onclick="showInfoPopover(this,'macAddress')">MAC</span></td><td class="mono">aa:bb:cc:11:22:33</td><td>The local router's MAC — the destination is remote, so this frame only needs to reach the gateway</td></tr>
+        <tr><td>Source MAC</td><td class="mono">00:1a:2b:3c:4d:5e</td><td>This device's own network card</td></tr>
+        <tr><td><span class="term" onclick="showInfoPopover(this,'etherType')">EtherType</span></td><td class="mono">0x0800</td><td>"An IPv4 packet is inside" — this is how the next layer is identified</td></tr>
+        <tr><td><span class="term" onclick="showInfoPopover(this,'fcs')">FCS</span> (trailer)</td><td class="mono">0x9f3a2b7c</td><td>Checksum — verified and then discarded, never passed upward</td></tr>
+      </table>
+
+      <div class="callout">
+        <strong>What this reveals</strong>
+        EtherType 0x0800 tells us exactly what's inside the payload — an IPv4 packet. That's the next layer.
+      </div>
+
+      <div class="ws-block">
+        <div class="ws-title">How this looks in Wireshark</div>
+        <div class="ws-tree">Ethernet II, Src: 00:1a:2b:3c:4d:5e, Dst: aa:bb:cc:11:22:33
+    Destination: aa:bb:cc:11:22:33
+    Source: 00:1a:2b:3c:4d:5e
+    Type: IPv4 (0x0800)</div>
+        <p>The FCS trailer usually does <strong>not</strong> appear in Wireshark at all — most network cards verify and strip
+        it in hardware before the capture driver ever sees the frame. Don't go looking for it; its absence is normal.</p>
+        <p>Filter for this traffic: <span class="ws-filter">eth.addr == aa:bb:cc:11:22:33</span> or
+        <span class="ws-filter">eth.type == 0x0800</span> — see <span class="term" onclick="showInfoPopover(this,'displayFilter')">display filters</span>.</p>
+      </div>
+
+      ${protocolListHtml('datalink')}
+    </div>`,
+
+  network: () => `
+    <div class="card">
+      ${layerHeader(STEPS[2])}
+      <p>Stripping the Ethernet header and trailer and reading the payload as IPv4 reveals the
+      <span class="term" onclick="showInfoPopover(this,'packet')">packet</span>'s IP header.</p>
+
+      <div class="field-diagram">
+        <div class="field-part" style="background:#15803d;">Version / Header Len<br><span style="opacity:0.75;">1 byte</span></div>
+        <div class="field-part" style="background:#166534;">TTL<br><span style="opacity:0.75;">1 byte</span></div>
+        <div class="field-part" style="background:#166534;">Protocol<br><span style="opacity:0.75;">1 byte</span></div>
+        <div class="field-part" style="background:#15803d;">Source IP<br><span style="opacity:0.75;">4 bytes</span></div>
+        <div class="field-part" style="background:#15803d;">Destination IP<br><span style="opacity:0.75;">4 bytes</span></div>
+        <div class="field-part" style="background:#d97706;">Payload (the TCP segment)</div>
+      </div>
+
+      <table class="field-table">
+        <tr><th>Field</th><th>Sample value</th><th></th></tr>
+        <tr><td>Version</td><td class="mono">4</td><td>IPv4</td></tr>
+        <tr><td><span class="term" onclick="showInfoPopover(this,'ttl')">TTL</span></td><td class="mono">64</td><td>Decremented by every router hop; discarded if it reaches 0</td></tr>
+        <tr><td><span class="term" onclick="showInfoPopover(this,'ipProtocolField')">Protocol</span></td><td class="mono">6</td><td>"TCP is inside" — the next layer identified again, same idea as EtherType</td></tr>
+        <tr><td>Source IP</td><td class="mono">192.168.1.10</td><td>This device</td></tr>
+        <tr><td>Destination IP</td><td class="mono">93.184.216.34</td><td>example.com's server</td></tr>
+      </table>
+
+      <div class="callout">
+        <strong>What this reveals</strong>
+        Protocol 6 means TCP is next. Notice this header identifies the actual devices (IP addresses) —
+        the Ethernet header only identified the next physical hop (a router), not the true destination.
+      </div>
+
+      <div class="ws-block">
+        <div class="ws-title">How this looks in Wireshark</div>
+        <div class="ws-tree">Internet Protocol Version 4, Src: 192.168.1.10, Dst: 93.184.216.34
+    0100 .... = Version: 4
+    Time to Live: 64
+    Protocol: TCP (6)
+    Source Address: 192.168.1.10
+    Destination Address: 93.184.216.34</div>
+        <p>Notice Wireshark labels our "TTL" as <em>Time to Live</em> in full, and shows Version as a binary breakdown
+        (<code>0100 ....</code>) rather than just the plain digit "4" — the field is the same, just displayed bit-by-bit.</p>
+        <p>Filter: <span class="ws-filter">ip.addr == 93.184.216.34</span>,
+        <span class="ws-filter">ip.ttl == 64</span>, or <span class="ws-filter">ip.proto == 6</span>.</p>
+      </div>
+
+      ${protocolListHtml('network')}
+    </div>`,
+
+  transport: () => `
+    <div class="card">
+      ${layerHeader(STEPS[3])}
+      <p>Stripping the IP header and reading the payload as TCP reveals the
+      <span class="term" onclick="showInfoPopover(this,'segment')">segment</span>'s header.</p>
+
+      <div class="field-diagram">
+        <div class="field-part" style="background:#d97706;">Source Port<br><span style="opacity:0.75;">2 bytes</span></div>
+        <div class="field-part" style="background:#d97706;">Dest Port<br><span style="opacity:0.75;">2 bytes</span></div>
+        <div class="field-part" style="background:#b45309;">Seq / Ack Numbers<br><span style="opacity:0.75;">8 bytes</span></div>
+        <div class="field-part" style="background:#b45309;">Flags<br><span style="opacity:0.75;">varies</span></div>
+        <div class="field-part" style="background:#4f5ef0;">Payload (the HTTP request)</div>
+      </div>
+
+      <table class="field-table">
+        <tr><th>Field</th><th>Sample value</th><th></th></tr>
+        <tr><td>Source <span class="term" onclick="showInfoPopover(this,'portNumber')">Port</span></td><td class="mono">51342</td><td>A random "ephemeral" port this device picked for this one connection</td></tr>
+        <tr><td>Destination Port</td><td class="mono">80</td><td>Conventionally HTTP — a hint the sender chose to follow, not a guarantee enforced by TCP</td></tr>
+        <tr><td>Sequence Number</td><td class="mono">1000</td><td>Lets the receiver reassemble segments in the correct order, even if they arrive out of order</td></tr>
+        <tr><td><span class="term" onclick="showInfoPopover(this,'tcpFlags')">Flags</span></td><td class="mono">PSH, ACK</td><td>"Here's data, and pass it to the application immediately"</td></tr>
+      </table>
+
+      <div class="callout">
+        <strong>What this reveals</strong>
+        This is the last layer with an actual header in this stack. What's left inside is the pure Application data —
+        but first, two conceptual layers that don't add anything here at all.
+      </div>
+
+      <div class="ws-block">
+        <div class="ws-title">How this looks in Wireshark</div>
+        <div class="ws-tree">Transmission Control Protocol, Src Port: 51342, Dst Port: 80, Seq: 1, Ack: 1, Len: 199
+    Source Port: 51342
+    Destination Port: 80
+    Sequence Number: 1    (relative sequence number)
+    Flags: 0x018 (PSH, ACK)
+        ...1 1... = PSH, ACK set
+    Window: 64240</div>
+        <p>Wireshark shows <span class="term" onclick="showInfoPopover(this,'tcpFlags')">Flags</span> as a hex value
+        that expands into individual bits — each set flag gets its own line when you expand the row, instead of the
+        plain "PSH, ACK" text we show above. Same information, more granular display.</p>
+        <p>Filter: <span class="ws-filter">tcp.port == 80</span>, <span class="ws-filter">tcp.flags.push == 1</span>.
+        Right-click any of these packets → Follow → TCP Stream (<span class="term" onclick="showInfoPopover(this,'followTcpStream')">what's that?</span>)
+        to see the whole conversation reassembled as plain text — exactly like the block shown in Application, next.</p>
+      </div>
+
+      ${protocolListHtml('transport')}
+    </div>`,
+
+  session: () => `
+    <div class="card">
+      ${layerHeader(STEPS[4])}
+      <div class="callout warn">
+        <strong>The important distinction</strong>
+        There is no Session header on the wire in this stack. <span class="term" onclick="showInfoPopover(this,'sessionLayer')">OSI's Session layer</span>
+        is a real job — keeping a dialogue between two programs going — but in real HTTP-over-TCP traffic, that job doesn't
+        get its own header. It's absorbed by two things that already exist elsewhere: the TCP connection itself staying
+        open (a "persistent connection"), and — visible once we reach Application — the <code>Connection: keep-alive</code>
+        header asking for exactly that.
+      </div>
+      <p>This is exactly why TCP/IP's 4-layer model doesn't bother giving Session its own layer at all — in practice,
+      it was never a separate thing on the wire to begin with.</p>
+
+      <div class="ws-block">
+        <div class="ws-title">How this looks in Wireshark</div>
+        <p>Open Wireshark's protocol tree for any packet and you will never find a "Session" entry — reinforcing the
+        same point from a completely different tool: this job doesn't have its own header, so there's nothing for
+        Wireshark to parse and display for it.</p>
+      </div>
+
+      ${protocolListHtml('session')}
+    </div>`,
+
+  presentation: () => `
+    <div class="card">
+      ${layerHeader(STEPS[5])}
+      <div class="callout warn">
+        <strong>Also no header here — but it's a real gap, not a fake one</strong>
+        <span class="term" onclick="showInfoPopover(this,'presentationLayer')">Presentation</span> is supposed to handle
+        format translation and encryption. Plain HTTP genuinely has neither at this point. If this request had been
+        HTTPS instead, a TLS record would sit exactly here — encrypting the entire HTTP message before TCP ever sees
+        it. TLS is real, working Presentation-layer behavior; it just isn't its own OSI-numbered layer in practice, the
+        same way Session isn't.
+      </div>
+      <p>Two layers in a row with nothing added on the wire is the clearest possible demonstration of why OSI's 7 layers
+      and a real packet's actual structure aren't the same thing — OSI describes job categories, not a guaranteed header
+      for each one.</p>
+
+      <div class="ws-block">
+        <div class="ws-title">How this looks in Wireshark</div>
+        <p>No "Presentation" entry here either, for the same reason as Session. But if this had been HTTPS instead of
+        plain HTTP, you WOULD see a real entry at exactly this point:</p>
+        <div class="ws-tree">Transport Layer Security
+    TLSv1.3 Record Layer: Handshake Protocol: Client Hello</div>
+        <p>That's the closest real-world match to "Presentation" you'll ever actually see in a capture. Filter for it:
+        <span class="ws-filter">tls.handshake.type == 1</span> finds Client Hello messages specifically.</p>
+      </div>
+
+      ${protocolListHtml('presentation')}
+    </div>`,
+
+  application: () => `
+    <div class="card">
+      ${layerHeader(STEPS[6])}
+      <p>Stripping the TCP header reveals the pure Application-layer data — plain, human-readable text, no further
+      wrapping. This is what the entire journey was carrying.</p>
+
+      <div class="raw-block"><span class="hl">GET /index.html HTTP/1.1</span>
+Host: example.com
+User-Agent: Mozilla/5.0
+Accept: text/html
+Connection: keep-alive
+<span class="c">(blank line, then a body if any — a GET typically has none)</span></div>
+
+      <table class="field-table">
+        <tr><th>Part</th><th></th></tr>
+        <tr><td><span class="term" onclick="showInfoPopover(this,'httpMethod')">GET /index.html HTTP/1.1</span></td><td>Method, path, and HTTP version — the request line</td></tr>
+        <tr><td><span class="term" onclick="showInfoPopover(this,'httpHeaders')">Host / User-Agent / Accept / Connection</span></td><td>Headers — metadata about the request</td></tr>
+      </table>
+
+      <div class="callout ok">
+        <strong>The whole journey, in reverse</strong>
+        This plain text is what existed BEFORE any of the other six layers added anything. Sending it meant: Transport
+        wrapped it in a TCP header, Network wrapped that in an IP header, Data Link wrapped that in an Ethernet
+        frame, and Physical turned the whole thing into a signal on the wire — the exact reverse of the order we just walked.
+      </div>
+
+      <div class="ws-block">
+        <div class="ws-title">How this looks in Wireshark</div>
+        <div class="ws-tree">Hypertext Transfer Protocol
+    GET /index.html HTTP/1.1\r\n
+    Host: example.com\r\n
+    User-Agent: Mozilla/5.0\r\n
+    Accept: text/html\r\n
+    Connection: keep-alive\r\n
+    \r\n</div>
+        <p>Wireshark shows the exact request line and every header as its own expandable row, <code>\r\n</code> line
+        endings included — this is the literal payload from the Transport step, just decoded as text instead of hex.</p>
+        <p>Filter: <span class="ws-filter">http.request.method == "GET"</span>,
+        <span class="ws-filter">http.host == "example.com"</span>.</p>
+      </div>
+
+      ${protocolListHtml('application')}
+    </div>`,
+};
+
+// ── Initial render ────────────────────────────────────────────────────────
+goToStep(1);
+</script>
+</body>
+</html>
