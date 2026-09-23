@@ -86,6 +86,16 @@ expected and correct, not a bug to route around.
   bypassing the generic per-record-type table entirely — it's the one
   record type where the `renderResults()` loop branches early. If you
   change the generic table rendering, remember SOA doesn't go through it.
+- **Record types with no data are hidden by default, not skipped.** All 14
+  types are still queried every time — `buildRecordSection()` just tags
+  each result `empty: true/false`, and `renderResults()` only inlines the
+  non-empty ones, stashing the rest behind a "Show N record types with no
+  data" toggle (`toggleEmptyRecordTypes()`). A failed query (`fetchError`)
+  is never treated as empty — that's a real problem, always shown. This
+  reversed an earlier "always show all 14 inline" decision after it turned
+  out to just read as clutter/confusion on ordinary domains; see
+  `../KNOWLEDGE_MAP.md`'s DNS Lookup section for the fuller history if you
+  touch this again.
 - Mounted at `/tools/dns-lookup/` by `main.py` in the repo root — this
   folder never needs to know that; it's a fully self-contained ASGI app
   either way.

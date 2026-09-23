@@ -1,0 +1,266 @@
+"""
+df-studio/engine.py
+
+Session state and DataFrame plumbing. One process, in-memory sessions
+(SESSIONS dict keyed by a cookie'd session id) — fine for a single-user
+local tool; a server restart loses in-progress sessions, which is an
+accepted tradeoff (nothing here is meant to be durable, see "Export").
+
+The pipeline model: each session keeps the ORIGINAL DataFrame plus an
+ordered list of steps. The "current" DataFrame is always recomputed by
+replaying every step over the original — not an incremental mutation or a
+snapshot stack. This makes "remove a step from the middle" trivially
+correct (just replay the remaining steps) instead of needing undo/redo
+bookkeeping.
+"""
+
+from __future__ import annotations
+
+import io
+import json
+import random
+import uuid
+from dataclasses import dataclass, field
+from typing import Any
+
+import pandas as pd
+
+try:  # package import when mounted inside the toolbox (df_studio.*)
+    from df_studio import steps as steps_mod
+except ImportError:  # flat import when run standalone from within this folder
+    import steps as steps_mod
+
+STEP_HANDLERS = steps_mod.STEP_HANDLERS
+STEP_LABELS = steps_mod.STEP_LABELS
+
+PREVIEW_ROW_CAP = 5000
+# Bounds the total cells shipped to the browser on every preview response,
+# regardless of shape — a 5000-column file would otherwise send
+# min(row_count, 5000) rows × ALL columns (tens of millions of cells) on
+# every single step. A normal-shaped file (few dozen columns) is
+# unaffected: the row cap stays PREVIEW_ROW_CAP either way.
+PREVIEW_CELL_BUDGET = 400_000
+MIN_PREVIEW_ROWS = 20
+
+
+class StepError(ValueError):
+    pass
+
+
+@dataclass
+class Session:
+    filename: str
+    original_df: pd.DataFrame
+    steps: list[dict[str, Any]] = field(default_factory=list)
+    preview_mode: str = "head"
+    # Generated once per session so .sample() doesn't reshuffle the visible
+    # rows on every incidental recompute() (Check, step add/remove, template
+    # apply all trigger one) — only an explicit "resample" regenerates this.
+    sample_seed: int = field(default_factory=lambda: random.randint(0, 2**31 - 1))
+
+
+SESSIONS: dict[str, Session] = {}
+
+
+def load_dataframe(
+    filename: str,
+    content: bytes,
+    *,
+    sep: str | None = None,
+    encoding: str = "utf-8",
+    header: bool = True,
+    nrows: int | None = None,
+) -> pd.DataFrame:
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    buf = io.BytesIO(content)
+    try:
+        if ext in ("csv", "tsv", "txt"):
+            actual_sep = sep or ("\t" if ext == "tsv" else ",")
+            return pd.read_csv(
+                buf, sep=actual_sep, encoding=encoding,
+                header=0 if header else None, nrows=nrows,
+            )
+        if ext == "json":
+            # nrows isn't a pandas read_json option — capped after the fact,
+            # which does not avoid reading the whole file into memory first
+            # (see engine.py's docstring / CLAUDE.md for why CSV/TSV is the
+            # only format this tool can genuinely stream-limit).
+            try:
+                df = pd.read_json(buf, encoding=encoding)
+            except ValueError:
+                buf.seek(0)
+                df = pd.read_json(buf, lines=True, encoding=encoding)
+            return df.head(nrows) if nrows else df
+        if ext == "xml":
+            df = pd.read_xml(buf, encoding=encoding)
+            return df.head(nrows) if nrows else df
+        if ext == "parquet":
+            df = pd.read_parquet(buf)  # binary format, no meaningful encoding/sep
+            return df.head(nrows) if nrows else df
+    except UnicodeDecodeError as exc:
+        raise StepError(f"Couldn't decode file as {encoding} — try a different encoding.") from exc
+    raise StepError(f"Unsupported file type '.{ext}'. Use CSV, TSV, JSON, XML, or Parquet.")
+
+
+def create_session(filename: str, df: pd.DataFrame) -> str:
+    session_id = uuid.uuid4().hex
+    SESSIONS[session_id] = Session(filename=filename, original_df=df)
+    return session_id
+
+
+def get_session(session_id: str | None) -> Session:
+    if not session_id or session_id not in SESSIONS:
+        raise StepError("No active session — load a file first.")
+    return SESSIONS[session_id]
+
+
+def recompute(session: Session) -> pd.DataFrame:
+    df = session.original_df
+    for step in session.steps:
+        handler = STEP_HANDLERS[step["type"]]
+        df, _ = handler(df, step["params"])
+    return df
+
+
+def _run_step(session: Session, step_type: str, params: dict[str, Any]) -> tuple[pd.DataFrame, str]:
+    if step_type not in STEP_HANDLERS:
+        raise StepError(f"Unknown step type '{step_type}'.")
+    current = recompute(session)
+    handler = STEP_HANDLERS[step_type]
+    return handler(current, params)
+
+
+def preview_step(session: Session, step_type: str, params: dict[str, Any]) -> pd.DataFrame:
+    """Run a step against the current DataFrame without committing it to the
+    pipeline — the "Check" half of the query box's edit/check workflow."""
+    new_df, _ = _run_step(session, step_type, params)
+    return new_df
+
+
+def apply_step(session: Session, step_type: str, params: dict[str, Any]) -> pd.DataFrame:
+    _, code = _run_step(session, step_type, params)  # validates against current df before committing
+    session.steps.append({"type": step_type, "params": params, "code": code})
+    return recompute(session)
+
+
+def remove_step(session: Session, index: int) -> pd.DataFrame:
+    if index < 0 or index >= len(session.steps):
+        raise StepError("Step not found.")
+    session.steps.pop(index)
+    return recompute(session)
+
+
+def reset_steps(session: Session) -> pd.DataFrame:
+    session.steps.clear()
+    return session.original_df
+
+
+def set_preview_mode(session: Session, mode: str, resample: bool = False) -> dict[str, Any]:
+    if mode not in ("head", "sample"):
+        raise StepError(f"Unknown preview mode '{mode}'.")
+    session.preview_mode = mode
+    if resample:
+        session.sample_seed = random.randint(0, 2**31 - 1)
+    return build_preview(session, recompute(session))
+
+
+def apply_template(session: Session, template_steps: list[dict[str, Any]]) -> tuple[pd.DataFrame, list[str]]:
+    """Replace the pipeline with a saved template's steps, replayed from scratch.
+
+    Stops at the first step that doesn't fit this file (e.g. a renamed/missing
+    column) and returns what succeeded up to that point, plus a message
+    explaining where it stopped — templates are written against one file's
+    shape and aren't guaranteed to fit another.
+    """
+    session.steps.clear()
+    errors: list[str] = []
+    for i, step in enumerate(template_steps):
+        try:
+            apply_step(session, step["type"], step["params"])
+        except ValueError as exc:  # StepError and the plain ValueErrors step handlers raise
+            label = STEP_LABELS.get(step["type"], step["type"])
+            errors.append(f"Step {i + 1} ({label}): {exc}")
+            break
+    return recompute(session), errors
+
+
+_SCRIPT_LOADERS = {
+    "csv": "pd.read_csv({path!r})",
+    "json": "pd.read_json({path!r})",
+    "xml": "pd.read_xml({path!r})",
+    "parquet": "pd.read_parquet({path!r})",
+}
+
+
+def generate_script(session: Session) -> str:
+    ext = session.filename.rsplit(".", 1)[-1].lower() if "." in session.filename else "csv"
+    loader_template = _SCRIPT_LOADERS.get(ext, _SCRIPT_LOADERS["csv"])
+    lines = [
+        "import pandas as pd",
+        "import numpy as np",
+        "",
+        f"df = {loader_template.format(path=session.filename)}",
+    ]
+    for step in session.steps:
+        lines.append("")
+        lines.append(step["code"])
+    lines.append("")
+    lines.append("print(df.head())")
+    return "\n".join(lines)
+
+
+def _json_safe_records(df: pd.DataFrame, limit: int) -> list[dict[str, Any]]:
+    capped = df.head(limit)
+    return json.loads(capped.to_json(orient="records", date_format="iso"))
+
+
+def compute_insight(df: pd.DataFrame, kind: str, column: str | None = None) -> dict[str, Any]:
+    if kind == "describe":
+        stats = df.describe(include="all").reset_index().rename(columns={"index": "stat"})
+        return {"kind": kind, "columns": list(stats.columns), "rows": _json_safe_records(stats, len(stats))}
+    if kind == "info":
+        rows = [
+            {
+                "column": c,
+                "dtype": str(df[c].dtype),
+                "non_null": int(df[c].notna().sum()),
+                "nulls": int(df[c].isna().sum()),
+            }
+            for c in df.columns
+        ]
+        return {"kind": kind, "row_count": len(df), "column_count": len(df.columns), "rows": rows}
+    if kind == "nunique":
+        rows = [{"column": c, "unique": int(df[c].nunique())} for c in df.columns]
+        return {"kind": kind, "rows": rows}
+    if kind == "value_counts":
+        if not column:
+            raise StepError("Pick a column for value counts.")
+        if column not in df.columns:
+            raise StepError(f"Column not found: {column}")
+        counts = df[column].value_counts().head(50).reset_index()
+        counts.columns = ["value", "count"]
+        return {"kind": kind, "column": column, "rows": _json_safe_records(counts, 50)}
+    raise StepError(f"Unknown insight kind '{kind}'.")
+
+
+def build_preview(session: Session, df: pd.DataFrame) -> dict[str, Any]:
+    total_rows = len(df)
+    num_cols = max(len(df.columns), 1)
+    row_cap = max(MIN_PREVIEW_ROWS, min(PREVIEW_ROW_CAP, PREVIEW_CELL_BUDGET // num_cols))
+    shown_rows = min(total_rows, row_cap)
+    if session.preview_mode == "sample" and shown_rows > 0:
+        capped = df.sample(n=shown_rows, random_state=session.sample_seed)
+    else:
+        capped = df.head(shown_rows)
+    return {
+        "filename": session.filename,
+        "columns": [{"name": c, "dtype": str(df[c].dtype)} for c in df.columns],
+        "row_count": total_rows,
+        "shown_rows": shown_rows,
+        "preview_mode": session.preview_mode,
+        "rows": json.loads(capped.to_json(orient="records", date_format="iso")),
+        "steps": [
+            {"type": s["type"], "label": STEP_LABELS[s["type"]], "code": s["code"]}
+            for s in session.steps
+        ],
+    }

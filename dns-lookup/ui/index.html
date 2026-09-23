@@ -124,6 +124,16 @@
 
   .provider-note { font-size: 0.75rem; color: var(--muted); margin-top: 10px; }
 
+  /* ── Empty record types, tucked behind a toggle instead of shown by default ── */
+  .empty-types-toggle { margin-top: 4px; }
+  .toggle-empty-btn {
+    background: none; border: 1px dashed var(--border); color: var(--muted);
+    border-radius: 7px; padding: 7px 12px; font-size: 0.78rem; cursor: pointer;
+  }
+  .toggle-empty-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .empty-types-body { margin-top: 14px; }
+  .empty-types-body[hidden] { display: none; }
+
   /* ── Reverse lookup: constructed query name ──────────────────────────── */
   .query-trace {
     background: #10131f; color: #d7dcf0; border-radius: 8px; padding: 12px 16px;
@@ -161,7 +171,7 @@
   <div class="panel active" id="panel-forward">
     <div class="card">
       <h2>Look Up a Domain</h2>
-      <p class="hint">Enter a domain (e.g. <code>example.com</code>) — pasting a full URL works too, the path/protocol is stripped automatically. Checks all 14 record types a domain could realistically have (A, AAAA, CNAME, MX, TXT, NS, SOA, CAA, SRV, NAPTR, DNSKEY, DS, TLSA, SSHFP) — most domains will show "no records found" for several of these, which is normal, not an error.</p>
+      <p class="hint">Enter a domain (e.g. <code>example.com</code>) — pasting a full URL works too, the path/protocol is stripped automatically. Checks all 14 record types a domain could realistically have (A, AAAA, CNAME, MX, TXT, NS, SOA, CAA, SRV, NAPTR, DNSKEY, DS, TLSA, SSHFP), but only shows the ones that actually have data — most domains don't use all 14, so the rest are tucked behind a "show" toggle instead of cluttering the results with "no records found."</p>
 
       <div class="row">
         <div class="field" style="flex:2;">
@@ -519,56 +529,103 @@ function renderSoaFieldGrid(rawData) {
     </div>`).join('') + `</div>`;
 }
 
-function renderResults(domain, providerKey, responses) {
-  document.getElementById('results-heading').innerHTML =
-    `Results for <span style="font-family:monospace;">${escHtml(domain)}</span> — via ${escHtml(PROVIDERS[providerKey].label)}`;
-
-  const sections = responses.map(({ type, data, fetchError }) => {
-    if (fetchError) {
-      return `<div class="record-section">
+// Builds one record-type section's HTML. Also returns whether this type had
+// zero records — a normal, healthy result (e.g. most domains have no TXT SPF
+// record) that renderResults() uses to keep the default view to just the
+// record types the domain actually has, instead of 14 sections where most
+// say "no records found."
+function buildRecordSection({ type, data, fetchError }) {
+  if (fetchError) {
+    return {
+      empty: false, // a failed query is a real problem, not "no record" — always shown
+      html: `<div class="record-section">
         <h3>${type} Records <span class="info-icon" onclick="showInfoPopover(this, '${type}')">?</span></h3>
         <p class="empty" style="color:var(--err-text);">Query failed: ${escHtml(fetchError)}</p>
-      </div>`;
-    }
+      </div>`,
+    };
+  }
 
-    const answers = data.Answer || [];
-    if (answers.length === 0) {
-      const statusNote = data.Status !== 0 ? ` (${DNS_STATUS_NAMES[data.Status] || 'status ' + data.Status})` : '';
-      return `<div class="record-section">
+  const answers = data.Answer || [];
+  if (answers.length === 0) {
+    const statusNote = data.Status !== 0 ? ` (${DNS_STATUS_NAMES[data.Status] || 'status ' + data.Status})` : '';
+    return {
+      empty: true,
+      html: `<div class="record-section">
         <h3>${type} Records <span class="info-icon" onclick="showInfoPopover(this, '${type}')">?</span></h3>
         <p class="empty">No ${type} records found${statusNote}.</p>
-      </div>`;
-    }
+      </div>`,
+    };
+  }
 
-    if (type === 'SOA') {
-      return `<div class="record-section">
+  if (type === 'SOA') {
+    return {
+      empty: false,
+      html: `<div class="record-section">
         <h3>SOA Record <span class="info-icon" onclick="showInfoPopover(this, 'SOA')">?</span></h3>
         ${renderSoaFieldGrid(answers[0].data)}
-      </div>`;
-    }
+      </div>`,
+    };
+  }
 
-    const hasChain = answers.some(a => DNS_TYPE_NAMES[a.type] !== type);
-    const rows = answers.map(a => {
-      const actualType = DNS_TYPE_NAMES[a.type] || `TYPE${a.type}`;
-      const isChainHop = actualType !== type;
-      return `<tr>
-        <td><span class="type-badge${isChainHop ? ' chain' : ''}">${actualType}</span></td>
-        <td class="mono">${escHtml(formatRecordData(actualType, a.data))}</td>
-        <td class="ttl-cell">${humanizeTtl(a.TTL)}</td>
-      </tr>`;
-    }).join('');
+  const hasChain = answers.some(a => DNS_TYPE_NAMES[a.type] !== type);
+  const rows = answers.map(a => {
+    const actualType = DNS_TYPE_NAMES[a.type] || `TYPE${a.type}`;
+    const isChainHop = actualType !== type;
+    return `<tr>
+      <td><span class="type-badge${isChainHop ? ' chain' : ''}">${actualType}</span></td>
+      <td class="mono">${escHtml(formatRecordData(actualType, a.data))}</td>
+      <td class="ttl-cell">${humanizeTtl(a.TTL)}</td>
+    </tr>`;
+  }).join('');
 
-    return `<div class="record-section">
+  return {
+    empty: false,
+    html: `<div class="record-section">
       <h3>${type} Records <span class="info-icon" onclick="showInfoPopover(this, '${type}')">?</span>${hasChain ? ` <span class="info-icon" onclick="showInfoPopover(this, 'chain')" title="Why more than one type?">?</span>` : ''}</h3>
       <table class="data-table">
         <tr><th>Type</th><th>Value</th><th>TTL <span class="info-icon" onclick="showInfoPopover(this, 'ttl')">?</span></th></tr>
         ${rows}
       </table>
-    </div>`;
-  }).join('');
+    </div>`,
+  };
+}
 
-  document.getElementById('results-body').innerHTML = sections;
+function renderResults(domain, providerKey, responses) {
+  document.getElementById('results-heading').innerHTML =
+    `Results for <span style="font-family:monospace;">${escHtml(domain)}</span> — via ${escHtml(PROVIDERS[providerKey].label)}`;
+
+  const built = responses.map(r => ({ type: r.type, ...buildRecordSection(r) }));
+  const present = built.filter(b => !b.empty);
+  const empty = built.filter(b => b.empty);
+
+  const presentHtml = present.length
+    ? present.map(b => b.html).join('')
+    : '<p class="empty">None of the 14 checked record types have any data for this domain.</p>';
+
+  let emptyBlock = '';
+  if (empty.length > 0) {
+    const typeList = empty.map(b => b.type).join(', ');
+    emptyBlock = `
+      <div class="empty-types-toggle">
+        <button type="button" class="toggle-empty-btn" onclick="toggleEmptyRecordTypes(this)">
+          Show ${empty.length} record type${empty.length > 1 ? 's' : ''} with no data (${escHtml(typeList)})
+        </button>
+        <div class="empty-types-body" hidden>${empty.map(b => b.html).join('')}</div>
+      </div>`;
+  }
+
+  document.getElementById('results-body').innerHTML = presentHtml + emptyBlock;
   resultsCard.style.display = 'block';
+}
+
+function toggleEmptyRecordTypes(btn) {
+  const body = btn.nextElementSibling;
+  const showing = !body.hidden;
+  body.hidden = showing;
+  const count = body.querySelectorAll('.record-section').length;
+  btn.textContent = showing
+    ? `Show ${count} record type${count > 1 ? 's' : ''} with no data`
+    : `Hide ${count} record type${count > 1 ? 's' : ''} with no data`;
 }
 
 // ── Reverse lookup tab ───────────────────────────────────────────────────

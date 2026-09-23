@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DataFrame Studio</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabulator/5.5.2/css/tabulator.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tabulator/5.5.2/js/tabulator.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f4f6fb; --surface: #ffffff; --border: #dde1ef;
+    --text: #1c2035; --muted: #6b7180; --accent: #4f5ef0;
+    --err-bg: rgba(220,38,38,0.06); --err-text: #b91c1c; --err-border: rgba(220,38,38,0.3);
+    --ok-bg: rgba(21,128,61,0.08); --ok-text: #15803d;
+    --warn-bg: rgba(217,119,6,0.08); --warn-text: #b45309; --warn-border: rgba(217,119,6,0.3);
+  }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text);
+    padding: 14px 20px 14px;
+    display: flex; flex-direction: column;
+    overflow: hidden; /* the page itself never scrolls — panes below do */
+  }
+  header {
+    max-width: 1280px; margin: 0 auto 10px; width: 100%; flex-shrink: 0;
+    display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  }
+  header h1 { font-size: 1.2rem; font-weight: 700; letter-spacing: -0.5px; }
+  header h1 span { color: var(--accent); }
+  header p { color: var(--muted); font-size: 0.78rem; }
+
+  .wrap {
+    max-width: 1280px; margin: 0 auto; width: 100%;
+    flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column;
+  }
+
+  /* Mobile: independent scroll panes stop paying off below ~900px width —
+     drop back to one naturally-flowing, page-scrolling column. */
+  @media (max-width: 900px) {
+    html, body { height: auto; }
+    body { display: block; overflow: visible; }
+    .wrap { display: block; height: auto; }
+  }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px; margin-bottom: 10px;
+  }
+  .card h2 { font-size: 0.95rem; font-weight: 700; margin-bottom: 4px; }
+  .card .hint { font-size: 0.76rem; color: var(--muted); margin-bottom: 10px; line-height: 1.5; }
+
+  label {
+    font-size: 0.74rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.4px; color: var(--muted); display: block; margin-bottom: 4px;
+  }
+  input[type="text"], select, textarea {
+    background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 7px 9px; font-size: 0.83rem; width: 100%;
+    font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
+  }
+  select[multiple] { height: 88px; }
+  textarea { resize: vertical; min-height: 90px; line-height: 1.4; }
+  input[type="file"] { font-size: 0.82rem; }
+
+  .field { margin-bottom: 10px; }
+  .row { display: flex; gap: 10px; }
+  .row > * { flex: 1; }
+
+  button {
+    background: var(--accent); color: #fff; border: none; border-radius: 6px;
+    padding: 8px 14px; font-size: 0.82rem; font-weight: 600; cursor: pointer;
+  }
+  button:hover { opacity: 0.9; }
+  button.secondary { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
+  button.danger { background: none; color: var(--err-text); padding: 2px 8px; font-size: 0.75rem; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .upload-bar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; flex-shrink: 0; padding: 10px 16px; }
+  .upload-bar .meta { font-size: 0.8rem; color: var(--muted); }
+  #loadProgress { width: 140px; height: 8px; accent-color: var(--accent); }
+
+  #loadOptionsPanel { flex-shrink: 0; padding: 8px 16px; }
+  #loadOptionsPanel summary {
+    cursor: pointer; font-size: 0.78rem; font-weight: 700; color: var(--muted);
+    list-style: none; text-transform: uppercase; letter-spacing: 0.4px;
+  }
+  #loadOptionsPanel[open] summary { margin-bottom: 10px; color: var(--text); }
+  #loadOptionsPanel summary::-webkit-details-marker { display: none; }
+  #loadOptionsPanel summary::before { content: "▸ "; color: var(--muted); }
+  #loadOptionsPanel[open] summary::before { content: "▾ "; }
+
+  .load-options-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 8px 14px; align-items: end;
+  }
+  .load-options-grid .field { margin-bottom: 0; }
+  .load-options-grid label { font-size: 0.68rem; margin-bottom: 2px; }
+  .load-options-grid select, .load-options-grid input[type="text"] { padding: 5px 7px; font-size: 0.78rem; }
+  .load-options-row2 {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 8px;
+  }
+  .load-options-row2 label {
+    display: flex; align-items: center; gap: 5px; text-transform: none;
+    font-weight: 400; font-size: 0.78rem; margin-bottom: 0; color: var(--text);
+  }
+  .load-options-row2 .hint { font-size: 0.68rem; margin-bottom: 0; flex: 1; min-width: 220px; }
+  .nrows-presets { display: flex; gap: 4px; }
+  .nrows-presets button { font-size: 0.68rem; padding: 4px 7px; }
+
+  .preview-mode-group { display: flex; gap: 6px; align-items: center; }
+  .preview-mode-group button { font-size: 0.76rem; padding: 6px 10px; }
+
+  /* Desktop: table pane + sidebar each own their vertical scroll; the grid
+     row itself is what's left of the viewport after header/upload/check
+     panel — min-height:0 is what actually lets a flex/grid child shrink
+     below its content size instead of pushing the page taller. */
+  .layout {
+    display: grid; grid-template-columns: 1fr 320px; gap: 16px;
+    flex: 1; min-height: 0; min-width: 0; overflow: hidden;
+  }
+
+  /* min-width:0 on both grid items is load-bearing, not decorative: a grid
+     item's default min-width is "auto" (its content's min-content size),
+     which for a wide table or long unwrapped text can be larger than the
+     1fr track — the grid then grows to fit it ("grid blowout"), pushing
+     .layout and everything above it wider than the viewport. Without this,
+     overflow:hidden above does nothing, because the box doing the
+     overflowing is .layout itself, not something inside it. */
+  .table-card { display: flex; flex-direction: column; height: 100%; min-width: 0; overflow: hidden; }
+  #table {
+    flex: 1; min-height: 0;
+    border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  }
+
+  .sidebar { height: 100%; min-width: 0; overflow-y: auto; overflow-x: hidden; padding-right: 4px; }
+
+  @media (max-width: 900px) {
+    .layout { display: block; height: auto; overflow: visible; }
+    .table-card { height: auto; }
+    #table { flex: none; height: 480px; }
+    .sidebar { height: auto; overflow: visible; padding-right: 0; }
+  }
+
+  .step-form fieldset { display: none; border: none; }
+  .step-form fieldset.active { display: block; }
+
+  .pipeline-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+  .pipeline-list li {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 8px 10px; display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;
+  }
+  .pipeline-list .label { font-size: 0.72rem; font-weight: 700; color: var(--muted); text-transform: uppercase; }
+  .pipeline-list code {
+    display: block; font-size: 0.76rem; margin-top: 2px; word-break: break-all;
+    font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
+  }
+  .pipeline-list .empty { color: var(--muted); font-size: 0.8rem; }
+
+  .insight-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .insight-btns button { font-size: 0.76rem; padding: 6px 10px; }
+
+  .export-btns { display: flex; gap: 8px; }
+
+  .banner {
+    display: none; max-width: 1280px; width: 100%; margin: 0 auto 14px; padding: 10px 14px;
+    border-radius: 8px; font-size: 0.83rem; flex-shrink: 0;
+    background: var(--err-bg); color: var(--err-text); border: 1px solid var(--err-border);
+  }
+  .banner.show { display: block; }
+  .banner.warn {
+    background: var(--warn-bg); color: var(--warn-text); border: 1px solid var(--warn-border);
+  }
+
+  .pipeline-list pre {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 4px;
+    padding: 6px 8px; margin-top: 4px; font-size: 0.74rem; white-space: pre-wrap;
+    word-break: break-word; font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
+  }
+
+  .script-box {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 10px; font-size: 0.76rem; white-space: pre-wrap; word-break: break-word;
+    max-height: 320px; overflow: auto; font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
+  }
+  .script-actions { display: flex; gap: 8px; margin-top: 8px; }
+
+  .template-list { list-style: none; display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+  .template-list li {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 7px 10px; display: flex; justify-content: space-between; align-items: center; gap: 8px;
+    font-size: 0.8rem;
+  }
+  .template-list .name { font-weight: 600; }
+  .template-list .count { color: var(--muted); font-size: 0.74rem; }
+  .template-list .actions { display: flex; gap: 6px; }
+  .template-list .actions button { font-size: 0.72rem; padding: 4px 8px; }
+  .template-list .empty { color: var(--muted); font-size: 0.8rem; }
+
+  .check-panel { border-color: var(--accent); flex-shrink: 0; }
+  .check-panel-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 12px; flex-wrap: wrap; margin-bottom: 10px;
+  }
+  .check-panel-actions { display: flex; gap: 8px; flex-shrink: 0; }
+  .check-panel .check-panel-result { max-height: 480px; }
+
+  .result-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; margin-top: 6px; table-layout: fixed; }
+  .result-table th, .result-table td {
+    border: 1px solid var(--border); padding: 5px 8px; text-align: left; white-space: nowrap;
+    max-width: 280px; overflow: hidden; text-overflow: ellipsis;
+  }
+  .result-table th { background: var(--bg); }
+  .result-wrap { max-height: 320px; overflow: auto; }
+
+  .empty-state { color: var(--muted); font-size: 0.85rem; padding: 40px 0; text-align: center; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>DataFrame <span>Studio</span></h1>
+    <p>Load a CSV / JSON / XML / Parquet file, transform it by clicking instead of writing pandas from scratch, export the result.</p>
+  </header>
+
+  <div id="banner" class="banner"></div>
+
+  <div class="wrap">
+    <div class="card upload-bar">
+      <div>
+        <label for="fileInput">Load file</label>
+        <input type="file" id="fileInput" accept=".csv,.tsv,.txt,.json,.xml,.parquet" />
+      </div>
+      <button id="loadBtn">Load</button>
+      <progress id="loadProgress" max="100" value="0" style="display:none;"></progress>
+      <span class="meta" id="fileMeta">No file loaded yet.</span>
+      <div class="preview-mode-group">
+        <span class="meta">Preview:</span>
+        <button type="button" class="secondary" id="previewModeHeadBtn" data-mode="head" disabled>Head</button>
+        <button type="button" class="secondary" id="previewModeSampleBtn" data-mode="sample" disabled>Sample</button>
+        <button type="button" class="secondary" id="resampleBtn" style="display:none;" disabled>⟳ Resample</button>
+      </div>
+    </div>
+
+    <details class="card" id="loadOptionsPanel">
+      <summary>Load options</summary>
+      <div class="load-options-grid">
+        <div class="field">
+          <label for="loadSep">Separator</label>
+          <select id="loadSep">
+            <option value="">Auto (, or tab for .tsv)</option>
+            <option value=",">Comma (,)</option>
+            <option value="&#9;">Tab (TSV)</option>
+            <option value=";">Semicolon (;)</option>
+            <option value="|">Pipe (|)</option>
+            <option value="__custom__">Custom…</option>
+          </select>
+          <input type="text" id="loadSepCustom" placeholder="custom separator" style="display:none; margin-top:5px;" />
+        </div>
+        <div class="field">
+          <label for="loadEncoding">Encoding</label>
+          <select id="loadEncoding">
+            <option value="utf-8" selected>UTF-8</option>
+            <option value="latin-1">Latin-1</option>
+            <option value="utf-16">UTF-16</option>
+            <option value="cp1252">Windows-1252</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="loadNrows">Row limit</label>
+          <input type="text" id="loadNrows" placeholder="no limit" inputmode="numeric" />
+        </div>
+      </div>
+      <div class="load-options-row2">
+        <label><input type="checkbox" id="loadHeader" checked style="width:auto;" /> Header row</label>
+        <div class="nrows-presets">
+          <button type="button" class="secondary" data-nrows-preset="500">500</button>
+          <button type="button" class="secondary" data-nrows-preset="5000">5k</button>
+          <button type="button" class="secondary" data-nrows-preset="50000">50k</button>
+          <button type="button" class="secondary" data-nrows-preset="">No limit</button>
+        </div>
+        <p class="hint">CSV/TSV row limit is read directly (low memory). JSON/XML/Parquet read fully, then trim.</p>
+      </div>
+    </details>
+
+    <div id="queryCheckPanel" class="card check-panel" style="display:none;">
+      <div class="check-panel-header">
+        <div>
+          <h2>Check result</h2>
+          <p class="hint" id="queryCheckMeta" style="margin-bottom:0;"></p>
+        </div>
+        <div class="check-panel-actions">
+          <button id="queryCheckAddBtn">Add to pipeline</button>
+          <button class="secondary" id="queryCheckDismissBtn">✕ Dismiss</button>
+        </div>
+      </div>
+      <div class="result-wrap check-panel-result"><div id="queryCheckResult"></div></div>
+    </div>
+
+    <div class="layout">
+      <!-- Main: table -->
+      <div class="card table-card">
+        <div id="table"></div>
+        <div id="emptyState" class="empty-state">Load a file above to get started.</div>
+      </div>
+
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <div class="card">
+          <h2>Query</h2>
+          <p class="hint">Write a <code>transform(df)</code> function. <strong>Check</strong> runs it and shows what it would produce without touching the pipeline; <strong>Add to pipeline</strong> commits it. Pick a snippet below to start from working code instead of a blank box.</p>
+
+          <div class="insight-btns" id="snippetBtns"></div>
+
+          <div class="field">
+            <textarea id="queryCode" rows="7" placeholder="def transform(df):&#10;    df[&quot;ratio&quot;] = df[&quot;a&quot;] / df[&quot;b&quot;]&#10;    return df"></textarea>
+          </div>
+          <p class="hint">Full pandas + numpy (<code>pd</code>, <code>np</code>) in scope. Must return a DataFrame. No sandboxing — it's your own code, on your own machine. Vectorized pandas (whole-column operations) stays fast at any row count; row-by-row code like <code>df.apply(lambda row: ..., axis=1)</code> or <code>iterrows()</code> runs a Python function per row and can get slow on large files — prefer vectorized operations where possible.</p>
+
+          <div class="script-actions">
+            <button class="secondary" id="checkQueryBtn">Check</button>
+            <button id="addQueryBtn">Add to pipeline</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Add step</h2>
+          <p class="hint">Form-based steps for the common cases. Each appends real pandas code to the pipeline below and is fully removable. For anything these don't cover, use Query above.</p>
+          <div class="field">
+            <label for="stepType">Step</label>
+            <select id="stepType">
+              <option value="rename_column">Rename column</option>
+              <option value="drop_columns">Drop column(s)</option>
+              <option value="add_column">Add column</option>
+              <option value="filter_rows">Filter rows</option>
+              <option value="sort_rows">Sort</option>
+            </select>
+          </div>
+
+          <form class="step-form" id="stepForm">
+            <fieldset id="f-rename_column" class="active">
+              <div class="field"><label>Column</label><select class="col-select" data-field="old"></select></div>
+              <div class="field"><label>New name</label><input type="text" data-field="new" placeholder="new_name" /></div>
+            </fieldset>
+
+            <fieldset id="f-drop_columns">
+              <div class="field"><label>Columns (multi-select)</label><select class="col-select" data-field="columns" multiple></select></div>
+            </fieldset>
+
+            <fieldset id="f-add_column">
+              <div class="field"><label>New column name</label><input type="text" data-field="name" placeholder="total" /></div>
+              <div class="field"><label>Expression</label><input type="text" data-field="expr" placeholder="price * qty" /></div>
+              <p class="hint">Reference existing columns by name. Arithmetic, comparisons, and string concatenation work; e.g. <code>price * qty</code> or <code>first + " " + last</code>.</p>
+            </fieldset>
+
+            <fieldset id="f-filter_rows">
+              <div class="field"><label>Keep rows where</label><input type="text" data-field="expr" placeholder='age > 30 and country == "IN"' /></div>
+            </fieldset>
+
+            <fieldset id="f-sort_rows">
+              <div class="field"><label>Columns (multi-select, priority order)</label><select class="col-select" data-field="columns" multiple></select></div>
+              <div class="field"><label><input type="checkbox" data-field="ascending" checked style="width:auto;display:inline-block;margin-right:6px;" />Ascending</label></div>
+            </fieldset>
+
+            <button type="submit" id="applyStepBtn">Apply</button>
+          </form>
+        </div>
+
+        <div class="card">
+          <h2>Pipeline</h2>
+          <ul class="pipeline-list" id="pipelineList"><li class="empty">No steps yet.</li></ul>
+          <div style="margin-top:10px;"><button class="secondary" id="resetBtn">Reset all steps</button></div>
+        </div>
+
+        <div class="card">
+          <h2>Pipeline script</h2>
+          <p class="hint">The whole pipeline as a standalone pandas script — copy it out and it keeps working without this tool.</p>
+          <div class="script-actions">
+            <button class="secondary" id="viewScriptBtn">View script</button>
+          </div>
+          <div id="scriptBox" class="script-box" style="display:none; margin-top:8px;"></div>
+          <div class="script-actions" id="scriptCopyActions" style="display:none;">
+            <button class="secondary" id="copyScriptBtn">Copy</button>
+            <button class="secondary" id="downloadScriptBtn">Download .py</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Templates</h2>
+          <p class="hint">Save the current pipeline as a reusable recipe, apply it to a different file later.</p>
+          <div class="row">
+            <input type="text" id="templateName" placeholder="template name" />
+            <button class="secondary" id="saveTemplateBtn" style="flex:0 0 auto;">Save current</button>
+          </div>
+          <ul class="template-list" id="templateList"><li class="empty">No saved templates yet.</li></ul>
+        </div>
+
+        <div class="card">
+          <h2>Insights</h2>
+          <div class="insight-btns">
+            <button class="secondary" data-insight="describe">Describe</button>
+            <button class="secondary" data-insight="info">Info</button>
+            <button class="secondary" data-insight="nunique">Nunique</button>
+          </div>
+          <div class="field">
+            <label>Value counts for</label>
+            <div class="row">
+              <select id="valueCountsCol" class="col-select"></select>
+              <button class="secondary" id="valueCountsBtn" style="flex:0 0 auto;">Go</button>
+            </div>
+          </div>
+          <div class="result-wrap"><div id="insightResult"></div></div>
+        </div>
+
+        <div class="card">
+          <h2>Export</h2>
+          <div class="export-btns">
+            <button class="secondary" data-format="csv">CSV</button>
+            <button class="secondary" data-format="json">JSON</button>
+            <button class="secondary" data-format="parquet">Parquet</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------------------------------------------------------------------
+  // STATE
+  // ---------------------------------------------------------------------
+  let table = null;
+  let currentColumns = [];
+
+  const SNIPPETS = {
+    sort: {
+      label: "Sort",
+      code: 'def transform(df):\n    return df.sort_values(by=["column"], ascending=True)',
+    },
+    filter: {
+      label: "Filter",
+      code: 'def transform(df):\n    return df[df["column"] > 0]',
+    },
+    add_column: {
+      label: "Add column",
+      code: 'def transform(df):\n    df["new_column"] = df["column_a"] + df["column_b"]\n    return df',
+    },
+    rename: {
+      label: "Rename",
+      code: 'def transform(df):\n    return df.rename(columns={"old_name": "new_name"})',
+    },
+    drop: {
+      label: "Drop columns",
+      code: 'def transform(df):\n    return df.drop(columns=["column"])',
+    },
+    groupby: {
+      label: "Group by",
+      code: 'def transform(df):\n    return df.groupby("column", as_index=False).agg({"other_column": "sum"})',
+    },
+    dedupe: {
+      label: "Deduplicate",
+      code: 'def transform(df):\n    return df.drop_duplicates(subset=["column"])',
+    },
+    fillna: {
+      label: "Fill missing",
+      code: 'def transform(df):\n    df["column"] = df["column"].fillna(0)\n    return df',
+    },
+    to_datetime: {
+      label: "Parse date",
+      code: 'def transform(df):\n    df["date_column"] = pd.to_datetime(df["date_column"])\n    return df',
+    },
+    clean_string: {
+      label: "Clean text",
+      code: 'def transform(df):\n    df["column"] = df["column"].str.strip().str.lower()\n    return df',
+    },
+  };
+
+  // ---------------------------------------------------------------------
+  // API
+  // ---------------------------------------------------------------------
+  async function api(url, options) {
+    const res = await fetch(url, options);
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      throw new Error(data.error || "Request failed.");
+    }
+    return data;
+  }
+
+  // fetch() has no reliable cross-browser upload-progress signal, so a big
+  // file's upload looks frozen with no feedback — XHR's upload.onprogress
+  // is what actually lets us show a real percentage while the bytes go
+  // over the wire, distinct from the "parsing on the server" phase after.
+  function loadFile(file, options, onUploadProgress) {
+    return new Promise((resolve, reject) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("sep", options.sep || "");
+      formData.append("encoding", options.encoding || "utf-8");
+      formData.append("header", options.header ? "true" : "false");
+      formData.append("nrows", options.nrows || "");
+
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", "load");
+      xhr.upload.addEventListener("progress", (e) => {
+        if (e.lengthComputable && onUploadProgress) onUploadProgress(e.loaded / e.total);
+      });
+      xhr.addEventListener("load", () => {
+        let data;
+        try {
+          data = JSON.parse(xhr.responseText);
+        } catch (e) {
+          reject(new Error("The server sent back something that wasn't valid JSON."));
+          return;
+        }
+        if (xhr.status >= 200 && xhr.status < 300 && !data.error) {
+          resolve(data);
+        } else {
+          reject(new Error(data.error || `Request failed (${xhr.status}).`));
+        }
+      });
+      xhr.addEventListener("error", () => reject(new Error("Network error during upload.")));
+      xhr.send(formData);
+    });
+  }
+
+  function getCurrentSession() {
+    return api("session");
+  }
+
+  function setPreviewModeApi(mode, resample) {
+    return api("preview-mode", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode, resample: !!resample }),
+    });
+  }
+
+  function addStep(type, params) {
+    return api("step", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type, params }),
+    });
+  }
+
+  function checkStep(type, params) {
+    return api("step/check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type, params }),
+    });
+  }
+
+  function removeStep(index) {
+    return api("step/remove", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ index }),
+    });
+  }
+
+  function resetSteps() {
+    return api("step/reset", { method: "POST" });
+  }
+
+  function getInsight(kind, column) {
+    const qs = new URLSearchParams({ kind });
+    if (column) qs.set("column", column);
+    return api("insight?" + qs.toString());
+  }
+
+  function getScript() {
+    return api("script");
+  }
+
+  function listTemplates() {
+    return api("template/list");
+  }
+
+  function saveTemplate(name) {
+    return api("template/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+  }
+
+  function applyTemplate(name) {
+    return api("template/apply", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+  }
+
+  function deleteTemplate(name) {
+    return api("template/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // RENDER
+  // ---------------------------------------------------------------------
+  function showError(msg) {
+    const banner = document.getElementById("banner");
+    banner.classList.remove("warn");
+    banner.textContent = msg;
+    banner.classList.add("show");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function showWarning(msg) {
+    const banner = document.getElementById("banner");
+    banner.classList.add("warn");
+    banner.textContent = msg;
+    banner.classList.add("show");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function clearError() {
+    const banner = document.getElementById("banner");
+    banner.classList.remove("show", "warn");
+    banner.textContent = "";
+  }
+
+  function tabulatorSorter(dtype) {
+    if (dtype.startsWith("int") || dtype.startsWith("float")) return "number";
+    if (dtype.startsWith("datetime")) return "datetime";
+    return "string";
+  }
+
+  const MANY_COLUMNS_THRESHOLD = 60;
+
+  function renderTable(preview) {
+    document.getElementById("emptyState").style.display = "none";
+    const manyColumns = preview.columns.length > MANY_COLUMNS_THRESHOLD;
+    const columns = preview.columns.map((c) => ({
+      title: `${c.name}  ·  ${c.dtype}`,
+      field: c.name,
+      sorter: tabulatorSorter(c.dtype),
+      headerFilter: "input",
+      // maxWidth bounds any single very-long value (e.g. a big string) from
+      // stretching its whole column — text-overflow:ellipsis (CSS below)
+      // clips it, tooltip:true shows the full value on hover.
+      maxWidth: 280,
+      tooltip: true,
+      // Fixed width skips Tabulator's per-column content-measurement pass,
+      // which is what actually stalls the grid at high column counts —
+      // "fitDataStretch" below is fine for a few dozen columns but measures
+      // every column's content otherwise.
+      ...(manyColumns ? { width: 160 } : {}),
+    }));
+
+    // Rebuilt from scratch (not setColumns/setData) so layout mode always
+    // matches the CURRENT column count — a file that crosses the
+    // many-columns threshold mid-session gets re-laid-out correctly instead
+    // of being stuck with whichever layout the first load picked.
+    if (table) {
+      table.destroy();
+      table = null;
+    }
+    table = new Tabulator("#table", {
+      data: preview.rows,
+      columns: columns,
+      layout: manyColumns ? "fitColumns" : "fitDataStretch",
+      pagination: true,
+      paginationSize: 50,
+      paginationSizeSelector: [25, 50, 100, 250],
+      // No fixed height here — #table's CSS (flex:1 in its pane on desktop,
+      // a fixed height in the mobile media query) drives how tall the grid
+      // is, so it fills whatever room the browser window actually gives it
+      // instead of being stuck at one fixed pixel height on a big screen.
+      placeholder: "No rows.",
+    });
+
+    currentColumns = preview.columns.map((c) => c.name);
+    populateColumnSelects();
+
+    const shownNote =
+      preview.shown_rows < preview.row_count
+        ? preview.preview_mode === "sample"
+          ? ` (random sample of ${preview.shown_rows.toLocaleString()})`
+          : ` (showing first ${preview.shown_rows.toLocaleString()})`
+        : "";
+    document.getElementById("fileMeta").textContent =
+      `${preview.filename} — ${preview.row_count.toLocaleString()} rows × ${preview.columns.length} columns${shownNote}`;
+  }
+
+  function populateColumnSelects() {
+    document.querySelectorAll(".col-select").forEach((sel) => {
+      const isMulti = sel.multiple;
+      sel.innerHTML = "";
+      currentColumns.forEach((name) => {
+        const opt = document.createElement("option");
+        opt.value = name;
+        opt.textContent = name;
+        sel.appendChild(opt);
+      });
+    });
+  }
+
+  function renderPipeline(steps) {
+    const list = document.getElementById("pipelineList");
+    list.innerHTML = "";
+    if (!steps.length) {
+      list.innerHTML = '<li class="empty">No steps yet.</li>';
+      return;
+    }
+    steps.forEach((step, i) => {
+      const li = document.createElement("li");
+      const codeHtml = step.code.includes("\n")
+        ? `<pre>${escapeHtml(step.code)}</pre>`
+        : `<code>${escapeHtml(step.code)}</code>`;
+      li.innerHTML = `
+        <div>
+          <div class="label">${step.label}</div>
+          ${codeHtml}
+        </div>
+        <button class="danger" data-remove="${i}">✕</button>`;
+      list.appendChild(li);
+    });
+  }
+
+  function renderTemplates(templates) {
+    const list = document.getElementById("templateList");
+    list.innerHTML = "";
+    if (!templates.length) {
+      list.innerHTML = '<li class="empty">No saved templates yet.</li>';
+      return;
+    }
+    templates.forEach((t) => {
+      const li = document.createElement("li");
+      li.innerHTML = `
+        <span class="name">${escapeHtml(t.name)}</span>
+        <span class="count">${t.step_count} step${t.step_count === 1 ? "" : "s"}</span>
+        <span class="actions">
+          <button class="secondary" data-apply-template="${escapeHtml(t.name)}">Apply</button>
+          <button class="danger" data-delete-template="${escapeHtml(t.name)}">✕</button>
+        </span>`;
+      list.appendChild(li);
+    });
+  }
+
+  function renderSnippetButtons() {
+    const wrap = document.getElementById("snippetBtns");
+    wrap.innerHTML = "";
+    Object.entries(SNIPPETS).forEach(([key, snippet]) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "secondary";
+      btn.textContent = snippet.label;
+      btn.dataset.snippet = key;
+      wrap.appendChild(btn);
+    });
+  }
+
+  function escapeHtml(s) {
+    return s
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function applyPreview(preview) {
+    clearError();
+    renderTable(preview);
+    renderPipeline(preview.steps);
+    document.getElementById("scriptBox").style.display = "none";
+    document.getElementById("scriptCopyActions").style.display = "none";
+    dismissQueryCheck();
+    setPreviewModeButtons(preview.preview_mode || "head");
+    ["previewModeHeadBtn", "previewModeSampleBtn", "resampleBtn"].forEach((id) => {
+      document.getElementById(id).disabled = false;
+    });
+  }
+
+  function setPreviewModeButtons(mode) {
+    document.getElementById("previewModeHeadBtn").classList.toggle("secondary", mode !== "head");
+    document.getElementById("previewModeSampleBtn").classList.toggle("secondary", mode !== "sample");
+    document.getElementById("resampleBtn").style.display = mode === "sample" ? "inline-block" : "none";
+  }
+
+  const RESULT_TABLE_ROW_CAP = 300;
+
+  function renderResultTable(container, columns, rows) {
+    if (!rows.length) {
+      container.innerHTML = '<p class="hint">No rows.</p>';
+      return;
+    }
+    const shown = rows.slice(0, RESULT_TABLE_ROW_CAP);
+    const head = columns.map((c) => `<th>${escapeHtml(String(c))}</th>`).join("");
+    const body = shown
+      .map((r) =>
+        `<tr>${columns
+          .map((c) => {
+            const val = r[c] === null || r[c] === undefined ? "" : String(r[c]);
+            // title attribute = full value on hover, same idea as the main
+            // grid's Tabulator tooltip, for the plain-HTML result tables.
+            return `<td title="${escapeHtml(val)}">${escapeHtml(val)}</td>`;
+          })
+          .join("")}</tr>`
+      )
+      .join("");
+    const note =
+      rows.length > RESULT_TABLE_ROW_CAP
+        ? `<p class="hint">Showing first ${RESULT_TABLE_ROW_CAP} of ${rows.length.toLocaleString()} rows.</p>`
+        : "";
+    container.innerHTML = `<table class="result-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>${note}`;
+  }
+
+  // ---------------------------------------------------------------------
+  // EVENTS
+  // ---------------------------------------------------------------------
+  const LARGE_FILE_WARNING_BYTES = 150 * 1024 * 1024; // 150 MB
+
+  document.getElementById("loadSep").addEventListener("change", (e) => {
+    document.getElementById("loadSepCustom").style.display = e.target.value === "__custom__" ? "block" : "none";
+  });
+
+  document.querySelectorAll("[data-nrows-preset]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.getElementById("loadNrows").value = btn.dataset.nrowsPreset;
+    });
+  });
+
+  function collectLoadOptions() {
+    const sepSelect = document.getElementById("loadSep").value;
+    const sep = sepSelect === "__custom__" ? document.getElementById("loadSepCustom").value : sepSelect;
+    return {
+      sep,
+      encoding: document.getElementById("loadEncoding").value,
+      header: document.getElementById("loadHeader").checked,
+      nrows: document.getElementById("loadNrows").value.trim(),
+    };
+  }
+
+  document.getElementById("loadBtn").addEventListener("click", async () => {
+    const input = document.getElementById("fileInput");
+    if (!input.files.length) {
+      showError("Choose a file first.");
+      return;
+    }
+    const file = input.files[0];
+    const options = collectLoadOptions();
+    if (file.size > LARGE_FILE_WARNING_BYTES && !options.nrows) {
+      showWarning(
+        `${(file.size / 1e6).toFixed(0)} MB is a big file — loading the whole thing can take a while and use a lot of memory. ` +
+          `Consider setting a row limit under "Load options" first (e.g. 5,000) to check the data looks right before loading everything.`
+      );
+    }
+
+    const loadBtn = document.getElementById("loadBtn");
+    const progress = document.getElementById("loadProgress");
+    loadBtn.disabled = true;
+    progress.style.display = "inline-block";
+    progress.value = 0;
+    const originalLabel = loadBtn.textContent;
+    loadBtn.textContent = "Uploading… 0%";
+
+    try {
+      const preview = await loadFile(file, options, (fraction) => {
+        const pct = Math.round(fraction * 100);
+        progress.value = pct;
+        if (pct < 100) {
+          loadBtn.textContent = `Uploading… ${pct}%`;
+        } else {
+          // Upload done, server is now parsing — we have no numeric progress
+          // for that phase, so switch to an indeterminate bar instead of
+          // sitting at a misleading "100%" while nothing visibly happens.
+          loadBtn.textContent = "Processing…";
+          progress.removeAttribute("value");
+        }
+      });
+      applyPreview(preview); // clears any warning/error banner on success
+      document.getElementById("loadOptionsPanel").open = false;
+    } catch (e) {
+      showError(e.message);
+    } finally {
+      loadBtn.disabled = false;
+      loadBtn.textContent = originalLabel;
+      progress.style.display = "none";
+    }
+  });
+
+  async function switchPreviewMode(mode, resample) {
+    try {
+      const preview = await setPreviewModeApi(mode, resample);
+      applyPreview(preview);
+    } catch (err) {
+      showError(err.message);
+    }
+  }
+
+  document.getElementById("previewModeHeadBtn").addEventListener("click", () => switchPreviewMode("head"));
+  document.getElementById("previewModeSampleBtn").addEventListener("click", () => switchPreviewMode("sample"));
+  document.getElementById("resampleBtn").addEventListener("click", () => switchPreviewMode("sample", true));
+
+  document.getElementById("stepType").addEventListener("change", (e) => {
+    document.querySelectorAll("#stepForm fieldset").forEach((f) => f.classList.remove("active"));
+    document.getElementById("f-" + e.target.value).classList.add("active");
+  });
+
+  document.getElementById("stepForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const type = document.getElementById("stepType").value;
+    const fieldset = document.getElementById("f-" + type);
+    const params = {};
+    fieldset.querySelectorAll("[data-field]").forEach((el) => {
+      const key = el.dataset.field;
+      if (el.tagName === "SELECT" && el.multiple) {
+        params[key] = Array.from(el.selectedOptions).map((o) => o.value);
+      } else if (el.type === "checkbox") {
+        params[key] = el.checked;
+      } else {
+        params[key] = el.value;
+      }
+    });
+    try {
+      const preview = await addStep(type, params);
+      applyPreview(preview);
+    } catch (err) {
+      showError(err.message);
+    }
+  });
+
+  document.getElementById("pipelineList").addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-remove]");
+    if (!btn) return;
+    try {
+      const preview = await removeStep(parseInt(btn.dataset.remove, 10));
+      applyPreview(preview);
+    } catch (err) {
+      showError(err.message);
+    }
+  });
+
+  document.getElementById("resetBtn").addEventListener("click", async () => {
+    try {
+      const preview = await resetSteps();
+      applyPreview(preview);
+    } catch (err) {
+      showError(err.message);
+    }
+  });
+
+  document.querySelectorAll("[data-insight]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      try {
+        const data = await getInsight(btn.dataset.insight);
+        renderResultTable(document.getElementById("insightResult"), data.columns || Object.keys(data.rows[0] || {}), data.rows);
+      } catch (err) {
+        showError(err.message);
+      }
+    });
+  });
+
+  document.getElementById("valueCountsBtn").addEventListener("click", async () => {
+    const col = document.getElementById("valueCountsCol").value;
+    if (!col) return;
+    try {
+      const data = await getInsight("value_counts", col);
+      renderResultTable(document.getElementById("insightResult"), ["value", "count"], data.rows);
+    } catch (err) {
+      showError(err.message);
+    }
+  });
+
+  document.querySelectorAll("[data-format]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      window.location = "export?format=" + btn.dataset.format;
+    });
+  });
+
+  let lastScript = "";
+
+  document.getElementById("viewScriptBtn").addEventListener("click", async () => {
+    try {
+      const data = await getScript();
+      lastScript = data.script;
+      const box = document.getElementById("scriptBox");
+      box.textContent = lastScript;
+      box.style.display = "block";
+      document.getElementById("scriptCopyActions").style.display = "flex";
+    } catch (err) {
+      showError(err.message);
+    }
+  });
+
+  document.getElementById("copyScriptBtn").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(lastScript);
+    } catch (err) {
+      showError("Couldn't copy to clipboard — select the text manually.");
+    }
+  });
+
+  document.getElementById("downloadScriptBtn").addEventListener("click", () => {
+    const blob = new Blob([lastScript], { type: "text/x-python" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "pipeline.py";
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  async function refreshTemplates() {
+    try {
+      const data = await listTemplates();
+      renderTemplates(data.templates);
+    } catch (err) {
+      showError(err.message);
+    }
+  }
+
+  document.getElementById("saveTemplateBtn").addEventListener("click", async () => {
+    const input = document.getElementById("templateName");
+    const name = input.value.trim();
+    if (!name) {
+      showError("Give the template a name first.");
+      return;
+    }
+    try {
+      const data = await saveTemplate(name);
+      renderTemplates(data.templates);
+      input.value = "";
+      clearError();
+    } catch (err) {
+      showError(err.message);
+    }
+  });
+
+  document.getElementById("templateList").addEventListener("click", async (e) => {
+    const applyBtn = e.target.closest("[data-apply-template]");
+    const deleteBtn = e.target.closest("[data-delete-template]");
+    if (applyBtn) {
+      try {
+        const preview = await applyTemplate(applyBtn.dataset.applyTemplate);
+        applyPreview(preview);
+        if (preview.template_errors && preview.template_errors.length) {
+          showWarning(
+            `Template applied partially — stopped at: ${preview.template_errors[0]}`
+          );
+        }
+      } catch (err) {
+        showError(err.message);
+      }
+      return;
+    }
+    if (deleteBtn) {
+      try {
+        const data = await deleteTemplate(deleteBtn.dataset.deleteTemplate);
+        renderTemplates(data.templates);
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+  });
+
+  let lastCheckedCode = "";
+
+  function dismissQueryCheck() {
+    document.getElementById("queryCheckPanel").style.display = "none";
+    lastCheckedCode = "";
+  }
+
+  async function commitQuery(code) {
+    if (!code.trim()) {
+      showError("Write some code first.");
+      return;
+    }
+    try {
+      const preview = await addStep("custom_code", { code });
+      applyPreview(preview); // also dismisses the check panel and clears lastCheckedCode
+      document.getElementById("queryCode").value = "";
+    } catch (err) {
+      showError(err.message);
+    }
+  }
+
+  document.getElementById("snippetBtns").addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-snippet]");
+    if (!btn) return;
+    document.getElementById("queryCode").value = SNIPPETS[btn.dataset.snippet].code;
+    dismissQueryCheck();
+  });
+
+  document.getElementById("checkQueryBtn").addEventListener("click", async () => {
+    const code = document.getElementById("queryCode").value;
+    if (!code.trim()) {
+      showError("Write some code first.");
+      return;
+    }
+    try {
+      const preview = await checkStep("custom_code", { code });
+      clearError();
+      lastCheckedCode = code;
+      const meta = document.getElementById("queryCheckMeta");
+      meta.textContent = `Preview only, not added to the pipeline — would produce ${preview.row_count.toLocaleString()} rows × ${preview.columns.length} columns.`;
+      renderResultTable(
+        document.getElementById("queryCheckResult"),
+        preview.columns.map((c) => c.name),
+        preview.rows
+      );
+      const panel = document.getElementById("queryCheckPanel");
+      panel.style.display = "block";
+      panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    } catch (err) {
+      showError(err.message);
+    }
+  });
+
+  document.getElementById("queryCheckAddBtn").addEventListener("click", () => {
+    commitQuery(lastCheckedCode);
+  });
+
+  document.getElementById("queryCheckDismissBtn").addEventListener("click", () => {
+    dismissQueryCheck();
+  });
+
+  document.getElementById("addQueryBtn").addEventListener("click", () => {
+    commitQuery(document.getElementById("queryCode").value);
+  });
+
+  async function restoreSession() {
+    try {
+      const data = await getCurrentSession();
+      if (data.active) {
+        applyPreview(data);
+      }
+    } catch (err) {
+      // No session yet, or the server restarted since — fall back to the
+      // empty "load a file" state silently, this isn't an error the user
+      // needs to see.
+    }
+  }
+
+  renderSnippetButtons();
+  refreshTemplates();
+  restoreSession();
+})();
+</script>
+</body>
+</html>

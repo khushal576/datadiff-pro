@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cookie Lab</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f4f6fb; --surface: #ffffff; --border: #dde1ef;
+    --text: #1c2035; --muted: #6b7180; --accent: #4f5ef0;
+    --ok-bg: rgba(21,128,61,0.10); --ok-text: #15803d; --ok-border: rgba(21,128,61,0.3);
+    --warn-bg: rgba(180,83,9,0.10); --warn-text: #b45309; --warn-border: rgba(180,83,9,0.3);
+    --err-bg: rgba(220,38,38,0.08); --err-text: #b91c1c; --err-border: rgba(220,38,38,0.3);
+    --info-bg: rgba(79,94,240,0.10); --info-text: #4f5ef0; --info-border: rgba(79,94,240,0.3);
+    --neutral-bg: rgba(107,113,128,0.12); --neutral-text: #6b7180;
+  }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; padding: 24px 20px 60px;
+  }
+  header { max-width: 1280px; margin: 0 auto 18px; }
+  header h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.5px; }
+  header h1 span { color: var(--accent); }
+  header p { color: var(--muted); font-size: 0.85rem; margin-top: 2px; }
+  .trust-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--warn-bg); color: var(--warn-text);
+    border: 1px solid var(--warn-border); border-radius: 20px;
+    padding: 5px 12px; font-size: 0.78rem; font-weight: 600; margin-top: 10px;
+  }
+
+  .wrap { max-width: 1280px; margin: 0 auto; }
+
+  .seg { display: flex; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; width: fit-content; margin-bottom: 18px; }
+  .seg button { cursor: pointer; border: none; background: var(--surface); color: var(--muted);
+    font-size: 0.85rem; font-weight: 700; padding: 9px 20px; border-right: 1px solid var(--border); }
+  .seg button:last-child { border-right: none; }
+  .seg button.active { background: var(--accent); color: #fff; }
+  .seg.small button { padding: 5px 12px; font-size: 0.74rem; }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  .card h2 { font-size: 1rem; font-weight: 700; margin-bottom: 4px; }
+  .card .hint { font-size: 0.78rem; color: var(--muted); margin-bottom: 12px; line-height: 1.55; }
+
+  label {
+    font-size: 0.74rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.5px; color: var(--muted); display: block; margin-bottom: 5px;
+  }
+  select, input[type="text"], input[type="number"], input[type="datetime-local"] {
+    background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 7px 10px; font-size: 0.85rem; width: 100%;
+  }
+  select:disabled, input:disabled { opacity: 0.5; cursor: not-allowed; }
+  select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .field { margin-bottom: 12px; }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; }
+  .row > .field { flex: 1; min-width: 170px; }
+
+  .check-field { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .check-field input { width: 16px; height: 16px; accent-color: var(--accent); flex: none; }
+  .check-field label { text-transform: none; letter-spacing: normal; font-weight: 500; font-size: 0.85rem; color: var(--text); margin-bottom: 0; }
+  .check-field .sub-hint { font-size: 0.74rem; color: var(--muted); margin-left: 24px; display: block; margin-top: -6px; margin-bottom: 8px; line-height: 1.5; }
+
+  button.action {
+    cursor: pointer; border: none; border-radius: 7px;
+    background: var(--accent); color: #fff; font-weight: 600;
+    font-size: 0.82rem; padding: 8px 16px;
+  }
+  button.action:hover { opacity: 0.88; }
+  button.action.secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+  button.action.secondary:hover { border-color: var(--accent); color: var(--accent); }
+  button.action.small { padding: 5px 11px; font-size: 0.76rem; }
+  button.action.danger { background: var(--err-text); }
+  button.action:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .pg-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 18px; align-items: start; }
+  @media (max-width: 900px) { .pg-grid { grid-template-columns: 1fr; } }
+
+  .pg-preview {
+    font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace; font-size: 0.8rem;
+    background: #1c2035; color: #e7e9f5; border-radius: 8px; padding: 12px 14px;
+    word-break: break-all; margin-bottom: 10px; line-height: 1.6;
+  }
+  .pg-note { font-size: 0.78rem; border-radius: 7px; padding: 8px 11px; margin-bottom: 8px; line-height: 1.55; }
+  .pg-note.warn { background: var(--warn-bg); color: var(--warn-text); border: 1px solid var(--warn-border); }
+  .pg-note.error { background: var(--err-bg); color: var(--err-text); border: 1px solid var(--err-border); }
+  .pg-note.info { background: var(--info-bg); color: var(--info-text); border: 1px solid var(--info-border); }
+
+  .pg-diag { border-radius: 8px; padding: 12px 14px; margin: 12px 0; font-size: 0.83rem; line-height: 1.6; display: none; }
+  .pg-diag.show { display: block; }
+  .pg-diag.ok { background: var(--ok-bg); color: var(--ok-text); border: 1px solid var(--ok-border); }
+  .pg-diag.fail { background: var(--err-bg); color: var(--err-text); border: 1px solid var(--err-border); }
+  .pg-diag .diag-raw { font-family: monospace; font-size: 0.74rem; opacity: 0.85; margin-top: 6px; word-break: break-all; }
+
+  .prefix-locked-note { font-size: 0.72rem; color: var(--muted); margin-top: 6px; font-style: italic; }
+
+  .cookie-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
+  .cookie-card .cc-name { font-family: monospace; font-weight: 700; font-size: 0.84rem; }
+  .cookie-card .cc-value { font-family: monospace; font-size: 0.78rem; color: var(--muted); word-break: break-all; margin-top: 2px; }
+  .cookie-card .cc-attrs { font-size: 0.74rem; color: var(--muted); margin-top: 6px; line-height: 1.6; }
+  .cookie-card .cc-badge { display: inline-block; font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
+    background: var(--info-bg); color: var(--info-text); border-radius: 5px; padding: 1px 6px; margin-right: 4px; }
+  .cookie-card .cc-badge.warn { background: var(--warn-bg); color: var(--warn-text); }
+  .cookie-card .countdown { font-family: monospace; font-size: 0.76rem; color: var(--muted); margin-top: 4px; }
+  .cookie-card .cc-actions { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .empty-note { font-size: 0.8rem; color: var(--muted); font-style: italic; padding: 10px 0; }
+
+  .exp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+  .exp-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 11px 13px; }
+  .exp-card .exp-title { font-weight: 700; font-size: 0.82rem; margin-bottom: 5px; }
+  .exp-card .exp-expect { font-size: 0.76rem; color: var(--muted); line-height: 1.5; margin-bottom: 8px; }
+
+  /* ── Reference tab (ported from header-reference) ── */
+  .ref-layout { display: grid; grid-template-columns: 230px 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 860px) { .ref-layout { grid-template-columns: 1fr; } }
+  .sidebar { position: sticky; top: 20px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px; max-height: calc(100vh - 40px); overflow-y: auto; }
+  @media (max-width: 860px) { .sidebar { position: static; max-height: none; } }
+  .cat-item { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+    background: none; border: none; cursor: pointer; border-radius: 7px;
+    padding: 8px 9px; font-size: 0.8rem; color: var(--text); margin-bottom: 2px; }
+  .cat-item:hover { background: var(--bg); }
+  .cat-item.active { background: var(--info-bg); color: var(--accent); font-weight: 700; }
+  .cat-item .ic { font-size: 1rem; flex: none; }
+  .cat-item .lbl { flex: 1; }
+  .cat-item .cnt { font-size: 0.66rem; color: var(--muted); background: var(--bg); border-radius: 10px; padding: 1px 7px; }
+  .sidebar hr { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
+
+  input[type="text"].search { margin-bottom: 10px; }
+  .cat-group { margin-bottom: 20px; }
+  .cat-group-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .cat-group-head h3 { font-size: 1rem; font-weight: 700; display: flex; align-items: center; gap: 7px; }
+  .cat-group-head .cnt { font-size: 0.72rem; color: var(--muted); }
+  .cat-group-desc { font-size: 0.79rem; color: var(--muted); line-height: 1.55; margin-bottom: 10px; }
+
+  .entry { background: var(--surface); border: 1px solid var(--border); border-radius: 9px; margin-bottom: 8px; overflow: hidden; scroll-margin-top: 20px; }
+  .entry.flash { animation: flashHi 1.4s ease; }
+  @keyframes flashHi { 0% { border-color: var(--accent); box-shadow: 0 0 0 3px var(--info-bg); } 100% { border-color: var(--border); box-shadow: none; } }
+  .entry-head { display: flex; align-items: center; gap: 10px; padding: 11px 14px; cursor: pointer; flex-wrap: wrap; }
+  .entry-head:hover { background: var(--bg); }
+  .entry-name { font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace; font-weight: 700; font-size: 0.87rem; flex: none; }
+  .entry-summary { font-size: 0.79rem; color: var(--muted); flex: 1; min-width: 160px; }
+  .chev { flex: none; color: var(--muted); font-size: 0.7rem; transition: transform 0.15s; margin-left: auto; }
+  .entry.open .chev { transform: rotate(90deg); }
+  .entry-body { display: none; padding: 0 14px 14px; border-top: 1px solid var(--border); }
+  .entry.open .entry-body { display: block; padding-top: 12px; }
+  .entry-body p { font-size: 0.83rem; line-height: 1.6; margin-bottom: 8px; }
+  .entry-example { font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace; font-size: 0.78rem;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; word-break: break-all; margin-bottom: 8px; }
+  .entry-meta { font-size: 0.75rem; color: var(--muted); margin-bottom: 8px; }
+  .entry-related { font-size: 0.77rem; color: var(--muted); display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .related-link { cursor: pointer; font-family: monospace; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 5px; padding: 2px 7px; color: var(--accent); font-size: 0.75rem; }
+  .related-link:hover { border-color: var(--accent); }
+  .no-results { font-size: 0.85rem; color: var(--muted); background: var(--surface); border: 1px dashed var(--border);
+    border-radius: 10px; padding: 24px; text-align: center; }
+
+  /* ── decision guide (ported from http-methods-status) ── */
+  .guide-card summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.95rem; }
+  .guide-card summary::-webkit-details-marker { display: none; }
+  .guide-card .sub { font-size: 0.78rem; color: var(--muted); font-weight: 500; margin-top: 3px; margin-left: 26px; }
+  .qa { border-top: 1px solid var(--border); margin-top: 12px; padding-top: 4px; }
+  .qa-item { padding: 10px 0; border-bottom: 1px dashed var(--border); }
+  .qa-item:last-child { border-bottom: none; }
+  .qa-q { font-weight: 700; font-size: 0.85rem; cursor: pointer; display: flex; gap: 8px; align-items: baseline; }
+  .qa-q .qmark { color: var(--accent); flex: none; }
+  .qa-a { font-size: 0.83rem; line-height: 1.65; color: var(--text); margin-top: 6px; margin-left: 20px; display: none; }
+  .qa-item.open .qa-a { display: block; }
+  .qa-item.open .qa-q { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Cookie <span>Lab</span></h1>
+  <p>A live document.cookie playground — set, inspect, and delete real cookies right here and watch exactly what the browser does, plus a full reference and decision guide</p>
+  <div class="trust-badge">⚠️ This tool writes real cookies to your browser for this page's origin, on purpose — that's how it teaches</div>
+</header>
+
+<div class="wrap">
+  <div class="seg" id="topTabs">
+    <button data-tab="playground" class="active">Playground</button>
+    <button data-tab="reference">Reference</button>
+  </div>
+
+  <!-- ══════════════════════════ PLAYGROUND TAB ══════════════════════════ -->
+  <div class="panel active" id="panel-playground">
+
+    <div class="pg-grid">
+      <!-- ── Builder form ── -->
+      <div class="card">
+        <h2>Build a Cookie</h2>
+        <p class="hint">Every attribute is live. Change anything and the preview below updates instantly — nothing is written to your browser until you click "Set Cookie."</p>
+
+        <div class="seg small" id="prefixSeg">
+          <button data-val="none" class="active">No prefix</button>
+          <button data-val="__Host-">__Host-</button>
+          <button data-val="__Secure-">__Secure-</button>
+        </div>
+        <div class="prefix-locked-note" id="prefixNote" style="display:none;"></div>
+        <div style="height:10px;"></div>
+
+        <div class="row">
+          <div class="field"><label for="cf-name">Name</label><input type="text" id="cf-name" value="demo_cookie"></div>
+          <div class="field"><label for="cf-value">Value</label><input type="text" id="cf-value" value="hello world"></div>
+        </div>
+        <div class="check-field"><input type="checkbox" id="cf-raw"><label for="cf-raw">Raw mode (don't percent-encode the value)</label></div>
+        <span class="sub-hint">Off by default — encoding avoids the raw-semicolon bug. Turn this on deliberately to reproduce it (see Suggested Experiments).</span>
+
+        <div class="row">
+          <div class="field" style="flex: 0 0 140px;">
+            <label for="cf-domain-mode">Domain</label>
+            <select id="cf-domain-mode"><option value="host-only">Host-only (unset)</option><option value="custom">Custom</option></select>
+          </div>
+          <div class="field" id="cf-domain-value-field" style="display:none;">
+            <label for="cf-domain-value">Domain value</label>
+            <input type="text" id="cf-domain-value" placeholder="e.g. this page's hostname">
+          </div>
+          <div class="field"><label for="cf-path">Path</label><input type="text" id="cf-path" value="/"></div>
+        </div>
+
+        <div class="row">
+          <div class="field" style="flex: 0 0 150px;">
+            <label for="cf-lifetime">Lifetime</label>
+            <select id="cf-lifetime">
+              <option value="session">Session (no expiry)</option>
+              <option value="max-age">Max-Age (seconds)</option>
+              <option value="expires">Expires (date/time)</option>
+            </select>
+          </div>
+          <div class="field" id="cf-maxage-field" style="display:none;">
+            <label for="cf-maxage">Max-Age (seconds)</label><input type="number" id="cf-maxage" value="3600" min="0">
+          </div>
+          <div class="field" id="cf-expires-field" style="display:none;">
+            <label for="cf-expires">Expires at</label><input type="datetime-local" id="cf-expires">
+          </div>
+        </div>
+
+        <div class="check-field"><input type="checkbox" id="cf-secure"><label for="cf-secure">Secure</label></div>
+        <div class="check-field"><input type="checkbox" id="cf-httponly"><label for="cf-httponly">HttpOnly</label></div>
+        <span class="sub-hint" id="httponly-hint">JavaScript categorically cannot create a working HttpOnly cookie. Check this and click "Set Cookie" anyway — the ENTIRE write gets silently dropped, not just this flag. That's the real, honest behavior; try it.</span>
+        <div class="field" style="max-width:220px;">
+          <label for="cf-samesite">SameSite</label>
+          <select id="cf-samesite"><option value="unset">Unset (browser default)</option><option value="Strict">Strict</option><option value="Lax">Lax</option><option value="None">None</option></select>
+        </div>
+
+        <div id="serverPreviewWrap" style="display:none;">
+          <div class="pg-note info">This is what a <b>server's</b> Set-Cookie response header would look like with HttpOnly included — shown for reference only, never sent or executed by this page.</div>
+          <div class="pg-preview" id="serverPreview"></div>
+        </div>
+
+        <div id="warnBox"></div>
+        <label>What document.cookie = "..." will actually receive</label>
+        <div class="pg-preview" id="cfPreview"></div>
+
+        <div style="display:flex; gap:8px;">
+          <button class="action" id="btnSetCookie">Set Cookie</button>
+          <button class="action secondary" id="btnResetForm">Reset form</button>
+        </div>
+
+        <div class="pg-diag" id="diagBox"></div>
+      </div>
+
+      <!-- ── Live views ── -->
+      <div>
+        <div class="card">
+          <h2>Current Cookies <span style="font-weight:400; color:var(--muted); font-size:0.78rem;">(live, from document.cookie)</span></h2>
+          <p class="hint" id="currentCookiesHint"></p>
+          <div id="currentCookiesList"></div>
+          <button class="action secondary small" id="btnRefreshCurrent">↻ Refresh now</button>
+        </div>
+
+        <div class="card">
+          <h2>Cookies You've Configured This Session</h2>
+          <p class="hint">What YOU asked for (remembered by this page, in JS) — contrasted against what document.cookie actually reports right now. JavaScript can never read a cookie's own attributes back; this view exists specifically to make that gap visible.</p>
+          <div id="configuredList"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Suggested Experiments</h2>
+      <p class="hint">Not a required flow — pick anything, in any order. Each button loads that setup into the form above; nothing runs until you click "Set Cookie" yourself.</p>
+      <div class="exp-grid" id="experimentsGrid"></div>
+    </div>
+
+  </div>
+
+  <!-- ══════════════════════════ REFERENCE TAB ══════════════════════════ -->
+  <div class="panel" id="panel-reference">
+    <details class="card guide-card" open>
+      <summary>🧭 Decision Guide — "how do I design this cookie?"
+        <div class="sub">Architect-style answers to the questions that actually come up</div>
+      </summary>
+      <div class="qa" id="cookieGuide"></div>
+    </details>
+
+    <div class="ref-layout">
+      <nav class="sidebar" id="refSidebar"></nav>
+      <div>
+        <input type="text" class="search" id="refSearch" placeholder="Search — e.g. &quot;domain&quot;, &quot;delete&quot;, &quot;xss&quot;, &quot;samesite&quot;…">
+        <div class="result-count hint" id="refCount" style="margin-bottom:12px;"></div>
+        <div id="refResults"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const escHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  // ===========================================================================
+  // Core cookie logic — pure functions, no DOM, testable standalone.
+  // ===========================================================================
+
+  function isTrustworthyHost(hostname) {
+    return hostname === 'localhost' || hostname.endsWith('.localhost')
+        || hostname === '127.0.0.1' || hostname === '[::1]';
+  }
+
+  function effectiveName(form) {
+    return form.prefix === 'none' ? form.name : form.prefix + form.name;
+  }
+
+  function effectivePath(form) {
+    return form.prefix === '__Host-' ? '/' : (form.path || '/');
+  }
+
+  function effectiveSecure(form) {
+    return form.secure || form.prefix !== 'none';
+  }
+
+  // Builds exactly what document.cookie would receive — or, with
+  // forceHttpOnly, the read-only "what a server would send" preview.
+  function buildCookieString(form, opts) {
+    opts = opts || {};
+    const rawValue = form.rawMode ? form.value : encodeURIComponent(form.value);
+    const parts = [`${effectiveName(form)}=${rawValue}`];
+    if (form.lifetimeMode === 'max-age') parts.push(`Max-Age=${form.maxAgeSeconds}`);
+    if (form.lifetimeMode === 'expires' && form.expiresAt) {
+      const d = new Date(form.expiresAt);
+      if (!isNaN(d.getTime())) parts.push(`Expires=${d.toUTCString()}`);
+    }
+    if (form.domainMode === 'custom' && form.domainValue && form.prefix !== '__Host-') parts.push(`Domain=${form.domainValue}`);
+    parts.push(`Path=${effectivePath(form)}`);
+    if (effectiveSecure(form)) parts.push('Secure');
+    if (form.sameSite !== 'unset') parts.push(`SameSite=${form.sameSite}`);
+    if (opts.forceHttpOnly) parts.push('HttpOnly');
+    return parts.join('; ');
+  }
+
+  function isSubdomainOrSame(hostname, domain) {
+    domain = domain.replace(/^\./, '');
+    return hostname === domain || hostname.endsWith('.' + domain);
+  }
+
+  // Returns [{level:'error'|'warn'|'info', text}], computed live pre-click.
+  function validateForm(form) {
+    const issues = [];
+    if (!form.name.trim()) issues.push({ level: 'error', text: 'Name is empty — a cookie needs a name.' });
+    if (form.prefix === '__Host-' && (form.domainMode === 'custom' || form.path !== '/')) {
+      issues.push({ level: 'error', text: '__Host- forbids the Domain attribute entirely and requires Path=/ — this write will be rejected as a whole.' });
+    }
+    if (form.sameSite === 'None' && !effectiveSecure(form)) {
+      issues.push({ level: 'error', text: 'SameSite=None requires Secure — rejected regardless of host, including on localhost.' });
+    }
+    if (form.httpOnly) {
+      issues.push({ level: 'error', text: 'HttpOnly is checked — JavaScript cannot create a working HttpOnly cookie. Clicking "Set Cookie" will silently drop the ENTIRE write, not just this flag.' });
+    }
+    if (effectiveSecure(form) && !form.httpOnly) {
+      if (isTrustworthyHost(location.hostname)) {
+        issues.push({ level: 'info', text: `This page is on "${location.hostname}", which browsers treat as a trustworthy origin — Secure will likely still succeed here even without HTTPS, contrary to the textbook rule.` });
+      } else {
+        issues.push({ level: 'warn', text: 'Secure requires a trustworthy context (HTTPS, or a browser-trusted host like localhost) — this page may not qualify, so expect this write to be rejected.' });
+      }
+    }
+    if (form.domainMode === 'custom' && form.domainValue) {
+      if (!isSubdomainOrSame(location.hostname, form.domainValue)) {
+        issues.push({ level: 'error', text: `Domain "${form.domainValue}" is not "${location.hostname}" or a parent of it — the browser will silently reject this write.` });
+      }
+    }
+    const nameValueBytes = new TextEncoder().encode(effectiveName(form) + '=' + (form.rawMode ? form.value : encodeURIComponent(form.value))).length;
+    if (nameValueBytes > 4093) {
+      issues.push({ level: 'warn', text: `Name+value is ~${nameValueBytes} bytes — over the ~4KB limit most browsers enforce. Expect this to be dropped entirely, not truncated.` });
+    }
+    if (form.rawMode && form.value.includes(';')) {
+      issues.push({ level: 'warn', text: 'Raw mode is on and the value contains a literal ";" — everything after it will be parsed as a separate (likely garbage) cookie attribute, not part of your value.' });
+    }
+    return issues;
+  }
+
+  function parseDocumentCookie() {
+    if (!document.cookie) return [];
+    return document.cookie.split('; ').filter(Boolean).map((pair) => {
+      const idx = pair.indexOf('=');
+      const name = idx === -1 ? pair : pair.slice(0, idx);
+      const raw = idx === -1 ? '' : pair.slice(idx + 1);
+      let value = raw;
+      try { value = decodeURIComponent(raw); } catch (e) { /* leave raw on bad escape */ }
+      return { name, raw, value };
+    });
+  }
+
+  function keyFor(form) {
+    const domain = form.domainMode === 'custom' && form.domainValue ? form.domainValue : '(host-only)';
+    return `${effectiveName(form)}|${domain}|${effectivePath(form)}`;
+  }
+
+  function formatCountdown(expiryMs) {
+    if (expiryMs == null) return 'Session cookie — until the browser/tab closes (not a fixed time)';
+    const remaining = expiryMs - Date.now();
+    if (remaining <= 0) return 'Expired (kept in this list until you delete or overwrite it)';
+    const s = Math.floor(remaining / 1000);
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    return `${h > 0 ? h + 'h ' : ''}${m}m ${sec}s remaining`;
+  }
+
+  // Diffs document.cookie before/after a write and explains the outcome.
+  function diagnoseOutcome(form, before, isDeleteAttempt) {
+    const name = effectiveName(form);
+    const expectedValue = form.rawMode ? form.value : encodeURIComponent(form.value);
+    const after = document.cookie;
+    const afterEntries = parseDocumentCookie().filter((c) => c.name === name);
+    let accepted;
+    if (isDeleteAttempt) {
+      accepted = afterEntries.length === 0;
+    } else {
+      accepted = afterEntries.some((c) => c.raw === expectedValue);
+    }
+    let reasons = [];
+    if (!accepted) {
+      const errors = validateForm(form).filter((i) => i.level === 'error' || i.level === 'warn');
+      reasons = errors.map((i) => i.text);
+      if (!reasons.length) {
+        reasons = [`The browser did not store it as expected, and no obvious rule violation was detected from here — double-check Domain/Path against this page ("${location.hostname}${location.pathname}").`];
+      }
+    }
+    return { accepted, name, expectedValue, before, after, reasons, isDeleteAttempt };
+  }
+
+  // ===========================================================================
+  // Playground state + wiring
+  // ===========================================================================
+
+  function defaultForm() {
+    return {
+      name: 'demo_cookie', value: 'hello world', rawMode: false,
+      domainMode: 'host-only', domainValue: location.hostname,
+      path: location.pathname || '/',
+      lifetimeMode: 'session', maxAgeSeconds: 3600, expiresAt: '',
+      secure: false, httpOnly: false, sameSite: 'unset', prefix: 'none',
+    };
+  }
+
+  let cookieForm = defaultForm();
+  const configuredCookies = new Map();
+  let currentRefreshTimer = null;
+  let countdownTimer = null;
+
+  function readFormFromDom() {
+    cookieForm.name = $('cf-name').value;
+    cookieForm.value = $('cf-value').value;
+    cookieForm.rawMode = $('cf-raw').checked;
+    cookieForm.domainMode = $('cf-domain-mode').value;
+    cookieForm.domainValue = $('cf-domain-value').value;
+    cookieForm.path = $('cf-path').value || '/';
+    cookieForm.lifetimeMode = $('cf-lifetime').value;
+    cookieForm.maxAgeSeconds = Number($('cf-maxage').value) || 0;
+    cookieForm.expiresAt = $('cf-expires').value;
+    cookieForm.secure = $('cf-secure').checked;
+    cookieForm.httpOnly = $('cf-httponly').checked;
+    cookieForm.sameSite = $('cf-samesite').value;
+  }
+
+  function writeFormToDom() {
+    $('cf-name').value = cookieForm.name;
+    $('cf-value').value = cookieForm.value;
+    $('cf-raw').checked = cookieForm.rawMode;
+    $('cf-domain-mode').value = cookieForm.domainMode;
+    $('cf-domain-value').value = cookieForm.domainValue;
+    $('cf-path').value = cookieForm.path;
+    $('cf-lifetime').value = cookieForm.lifetimeMode;
+    $('cf-maxage').value = cookieForm.maxAgeSeconds;
+    $('cf-expires').value = cookieForm.expiresAt;
+    $('cf-secure').checked = cookieForm.secure;
+    $('cf-httponly').checked = cookieForm.httpOnly;
+    $('cf-samesite').value = cookieForm.sameSite;
+    document.querySelectorAll('#prefixSeg button').forEach((b) => b.classList.toggle('active', b.dataset.val === cookieForm.prefix));
+    applyPrefixLocks();
+    toggleConditionalFields();
+  }
+
+  function toggleConditionalFields() {
+    $('cf-domain-value-field').style.display = cookieForm.domainMode === 'custom' ? '' : 'none';
+    $('cf-maxage-field').style.display = cookieForm.lifetimeMode === 'max-age' ? '' : 'none';
+    $('cf-expires-field').style.display = cookieForm.lifetimeMode === 'expires' ? '' : 'none';
+    $('serverPreviewWrap').style.display = cookieForm.httpOnly ? '' : 'none';
+  }
+
+  function applyPrefixLocks() {
+    const locked = cookieForm.prefix === '__Host-';
+    $('cf-domain-mode').disabled = locked;
+    $('cf-path').disabled = locked;
+    $('cf-secure').disabled = locked || cookieForm.prefix === '__Secure-';
+    const note = $('prefixNote');
+    if (locked) {
+      note.style.display = '';
+      note.textContent = '__Host- locks Domain to host-only, Path to "/", and forces Secure — these are real browser-enforced rules, not this tool restricting you.';
+    } else if (cookieForm.prefix === '__Secure-') {
+      note.style.display = '';
+      note.textContent = '__Secure- forces Secure — required by the browser for any name starting with this prefix.';
+    } else {
+      note.style.display = 'none';
+    }
+  }
+
+  function onFormChange() {
+    readFormFromDom();
+    render();
+  }
+
+  function render() {
+    toggleConditionalFields();
+    $('cfPreview').textContent = buildCookieString(cookieForm);
+    if (cookieForm.httpOnly) $('serverPreview').textContent = buildCookieString(cookieForm, { forceHttpOnly: true });
+
+    const issues = validateForm(cookieForm);
+    $('warnBox').innerHTML = issues.map((i) => `<div class="pg-note ${i.level === 'error' ? 'error' : i.level === 'warn' ? 'warn' : 'info'}">${escHtml(i.text)}</div>`).join('');
+  }
+
+  function renderDiagnosis(diag) {
+    const box = $('diagBox');
+    box.classList.add('show');
+    box.classList.toggle('ok', diag.accepted);
+    box.classList.toggle('fail', !diag.accepted);
+    const verb = diag.isDeleteAttempt ? (diag.accepted ? 'Deleted' : 'Delete failed') : (diag.accepted ? 'Accepted' : 'Rejected');
+    let html = `<b>${diag.accepted ? '✅' : '❌'} ${verb}</b> — `;
+    html += diag.accepted
+      ? (diag.isDeleteAttempt ? `"${escHtml(diag.name)}" is no longer present in document.cookie.` : `"${escHtml(diag.name)}" is now in document.cookie with the value you set.`)
+      : (diag.reasons.length ? diag.reasons.map(escHtml).join('<br>') : 'No obvious reason detected.');
+    html += `<div class="diag-raw">before: ${escHtml(diag.before) || '(empty)'}<br>after:&nbsp; ${escHtml(diag.after) || '(empty)'}</div>`;
+    box.innerHTML = html;
+  }
+
+  function setCookieLive(form, opts) {
+    opts = opts || {};
+    const before = document.cookie;
+    const isDeleteAttempt = form.lifetimeMode === 'max-age' && Number(form.maxAgeSeconds) <= 0;
+    document.cookie = buildCookieString(form);
+    const diag = diagnoseOutcome(form, before, isDeleteAttempt);
+    if (!opts.silent) renderDiagnosis(diag);
+    if (diag.accepted && isDeleteAttempt) configuredCookies.delete(keyFor(form));
+    else if (diag.accepted) recordConfigured(form);
+    renderCurrentCookies();
+    renderConfigured();
+    return diag;
+  }
+
+  function recordConfigured(form) {
+    const key = keyFor(form);
+    const computedExpiryMs =
+      form.lifetimeMode === 'max-age' ? Date.now() + Number(form.maxAgeSeconds) * 1000 :
+      form.lifetimeMode === 'expires' && form.expiresAt ? new Date(form.expiresAt).getTime() :
+      null;
+    configuredCookies.set(key, { key, form: Object.assign({}, form), setAt: Date.now(), computedExpiryMs });
+  }
+
+  function deleteConfigured(key, mode) {
+    const entry = configuredCookies.get(key);
+    if (!entry) return;
+    if (mode === 'correct') {
+      setCookieLive(Object.assign({}, entry.form, { lifetimeMode: 'max-age', maxAgeSeconds: 0 }));
+    } else if (mode === 'wrong-path') {
+      // The classic real bug: re-sending with a DIFFERENT path and no expiry
+      // at all (forgetting Max-Age=0) creates a second, visible cookie with
+      // the same name instead of deleting the original — deliberately
+      // reproduced here rather than a clean Max-Age=0 miss (which is a
+      // silent, invisible no-op and teaches nothing).
+      setCookieLive(Object.assign({}, entry.form, { value: '', lifetimeMode: 'session', path: '/' }));
+    }
+  }
+
+  // ── Current Cookies (live) ──
+  function renderCurrentCookies() {
+    const cookies = parseDocumentCookie();
+    $('currentCookiesHint').textContent =
+      `${cookies.length} cookie${cookies.length === 1 ? '' : 's'} visible to this exact document right now — name=value only. document.cookie can never report a cookie's Domain, Path, Expiry, Secure, or SameSite back to JavaScript.`;
+    const list = $('currentCookiesList');
+    if (!cookies.length) { list.innerHTML = '<div class="empty-note">No cookies visible from this page right now.</div>'; return; }
+    list.innerHTML = cookies.map((c) => `
+      <div class="cookie-card">
+        <div class="cc-name">${escHtml(c.name)}</div>
+        <div class="cc-value">${escHtml(c.value)}${c.raw !== c.value ? ` <span style="opacity:0.6;">(raw: ${escHtml(c.raw)})</span>` : ''}</div>
+      </div>`).join('');
+  }
+
+  // ── Configured This Session ──
+  function renderConfigured() {
+    const list = $('configuredList');
+    if (!configuredCookies.size) { list.innerHTML = '<div class="empty-note">Nothing configured yet — set a cookie above.</div>'; return; }
+    const liveNames = new Set(parseDocumentCookie().map((c) => c.name));
+    list.innerHTML = Array.from(configuredCookies.values()).map((entry) => {
+      const f = entry.form;
+      const stillLive = liveNames.has(effectiveName(f));
+      const badges = [
+        f.prefix !== 'none' ? f.prefix.replace('-', '') : null,
+        effectiveSecure(f) ? 'Secure' : null,
+        f.sameSite !== 'unset' ? 'SameSite=' + f.sameSite : null,
+      ].filter(Boolean).map((b) => `<span class="cc-badge">${escHtml(b)}</span>`).join('');
+      return `
+      <div class="cookie-card" data-configured-key="${escHtml(entry.key)}">
+        <div class="cc-name">${escHtml(effectiveName(f))} ${!stillLive ? '<span class="cc-badge warn">⚠ not in document.cookie</span>' : ''}</div>
+        <div class="cc-attrs">
+          Domain: ${f.domainMode === 'custom' ? escHtml(f.domainValue) : '(host-only)'} · Path: ${escHtml(effectivePath(f))}<br>
+          ${badges || '<span style="opacity:0.6;">no Secure/SameSite/prefix set</span>'}
+        </div>
+        <div class="countdown">${escHtml(formatCountdown(entry.computedExpiryMs))}</div>
+        <div class="cc-actions">
+          <button class="action secondary small" data-del-correct="${escHtml(entry.key)}">Delete correctly</button>
+          <button class="action secondary small" data-del-wrong="${escHtml(entry.key)}">Delete with wrong Path (bug demo)</button>
+        </div>
+      </div>`;
+    }).join('');
+    list.querySelectorAll('[data-del-correct]').forEach((b) => b.addEventListener('click', () => deleteConfigured(b.dataset.delCorrect, 'correct')));
+    list.querySelectorAll('[data-del-wrong]').forEach((b) => b.addEventListener('click', () => deleteConfigured(b.dataset.delWrong, 'wrong-path')));
+  }
+
+  // ===========================================================================
+  // Suggested Experiments
+  // ===========================================================================
+
+  const EXPERIMENTS = [
+    { title: 'Secure on this exact page — actually rejected?', expect: 'Likely ACCEPTED here (localhost is a trustworthy origin) — contrary to the textbook rule. Watch the info note above the preview.',
+      setup: { secure: true, sameSite: 'unset', httpOnly: false } },
+    { title: 'SameSite=None without Secure', expect: 'Rejected — this check does not care about localhost.',
+      setup: { sameSite: 'None', secure: false, httpOnly: false } },
+    { title: 'SameSite=None WITH Secure', expect: 'Accepted here.',
+      setup: { sameSite: 'None', secure: true, httpOnly: false } },
+    { title: 'Try to set HttpOnly from JS anyway', expect: 'The ENTIRE write is silently dropped, not just the flag.',
+      setup: { httpOnly: true } },
+    { title: 'Set an unrelated Domain', expect: 'Rejected — Domain must be the current host or a parent of it.',
+      setup: { domainMode: 'custom', domainValue: 'example.com', httpOnly: false } },
+    { title: 'Host-only vs Domain = current hostname', expect: 'Both work here — the visible difference only shows up across real subdomains, which this single page can\'t demonstrate.',
+      setup: { domainMode: 'custom', domainValue: location.hostname, httpOnly: false } },
+    { title: '__Host- prefix with a Domain set anyway', expect: 'Rejected outright — __Host- forbids Domain entirely, even a matching one.',
+      setup: { prefix: '__Host-', domainMode: 'custom', domainValue: location.hostname, httpOnly: false } },
+    { title: 'Set a cookie, then delete it with the wrong Path', expect: 'Use the "Delete with wrong Path" button on the resulting card in "Configured This Session" — the original survives, and a second cookie with the same name appears instead of a clean delete.',
+      setup: { name: 'delete_demo', path: location.pathname, httpOnly: false } },
+    { title: 'Set a ~5KB value', expect: 'Dropped entirely (not truncated) — check Current Cookies afterward.',
+      setup: { value: 'x'.repeat(5000), httpOnly: false } },
+    { title: 'Raw mode: value containing a literal semicolon', expect: 'Only the part before ";" survives as the value; the rest is parsed as separate, likely-garbage attributes.',
+      setup: { rawMode: true, value: 'a=1; evil=2', httpOnly: false } },
+  ];
+
+  function renderExperiments() {
+    $('experimentsGrid').innerHTML = EXPERIMENTS.map((exp, i) => `
+      <div class="exp-card">
+        <div class="exp-title">${escHtml(exp.title)}</div>
+        <div class="exp-expect">${escHtml(exp.expect)}</div>
+        <button class="action secondary small" data-load-exp="${i}">Load into playground</button>
+      </div>`).join('');
+    document.querySelectorAll('[data-load-exp]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        cookieForm = Object.assign(defaultForm(), EXPERIMENTS[Number(btn.dataset.loadExp)].setup);
+        writeFormToDom();
+        render();
+        document.querySelector('#panel-playground .card').scrollIntoView({ block: 'start', behavior: 'smooth' });
+      });
+    });
+  }
+
+  // ===========================================================================
+  // Wiring: form inputs, prefix seg, buttons, tabs, auto-refresh
+  // ===========================================================================
+
+  ['cf-name','cf-value','cf-raw','cf-domain-mode','cf-domain-value','cf-path','cf-lifetime','cf-maxage','cf-expires','cf-secure','cf-httponly','cf-samesite']
+    .forEach((id) => { $(id).addEventListener('input', onFormChange); $(id).addEventListener('change', onFormChange); });
+
+  document.querySelectorAll('#prefixSeg button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#prefixSeg button').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      cookieForm.prefix = btn.dataset.val;
+      if (cookieForm.prefix === '__Host-') { cookieForm.domainMode = 'host-only'; cookieForm.path = '/'; }
+      writeFormToDom();
+      render();
+    });
+  });
+
+  $('btnSetCookie').addEventListener('click', () => { readFormFromDom(); setCookieLive(cookieForm); });
+  $('btnResetForm').addEventListener('click', () => { cookieForm = defaultForm(); writeFormToDom(); render(); $('diagBox').classList.remove('show'); });
+  $('btnRefreshCurrent').addEventListener('click', renderCurrentCookies);
+
+  document.querySelectorAll('#topTabs button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#topTabs button').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
+      $('panel-' + btn.dataset.tab).classList.add('active');
+      if (btn.dataset.tab === 'playground') startAutoRefresh(); else stopAutoRefresh();
+    });
+  });
+
+  function startAutoRefresh() {
+    stopAutoRefresh();
+    currentRefreshTimer = setInterval(renderCurrentCookies, 2000);
+    countdownTimer = setInterval(renderConfigured, 1000);
+  }
+  function stopAutoRefresh() {
+    if (currentRefreshTimer) clearInterval(currentRefreshTimer);
+    if (countdownTimer) clearInterval(countdownTimer);
+  }
+
+  // ===========================================================================
+  // Reference tab data: THEORY / THEORY_CATEGORIES / COOKIE_GUIDE
+  // ===========================================================================
+
+  const THEORY_CATEGORIES = [
+    { key: 'what-it-is', icon: '🍪', label: 'What a Cookie Is',
+      desc: 'The basic mechanism: a server asks the browser to remember a small piece of data via Set-Cookie, and the browser sends it straight back on every matching future request via the Cookie header — this is literally how a stateless protocol gets state.' },
+    { key: 'attributes', icon: '🏷️', label: 'Attributes',
+      desc: 'Everything you can attach to a cookie to control where it is sent, how long it lives, and how safely it is handled.' },
+    { key: 'scope-matching', icon: '🎯', label: 'Scope & Matching',
+      desc: 'The exact rules a browser uses to decide which requests a stored cookie gets attached to — domain, path, and the site vs origin distinction.' },
+    { key: 'lifetime-cleanup', icon: '⏳', label: 'Lifetime & Cleanup',
+      desc: 'How long a cookie actually lives, and the real mechanics of making one go away on purpose.' },
+    { key: 'security', icon: '🛡️', label: 'Security',
+      desc: 'What each cookie-security mechanism actually protects against — and what it does not.' },
+    { key: 'best-practices', icon: '✅', label: 'Best Practices',
+      desc: 'Concrete, opinionated defaults for the cookie designs you will actually build.' },
+    { key: 'edge-cases', icon: '⚠️', label: 'Edge Cases & Limitations',
+      desc: 'The gotchas that do not show up until you hit them in production — most demonstrable live in the Playground tab.' },
+  ];
+
+  const THEORY = [
+    // ── What a Cookie Is ──
+    { name: 'The Cookie / Set-Cookie Round Trip', category: 'what-it-is',
+      summary: 'A server sends Set-Cookie in a response; the browser stores it and echoes it back via the Cookie header on future matching requests.',
+      description: 'This is the entire mechanism, end to end: <code>Set-Cookie: session=abc123</code> arrives in a response, the browser stores <code>session=abc123</code> against this origin (plus whatever Domain/Path/expiry it was given), and from then on every request that matches those rules automatically includes <code>Cookie: session=abc123</code> — no JavaScript, no manual re-sending, it is built into the browser\'s request pipeline.',
+      example: 'Set-Cookie: session=abc123; Path=/; HttpOnly', spec: 'RFC 6265bis', related: ['Domain', 'Path'] },
+    { name: 'Why Cookies Exist (Statelessness)', category: 'what-it-is',
+      summary: 'HTTP itself has no memory between requests — cookies are the standard patch that lets a site recognize the same visitor across multiple requests.',
+      description: 'Without cookies (or an equivalent like a URL-embedded token), every request to a server would look identical regardless of who sent it or what they did a moment ago — no logged-in state, no shopping cart, no preferences. Cookies solve this by letting the SERVER hand the CLIENT a small token to carry around and present back automatically.',
+      example: '', spec: '', related: [] },
+    { name: 'document.cookie (the client-side API)', category: 'what-it-is',
+      summary: 'The one JavaScript property that reads and writes cookies — a strange API that looks like a normal string property but behaves nothing like one.',
+      description: 'Reading <code>document.cookie</code> returns ALL non-HttpOnly cookies visible to the current document, semicolon-space-joined, as one flat string — with no way to tell them apart by attribute. Writing to it (<code>document.cookie = "name=value; ..."</code>) does not replace the whole cookie jar — it is an upsert of exactly one cookie, identified by name+domain+path. Try it live in the Playground tab.',
+      example: 'document.cookie = "theme=dark; Path=/; Max-Age=86400"', spec: 'HTML Standard (WHATWG)', related: ['The Cookie / Set-Cookie Round Trip'] },
+    { name: 'First-Party vs Third-Party Cookies', category: 'what-it-is',
+      summary: 'Whether a cookie belongs to the site in the browser\'s address bar, or to some other domain loaded inside it (an ad, a widget, a tracking pixel).',
+      description: 'A first-party cookie is set by (and only sent back to) the site you are actually visiting. A third-party cookie is set by a DIFFERENT domain embedded in that page (an iframe, an image, a script) — historically the mechanism behind cross-site ad tracking, which is why modern browsers increasingly block or restrict it by default.',
+      example: '', spec: '', related: ['Partitioned / CHIPS'] },
+
+    // ── Attributes ──
+    { name: 'Domain', category: 'attributes',
+      summary: 'Which host(s) the cookie is sent to — the exact current host only (if omitted), or that domain plus every subdomain (if set).',
+      description: 'Omitting Domain creates a "host-only" cookie, sent only to the exact host that set it. Setting <code>Domain=example.com</code> creates a "domain cookie" sent to <code>example.com</code> AND every subdomain (<code>app.example.com</code>, <code>api.example.com</code>, ...). You can only set Domain to the current host or a parent of it — anything else is silently rejected by the browser.',
+      example: 'Set-Cookie: id=1; Domain=example.com', spec: 'RFC 6265bis §5.4', related: ['Path', 'Host-Only vs Domain Cookies'] },
+    { name: 'Path', category: 'attributes',
+      summary: 'Which URL paths on the host the cookie is sent for — only requests whose path starts with this one.',
+      description: 'A cookie with <code>Path=/app</code> is sent for <code>/app</code>, <code>/app/settings</code>, etc., but not for <code>/other</code>. Unlike Domain, an unrelated Path is never rejected at set-time — the cookie is still stored, it is just invisible to documents whose path does not match it. Defaults to the path of the request that set it if omitted.',
+      example: 'Set-Cookie: id=1; Path=/app', spec: 'RFC 6265bis §5.4', related: ['Domain', 'Path Matching Is a Prefix Check'] },
+    { name: 'Expires', category: 'attributes',
+      summary: 'An absolute date/time after which the cookie is deleted.',
+      description: 'Sets a fixed point in time (in HTTP-date format). Sensitive to clock differences between the client and the server that set it — Max-Age is the modern, relative alternative and takes precedence when both are present.',
+      example: 'Set-Cookie: id=1; Expires=Wed, 21 Oct 2026 07:28:00 GMT', spec: 'RFC 6265bis §5.4', related: ['Max-Age'] },
+    { name: 'Max-Age', category: 'attributes',
+      summary: 'How many seconds from right now until the cookie expires — the modern, clock-skew-proof alternative to Expires.',
+      description: '<code>Max-Age=3600</code> means "delete this in one hour, from whenever the browser actually receives it" — no dependency on the client\'s or server\'s wall-clock being correct. When both Max-Age and Expires are present, Max-Age wins. Omitting both makes it a session cookie.',
+      example: 'Set-Cookie: id=1; Max-Age=3600', spec: 'RFC 6265bis §5.4', related: ['Expires'] },
+    { name: 'Secure', category: 'attributes',
+      summary: 'Only send this cookie over an encrypted connection — with a browser-specific carve-out for "trustworthy" origins like localhost.',
+      description: 'Blocks the cookie from ever being sent (or, depending on context, even set) over plain HTTP — protecting it from network eavesdroppers. The one wrinkle: browsers treat certain origins (notably localhost) as "potentially trustworthy" even over HTTP, so Secure cookies can still work there. Try it in the Playground.',
+      example: 'Set-Cookie: id=1; Secure', spec: 'RFC 6265bis §4.1.2.5', related: ['HttpOnly', 'SameSite', 'Secure on localhost Usually Still Works Over Plain HTTP'] },
+    { name: 'HttpOnly', category: 'attributes',
+      summary: 'Makes the cookie completely invisible to JavaScript — document.cookie can neither read nor write it.',
+      description: 'The single most effective defense against session-cookie theft via XSS: even if an attacker gets arbitrary JavaScript running on your page, an HttpOnly cookie simply is not there for document.cookie to read. It can ONLY be set by a server\'s Set-Cookie response header — a client-side attempt to set it does not just drop the flag, it silently drops the ENTIRE cookie write. Try this live in the Playground.',
+      example: 'Set-Cookie: session=abc123; HttpOnly', spec: 'RFC 6265bis §4.1.2.6', related: ['Secure', 'HttpOnly From JS Drops the WHOLE Write, Not Just the Flag'] },
+    { name: 'SameSite', category: 'attributes',
+      summary: 'Controls whether the cookie is sent on cross-site requests — Strict, Lax, or None — the primary browser-level CSRF defense.',
+      description: 'Strict: never sent cross-site, not even clicking a link from another site. Lax (the modern default when unset in most browsers): sent on top-level cross-site GET navigations (clicking a link) but not on cross-site subrequests/forms. None: sent everywhere, including third-party context — but requires the Secure attribute or the browser rejects it outright.',
+      example: 'Set-Cookie: id=1; SameSite=Lax', spec: 'RFC 6265bis §5.4', related: ['Secure', 'SameSite vs CSRF'] },
+    { name: 'Prefixes (__Host- / __Secure-)', category: 'attributes',
+      summary: 'Special, browser-enforced name prefixes that make certain security properties impossible to violate by accident.',
+      description: '__Secure- in the name requires the cookie to also have Secure set, or the browser refuses it entirely. __Host- is stricter still: requires Secure, forces Path=/, AND forbids the Domain attribute entirely — locking the cookie to exactly this host, immune to being overwritten by a malicious or compromised subdomain (a real attack class called cookie tossing).',
+      example: 'Set-Cookie: __Host-session=abc123; Path=/; Secure', spec: 'RFC 6265bis §4.1.3', related: ['Domain', 'Secure', 'Prefixes as Hardening Against Cookie Tossing'] },
+    { name: 'Partitioned / CHIPS', category: 'attributes',
+      summary: 'Marks a cookie as double-keyed per top-level site — the modern replacement for unrestricted third-party cookies.',
+      description: 'A Partitioned cookie set while embedded on site A is only ever visible when embedded on site A again — even though it is technically a "third-party" cookie from some widget/service domain, it cannot be used to track a user ACROSS different top-level sites, which is exactly the property ordinary third-party cookies lacked. Requires Secure.',
+      example: 'Set-Cookie: id=1; Secure; Partitioned', spec: 'CHIPS (draft)', related: ['First-Party vs Third-Party Cookies', 'Third-Party Cookies Are Being Phased Out'] },
+
+    // ── Scope & Matching ──
+    { name: 'Host-Only vs Domain Cookies', category: 'scope-matching',
+      summary: 'Leave Domain unset for the tightest scope (exact host only); set it to broaden reach to every subdomain, and every subdomain\'s attack surface.',
+      description: 'Leave Domain unset for the tightest possible scope (exact host only) — the right default unless you specifically need subdomain sharing. Setting Domain broadens the cookie\'s reach to every subdomain, which also broadens its attack surface (any of those subdomains can now read and, if not using __Host-, overwrite it).',
+      example: '', spec: '', related: ['Domain', 'Prefixes (__Host- / __Secure-)'] },
+    { name: 'Path Matching Is a Prefix Check', category: 'scope-matching',
+      summary: 'A cookie is sent when the request path starts with the cookie\'s Path — not an exact match.',
+      description: 'Path=/api matches /api, /api/, and /api/users/42 — but not /apiary (the match happens on path SEGMENTS, not raw string prefix). This is why a cookie set with a narrower path than you expect can mysteriously "not be there" on a page that looks like it should be included.',
+      example: '', spec: '', related: ['Path'] },
+    { name: 'Site vs Origin (why SameSite isn\'t same-origin)', category: 'scope-matching',
+      summary: 'SameSite compares the registrable domain (eTLD+1), ignoring scheme and subdomain — a looser check than the same-origin policy JavaScript otherwise follows.',
+      description: 'https://app.example.com and https://api.example.com are different ORIGINS (different hosts) but the SAME SITE (both under example.com) — so a SameSite=Strict cookie set on one is still sent to the other. This is deliberately looser than same-origin so that ordinary multi-subdomain apps keep working; it also means SameSite alone does not protect against a malicious subdomain the way HttpOnly/Secure/prefixes do.',
+      example: '', spec: '', related: ['SameSite', 'Prefixes (__Host- / __Secure-)'] },
+    { name: 'Cross-Subdomain Behavior Can\'t Be Demonstrated on a Single Page', category: 'scope-matching',
+      summary: 'This Playground can only show host-only vs current-host Domain behavior — genuinely testing subdomain sharing needs two real subdomains.',
+      description: 'Everything in this tool runs on one page at one host, so "set Domain=example.com and check it from app.example.com" is not something this Playground can show you live — that part stays theory. If you want to see it for real, you would need two subdomains of a domain you control.',
+      example: '', spec: '', related: ['Domain'] },
+
+    // ── Lifetime & Cleanup ──
+    { name: 'Session Cookies vs Persistent Cookies', category: 'lifetime-cleanup',
+      summary: 'No Expires/Max-Age means it dies when the browser closes (in theory). Either one set means it survives restarts, until that exact time.',
+      description: 'A session cookie is meant to disappear when the browser (not just the tab) closes — useful for things that genuinely should not persist. A persistent cookie has an explicit lifetime and survives browser restarts, up to that limit. See the session-restore gotcha below for why "dies on close" is not always true in practice.',
+      example: '', spec: '', related: ['Expires', 'Max-Age', 'The Session-Restore Gotcha'] },
+    { name: 'The Session-Restore Gotcha', category: 'lifetime-cleanup',
+      summary: 'Many modern browsers\' "reopen previous session" feature keeps session cookies alive across a restart, defeating the "gone when the browser closes" assumption.',
+      description: 'If you are relying on a session cookie\'s lack of Expires/Max-Age as a security boundary ("it will be gone next time"), test against a browser with session restore enabled — it often is not gone. Use a server-side idle/absolute timeout for anything that actually needs to expire on a schedule; do not rely on session-cookie semantics alone.',
+      example: '', spec: '', related: ['Session Cookies vs Persistent Cookies'] },
+    { name: 'Deleting a Cookie Is Just Re-Setting It, Expired', category: 'lifetime-cleanup',
+      summary: 'There is no dedicated "delete" operation — you re-send the same cookie with Max-Age=0 (or a past Expires), matching Name+Domain+Path exactly.',
+      description: 'The browser has no separate "remove this cookie" instruction in the protocol. Deletion works by overwriting: send the identical Name, Domain, and Path with an expiry in the past, and the browser discards it on receipt. Get any of Name/Domain/Path even slightly wrong and you create a brand-new, separate cookie instead of removing the old one — try this deliberately in the Playground\'s "delete with wrong Path" experiment.',
+      example: 'Set-Cookie: id=; Path=/; Max-Age=0', spec: '', related: ['Path', 'Domain'] },
+    { name: 'Size and Count Limits (Dropped, Not Truncated)', category: 'lifetime-cleanup',
+      summary: 'Cookies over ~4KB, or beyond a browser\'s per-domain/total cookie count cap, are silently dropped entirely — never partially saved.',
+      description: 'RFC 6265bis specifies roughly 4096 bytes for name+value combined as a MINIMUM guarantee browsers must support; exceed it and the whole cookie is rejected, not cut short. Browsers also cap the total number of cookies per domain (commonly in the 50-180 range depending on browser) and evict the oldest when a new one would exceed it.',
+      example: '', spec: 'RFC 6265bis §6.1', related: [] },
+
+    // ── Security ──
+    { name: 'HttpOnly vs XSS (Session Theft)', category: 'security',
+      summary: 'The #1 reason to mark session cookies HttpOnly: it makes them invisible to any JavaScript running on the page — including an attacker\'s.',
+      description: 'If your session cookie is readable by document.cookie, a single successful XSS injection anywhere on your site can exfiltrate it wholesale, letting the attacker impersonate that user with no further work. HttpOnly closes this specific hole completely — it does not stop XSS from happening, but it stops that particular payoff.',
+      example: '', spec: '', related: ['HttpOnly'] },
+    { name: 'SameSite vs CSRF', category: 'security',
+      summary: 'Restricting when a cookie rides along on cross-site requests is a strong, mostly-automatic CSRF defense — but not a complete one on its own.',
+      description: 'A classic CSRF attack relies on the victim\'s browser automatically attaching their session cookie to a forged request from another site. SameSite=Lax/Strict breaks that assumption for most request shapes. It is not total coverage though — treat it as one layer alongside real CSRF tokens for state-changing endpoints, especially anything security-critical.',
+      example: '', spec: '', related: ['SameSite'] },
+    { name: 'Secure vs Network Interception', category: 'security',
+      summary: 'Stops a cookie from ever crossing the network in plaintext, where anyone sharing that network (public wifi, a compromised router) could read it.',
+      description: 'Without Secure, a cookie set over HTTPS can still leak if the SAME site is ever accessed over plain HTTP on that connection — Secure guarantees it is only ever transmitted encrypted (with the localhost trustworthy-origin exception covered in the Playground).',
+      example: '', spec: '', related: ['Secure'] },
+    { name: 'Prefixes as Hardening Against Cookie Tossing', category: 'security',
+      summary: '__Host- specifically defends against a malicious or compromised subdomain overwriting a cookie your main site relies on.',
+      description: '"Cookie tossing" is setting a same-named cookie from a subdomain (or via a Domain-scoped write) that gets sent to the parent site too, potentially overriding a legitimate one. __Host- makes this impossible for that cookie, because it can never have a Domain attribute broader than the exact host, closing the door subdomain-level attacks would otherwise use.',
+      example: '', spec: '', related: ['Prefixes (__Host- / __Secure-)'] },
+    { name: 'Session Fixation (Briefly)', category: 'security',
+      summary: 'An attacker who can set a victim\'s session cookie to a known value before login can hijack the resulting authenticated session.',
+      description: 'If a session ID is accepted from a cookie the ATTACKER set (not one the server generated at login), the attacker can pre-choose the ID, wait for the victim to log in under it, then use that same ID themselves. Defense: always issue a fresh session ID at login/privilege-change, never reuse whatever ID was present beforehand.',
+      example: '', spec: '', related: [] },
+
+    // ── Best Practices ──
+    { name: 'The Default Session-Cookie Recipe', category: 'best-practices',
+      summary: 'HttpOnly + Secure + SameSite=Lax (or Strict) + no explicit lifetime (or a short server-refreshed one), ideally __Host- prefixed.',
+      description: 'This combination is the right starting point for the overwhelming majority of login/session cookies — start here and only relax an attribute when you have a specific, understood reason to.',
+      example: 'Set-Cookie: __Host-session=abc123; Path=/; Secure; HttpOnly; SameSite=Lax', spec: '', related: ['HttpOnly', 'Secure', 'SameSite', 'Prefixes (__Host- / __Secure-)'] },
+    { name: 'Never Put Sensitive Data in a JS-Readable Cookie', category: 'best-practices',
+      summary: 'If a cookie must be readable by document.cookie (no HttpOnly), treat its contents as fully exposed to any XSS that ever runs on the page.',
+      description: 'A theme preference or A/B bucket is fine. A user ID, a permission level, anything you would not want an attacker\'s injected script to read or tamper with, is not — keep those HttpOnly and look them up server-side instead of trusting a client-readable value.',
+      example: '', spec: '', related: ['HttpOnly'] },
+    { name: 'Keep Cookies Small and Few', category: 'best-practices',
+      summary: 'Every cookie for a domain/path is sent on EVERY matching request — a bloated cookie jar is a bandwidth tax on every single page load.',
+      description: 'Beyond the hard ~4KB per-cookie limit, there is a practical cost: cookies are sent uplink on every request whether that request needs them or not. Store an opaque session ID, not a pile of application state.',
+      example: '', spec: '', related: ['Size and Count Limits (Dropped, Not Truncated)'] },
+    { name: 'Rotate Session Identifiers on Privilege Change', category: 'best-practices',
+      summary: 'Issue a brand-new session cookie value at login, logout, and any permission-level change — never reuse the old one across a security boundary.',
+      description: 'This is the concrete defense against session fixation (above) and limits how long a leaked session token stays useful even if one does leak.',
+      example: '', spec: '', related: ['Session Fixation (Briefly)'] },
+    { name: 'Clear Cookies Properly on Logout', category: 'best-practices',
+      summary: 'Re-send every session-related cookie with Max-Age=0 and the exact original Name/Domain/Path — and consider Clear-Site-Data for a full client-side wipe.',
+      description: 'A logout that only clears server-side session state but leaves the cookie sitting in the browser is incomplete — especially on a shared machine. For a thorough logout, explicitly delete the cookie (matching attributes exactly) rather than assuming it will just stop working once the server forgets it.',
+      example: '', spec: '', related: ['Deleting a Cookie Is Just Re-Setting It, Expired'] },
+
+    // ── Edge Cases & Limitations ──
+    { name: 'JavaScript Can Never Read a Cookie\'s Own Attributes Back', category: 'edge-cases',
+      summary: 'document.cookie only ever exposes name=value pairs — there is no API to ask "what Path/Domain/Expiry/Secure did THIS cookie have?"',
+      description: 'Once you have set a cookie, you can confirm it is THERE via document.cookie, but you cannot ask the browser what attributes it actually stored — that information is gone from JavaScript\'s perspective the moment the write completes. This tool\'s "Configured This Session" view works around this by remembering, in its OWN memory, what you asked for — clearly separate from what document.cookie can actually confirm.',
+      example: '', spec: '', related: ['document.cookie (the client-side API)'] },
+    { name: 'HttpOnly From JS Drops the WHOLE Write, Not Just the Flag', category: 'edge-cases',
+      summary: 'Including HttpOnly in a document.cookie assignment does not quietly ignore that one attribute — it silently rejects the entire cookie.',
+      description: 'A common assumption is "JS just cannot make it HttpOnly, but the rest of the cookie still gets set" — that is wrong. A cookie-string that includes HttpOnly and comes from a non-HTTP API (i.e. JavaScript) is rejected outright; nothing is stored at all. Confirmed live in the Playground.',
+      example: '', spec: '', related: ['HttpOnly'] },
+    { name: 'Secure on localhost Usually Still Works Over Plain HTTP', category: 'edge-cases',
+      summary: 'Browsers treat localhost as a "potentially trustworthy origin," so a Secure cookie can succeed there even without HTTPS — contrary to the textbook rule.',
+      description: 'This matters directly for THIS tool: it is normally accessed at http://localhost:8000, so testing "does Secure get rejected on HTTP" here will likely show ACCEPTED, not rejected. The rule itself (Secure requires a trustworthy context) is real — localhost is just specifically carved out as trustworthy regardless of scheme.',
+      example: '', spec: '', related: ['Secure'] },
+    { name: 'SameSite=None Without Secure Is Rejected Everywhere, Including localhost', category: 'edge-cases',
+      summary: 'Unlike the Secure-alone case above, this specific combination is rejected as a syntax rule, independent of whether the origin is otherwise trustworthy.',
+      description: 'If SameSite=None is present, Secure must also be present in the same cookie-string, full stop — this one is not affected by the localhost exception, so it is reliably demonstrable in this tool.',
+      example: '', spec: '', related: ['SameSite', 'Secure'] },
+    { name: 'document.cookie Assignment Is Additive, Not Replacing', category: 'edge-cases',
+      summary: 'Assigning to document.cookie looks like overwriting a property, but it actually upserts just ONE cookie (by name+domain+path), leaving every other cookie untouched.',
+      description: 'This trips people up because it LOOKS like document.cookie = "a=1" should wipe out anything that was there before, the way a normal property assignment would — it does not. Set two different-named cookies back to back and both survive.',
+      example: '', spec: '', related: ['document.cookie (the client-side API)'] },
+    { name: 'Oversized or Malformed Values Are Dropped, Not Fixed Up', category: 'edge-cases',
+      summary: 'A too-large value, or a raw unescaped ";" inside it, does not get truncated or auto-corrected — it either drops the whole cookie or gets mis-parsed as separate garbage attributes.',
+      description: 'Percent-encoding a cookie value (the normal, safe way) avoids the raw-semicolon problem entirely, since ";" is the cookie-pair separator in the wire format — an unescaped one inside a value splits it into what looks like additional (probably invalid) attributes. This tool\'s raw-mode toggle lets you deliberately reproduce this.',
+      example: '', spec: '', related: ['Size and Count Limits (Dropped, Not Truncated)'] },
+    { name: 'Third-Party Cookies Are Being Phased Out', category: 'edge-cases',
+      summary: 'Safari and Firefox block third-party cookies by default already; Chrome has been rolling out the same restriction.',
+      description: 'If you are designing anything that depends on a cookie being readable across different top-level sites (an embedded widget remembering state, a cross-site analytics cookie), plan for third-party cookies simply not being available going forward, not just "blocked for privacy-conscious users." Partitioned/CHIPS is the emerging replacement for the legitimate use cases.',
+      example: '', spec: '', related: ['Partitioned / CHIPS', 'First-Party vs Third-Party Cookies'] },
+  ];
+
+  const COOKIE_GUIDE = [
+    { q: 'Building a login/session cookie — which attributes?', a: 'HttpOnly (JS never needs to read a session ID — keeps it safe from XSS), Secure (never send it over plain HTTP), SameSite=Lax at minimum (Strict if the site does not need the cookie to arrive on a top-level cross-site navigation like an email link), and no Expires/Max-Age at all for a true session cookie, or a short Max-Age refreshed server-side if you want an idle timeout. Consider the __Host- prefix so it cannot be overwritten by a malicious subdomain.' },
+    { q: 'A "remember me" cookie that should survive weeks?', a: 'Same HttpOnly+Secure+SameSite baseline as a session cookie, but with a real Max-Age (commonly 30 days) and — critically — a different, rotating token value, not your actual session ID or password. Store it server-side as a long-lived, revocable token so a stolen cookie can be invalidated without forcing everyone to log out.' },
+    { q: 'A cookie that client-side JS itself needs to read (theme, A/B bucket)?', a: 'No HttpOnly — that is the one attribute you must drop, since HttpOnly cookies are invisible to document.cookie by design. Still use Secure and SameSite=Lax. Never put anything sensitive in it — if JS can read it, so can any XSS payload that ever runs on your page.' },
+    { q: 'Does SameSite alone solve CSRF?', a: 'Strong defense-in-depth, not a full replacement for CSRF tokens on state-changing endpoints. SameSite=Lax still allows the cookie on top-level GET navigations (a user clicking a link), and some edge cases and older browsers do not enforce it at all. Treat SameSite as one layer, not the whole defense, for anything that changes state.' },
+    { q: 'Cookie needs to work across multiple subdomains (app.example.com and api.example.com)?', a: 'Set Domain=example.com explicitly (not just the current host) — that turns it from a host-only cookie into a domain cookie sent to example.com and every subdomain. You lose the __Host- prefix\'s protection when you do this (it forbids Domain entirely), so weigh convenience against the subdomain-takeover risk this reintroduces.' },
+    { q: '__Host- or __Secure- — which one?', a: '__Host- is the stronger, and the right default whenever you do not need cross-subdomain sharing: it requires Secure, forces Path=/, and forbids Domain entirely, so no subdomain (compromised or not) can ever overwrite it. __Secure- only requires Secure — reach for it only when you specifically need a Domain attribute (see the previous question) and cannot use __Host-.' },
+    { q: 'Expires or Max-Age, and what\'s the "session restore" gotcha?', a: 'Prefer Max-Age — it is relative (immune to clock skew between client and server) and universally supported. The gotcha: a cookie with NO Expires/Max-Age is a "session cookie" that is supposed to die when the browser closes, but most modern browsers\' "restore previous session" feature keeps the whole browsing session (tabs, and their cookies) alive across a restart — so a "log out when the browser closes" expectation does not actually hold on those browsers. Do not rely on session-cookie semantics alone for anything security-sensitive; add a server-side idle timeout instead.' },
+    { q: 'Why won\'t my cookie delete?', a: 'Deleting a cookie is really re-sending it with an already-past Expires (or Max-Age=0) — but the Name, Domain, AND Path must match EXACTLY what was used when it was set, or the browser treats it as a totally different cookie and creates a new one instead of deleting the old one. The single most common cause: the cookie was originally set with an explicit Path (or Domain) and the deletion code left that attribute out, defaulting to something else.' },
+    { q: 'Storing a JWT / large payload — cookie, localStorage, or neither?', a: 'A cookie (HttpOnly, Secure) if you want it automatically sent with every request and protected from XSS-based theft — the standard choice for session tokens. localStorage if JS genuinely needs to read/write it directly and you accept it is fully exposed to any XSS on the page. Neither, ideally, for a large payload — cookies count against the ~4KB-per-cookie limit and get sent on EVERY request to that domain/path, wasting bandwidth; keep the cookie to an opaque session identifier and look up the real data server-side.' },
+    { q: 'A third-party embedded widget wants to set a cross-site-readable cookie?', a: 'It needs SameSite=None + Secure (the only combination a browser will accept for a cookie meant to travel in a cross-site/third-party context) — but plan for it not working at all in a growing number of browsers: Safari and Firefox block third-party cookies by default already, and Chrome has been phasing them out. The modern alternative for this exact case is the Partitioned attribute (CHIPS) — a cross-site cookie that is double-keyed per top-level site, meant to replace unrestricted third-party cookies for the legitimate widget/embed use case.' },
+  ];
+
+  // ===========================================================================
+  // Reference tab render (ported from header-reference)
+  // ===========================================================================
+
+  const refState = { search: '', category: 'all', openEntry: null };
+
+  function refMatches(t) {
+    if (refState.category !== 'all' && t.category !== refState.category) return false;
+    if (!refState.search) return true;
+    const q = refState.search.toLowerCase();
+    const hay = (t.name + ' ' + t.summary + ' ' + t.description.replace(/<[^>]+>/g, '')).toLowerCase();
+    return hay.includes(q);
+  }
+
+  function catInfo(key) { return THEORY_CATEGORIES.find((c) => c.key === key); }
+
+  function renderRefSidebar() {
+    const counts = {};
+    THEORY.forEach((t) => { counts[t.category] = (counts[t.category] || 0) + 1; });
+    let html = `<button class="cat-item${refState.category === 'all' ? ' active' : ''}" data-cat="all">
+        <span class="ic">📚</span><span class="lbl">All Categories</span><span class="cnt">${THEORY.length}</span>
+      </button><hr>`;
+    html += THEORY_CATEGORIES.map((c) => `
+      <button class="cat-item${refState.category === c.key ? ' active' : ''}" data-cat="${c.key}">
+        <span class="ic">${c.icon}</span><span class="lbl">${c.label}</span><span class="cnt">${counts[c.key] || 0}</span>
+      </button>`).join('');
+    $('refSidebar').innerHTML = html;
+    document.querySelectorAll('#refSidebar .cat-item').forEach((btn) => {
+      btn.addEventListener('click', () => { refState.category = btn.dataset.cat; renderRef(); });
+    });
+  }
+
+  function theoryCardHtml(t) {
+    const isOpen = refState.openEntry === t.name;
+    const relatedHtml = (t.related && t.related.length)
+      ? `<div class="entry-related">Related: ${t.related.map((r) => `<span class="related-link" data-jump="${escHtml(r)}">${escHtml(r)}</span>`).join('')}</div>` : '';
+    return `
+      <div class="entry${isOpen ? ' open' : ''}" data-theory="${escHtml(t.name)}" id="th-${escHtml(t.name)}">
+        <div class="entry-head" data-ttoggle="${escHtml(t.name)}">
+          <span class="entry-name">${escHtml(t.name)}</span>
+          <span class="entry-summary">${escHtml(t.summary)}</span>
+          <span class="chev">▶</span>
+        </div>
+        <div class="entry-body">
+          <p>${t.description}</p>
+          ${t.example ? `<div class="entry-example">${escHtml(t.example)}</div>` : ''}
+          ${t.spec ? `<div class="entry-meta">Spec: ${escHtml(t.spec)}</div>` : ''}
+          ${relatedHtml}
+        </div>
+      </div>`;
+  }
+
+  function renderRef() {
+    renderRefSidebar();
+    const filtered = THEORY.filter(refMatches);
+    $('refCount').textContent = `${filtered.length} of ${THEORY.length} entries shown`;
+    if (!filtered.length) { $('refResults').innerHTML = `<div class="no-results">No entries match your search.</div>`; return; }
+    const cats = refState.category === 'all' ? THEORY_CATEGORIES.map((c) => c.key) : [refState.category];
+    let html = '';
+    cats.forEach((catKey) => {
+      const inCat = filtered.filter((t) => t.category === catKey);
+      if (!inCat.length) return;
+      const c = catInfo(catKey);
+      html += `
+        <div class="cat-group">
+          <div class="cat-group-head"><h3>${c.icon} ${escHtml(c.label)}</h3><span class="cnt">${inCat.length}</span></div>
+          <div class="cat-group-desc">${escHtml(c.desc)}</div>
+          ${inCat.map(theoryCardHtml).join('')}
+        </div>`;
+    });
+    $('refResults').innerHTML = html;
+    document.querySelectorAll('[data-ttoggle]').forEach((el) => {
+      el.addEventListener('click', () => {
+        const name = el.dataset.ttoggle;
+        refState.openEntry = refState.openEntry === name ? null : name;
+        renderRef();
+        if (refState.openEntry === name) $('th-' + name)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      });
+    });
+    document.querySelectorAll('[data-jump]').forEach((el) => {
+      el.addEventListener('click', (e) => { e.stopPropagation(); jumpToTheory(el.dataset.jump); });
+    });
+  }
+
+  function jumpToTheory(name) {
+    if (!THEORY.some((t) => t.name === name)) return;
+    refState.search = ''; $('refSearch').value = '';
+    refState.category = 'all';
+    refState.openEntry = name;
+    renderRef();
+    requestAnimationFrame(() => {
+      const el = $('th-' + name);
+      if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1400); }
+    });
+  }
+
+  $('refSearch').addEventListener('input', (e) => { refState.search = e.target.value; renderRef(); });
+
+  function renderGuide(containerId, items) {
+    const el = $(containerId);
+    el.innerHTML = items.map((item, i) => `
+      <div class="qa-item" data-qidx="${i}">
+        <div class="qa-q" data-qtoggle="${i}"><span class="qmark">Q.</span> ${escHtml(item.q)}</div>
+        <div class="qa-a">${escHtml(item.a)}</div>
+      </div>`).join('');
+    el.querySelectorAll('[data-qtoggle]').forEach((q) => q.addEventListener('click', () => q.closest('.qa-item').classList.toggle('open')));
+  }
+
+  // ===========================================================================
+  // Init
+  // ===========================================================================
+
+  writeFormToDom();
+  render();
+  renderCurrentCookies();
+  renderConfigured();
+  renderExperiments();
+  renderGuide('cookieGuide', COOKIE_GUIDE);
+  renderRef();
+  startAutoRefresh();
+})();
+</script>
+</body>
+</html>

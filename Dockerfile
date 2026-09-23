@@ -51,11 +51,32 @@ COPY vlan-designer/ui/       ./vlan_designer/ui/
 COPY packet-journey/server.py ./packet_journey/server.py
 COPY packet-journey/ui/       ./packet_journey/ui/
 
+# cURL Builder (tool #7) — same namespacing pattern.
+COPY curl-builder/server.py ./curl_builder/server.py
+COPY curl-builder/ui/       ./curl_builder/ui/
+
+# HTTP Header Reference (tool #8) — same namespacing pattern.
+COPY header-reference/server.py ./header_reference/server.py
+COPY header-reference/ui/       ./header_reference/ui/
+
+# HTTP Methods & Status Codes (tool #9) — same namespacing pattern.
+COPY http-methods-status/server.py ./http_methods_status/server.py
+COPY http-methods-status/ui/       ./http_methods_status/ui/
+
+# Cookie Lab (tool #10) — same namespacing pattern.
+COPY cookie-lab/server.py ./cookie_lab/server.py
+COPY cookie-lab/ui/       ./cookie_lab/ui/
+
+# DataFrame Studio (tool #11) — same namespacing pattern, but copied as a
+# whole folder (not the usual two-line server.py + ui/ copy) because it has
+# extra backend modules (engine.py, steps.py) alongside server.py.
+COPY df-studio/ ./df_studio/
+
 COPY main.py .
 COPY registry.yaml .
 
 # Create empty __init__.py files so Python treats these as packages.
-RUN touch core/__init__.py api/__init__.py encode_decode/__init__.py subnet_calc/__init__.py dns_lookup/__init__.py vlan_designer/__init__.py packet_journey/__init__.py
+RUN touch core/__init__.py api/__init__.py encode_decode/__init__.py subnet_calc/__init__.py dns_lookup/__init__.py vlan_designer/__init__.py packet_journey/__init__.py curl_builder/__init__.py header_reference/__init__.py http_methods_status/__init__.py cookie_lab/__init__.py df_studio/__init__.py
 
 # --- Runtime config ----------------------------------------------------------
 # Tell Python not to write .pyc files and not to buffer stdout/stderr.
@@ -69,5 +90,14 @@ EXPOSE 8080
 # Start the toolbox app (main.py) with uvicorn — this is the one process
 # that serves the home page and every mounted tool.
 # --host 0.0.0.0  makes it reachable from outside the container.
-# --workers 2     handles two concurrent requests (plenty for a local tool).
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "2"]
+# --workers 1     MUST stay 1. DataFrame Studio keeps session state
+#                 (engine.SESSIONS) in an in-memory dict inside one process.
+#                 With >1 worker, uvicorn runs separate OS processes that
+#                 don't share memory, so a session created by one worker is
+#                 invisible to the other — the /load that created it and a
+#                 later /step can land on different workers and produce
+#                 "No active session" for what looks like no reason. Every
+#                 other tool here is stateless/client-side and wouldn't
+#                 care, but this one does. Don't raise this without giving
+#                 df-studio a real shared session store first.
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1"]

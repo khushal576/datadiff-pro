@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HTTP Methods &amp; Status Codes</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f4f6fb; --surface: #ffffff; --border: #dde1ef;
+    --text: #1c2035; --muted: #6b7180; --accent: #4f5ef0;
+    --ok-bg: rgba(21,128,61,0.10); --ok-text: #15803d;
+    --warn-bg: rgba(180,83,9,0.10); --warn-text: #b45309;
+    --err-bg: rgba(220,38,38,0.08); --err-text: #b91c1c;
+    --info-bg: rgba(79,94,240,0.10); --info-text: #4f5ef0;
+    --neutral-bg: rgba(107,113,128,0.12); --neutral-text: #6b7180;
+  }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; padding: 24px 20px 60px;
+  }
+  header { max-width: 980px; margin: 0 auto 18px; }
+  header h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.5px; }
+  header h1 span { color: var(--accent); }
+  header p { color: var(--muted); font-size: 0.85rem; margin-top: 2px; }
+
+  .wrap { max-width: 980px; margin: 0 auto; }
+
+  .seg { display: flex; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; width: fit-content; margin-bottom: 18px; }
+  .seg button { cursor: pointer; border: none; background: var(--surface); color: var(--muted);
+    font-size: 0.85rem; font-weight: 700; padding: 9px 20px; border-right: 1px solid var(--border); }
+  .seg button:last-child { border-right: none; }
+  .seg button.active { background: var(--accent); color: #fff; }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+
+  /* ── decision guide ── */
+  .guide-card summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.95rem; }
+  .guide-card summary::-webkit-details-marker { display: none; }
+  .guide-card .sub { font-size: 0.78rem; color: var(--muted); font-weight: 500; margin-top: 3px; margin-left: 26px; }
+  .qa { border-top: 1px solid var(--border); margin-top: 12px; padding-top: 4px; }
+  .qa-item { padding: 10px 0; border-bottom: 1px dashed var(--border); }
+  .qa-item:last-child { border-bottom: none; }
+  .qa-q { font-weight: 700; font-size: 0.85rem; cursor: pointer; display: flex; gap: 8px; align-items: baseline; }
+  .qa-q .qmark { color: var(--accent); flex: none; }
+  .qa-a { font-size: 0.83rem; line-height: 1.65; color: var(--text); margin-top: 6px; margin-left: 20px; display: none; }
+  .qa-item.open .qa-a { display: block; }
+  .qa-item.open .qa-q { color: var(--accent); }
+
+  /* ── controls ── */
+  input[type="text"] {
+    width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 9px 12px; font-size: 0.9rem; margin-bottom: 10px;
+  }
+  input[type="text"]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+  .chip { cursor: pointer; border: 1px solid var(--border); background: var(--bg); color: var(--muted);
+    border-radius: 20px; padding: 4px 12px; font-size: 0.76rem; font-weight: 700; }
+  .chip:hover { border-color: var(--accent); }
+  .chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .result-count { font-size: 0.78rem; color: var(--muted); margin: 6px 0 14px; }
+
+  /* ── entry cards (methods + status codes) ── */
+  .entry { background: var(--surface); border: 1px solid var(--border); border-radius: 9px; margin-bottom: 8px; overflow: hidden; }
+  .entry-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; cursor: pointer; flex-wrap: wrap; }
+  .entry-head:hover { background: var(--bg); }
+  .entry-name { font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace; font-weight: 700; font-size: 0.92rem; flex: none; }
+  .entry-summary { font-size: 0.8rem; color: var(--muted); flex: 1; min-width: 160px; }
+  .badge { flex: none; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; border-radius: 5px; padding: 2px 7px; }
+  .badge.b-ok { background: var(--ok-bg); color: var(--ok-text); }
+  .badge.b-warn { background: var(--warn-bg); color: var(--warn-text); }
+  .badge.b-err { background: var(--err-bg); color: var(--err-text); }
+  .badge.b-info { background: var(--info-bg); color: var(--info-text); }
+  .badge.b-neutral { background: var(--neutral-bg); color: var(--neutral-text); }
+  .chev { flex: none; color: var(--muted); font-size: 0.7rem; transition: transform 0.15s; margin-left: auto; }
+  .entry.open .chev { transform: rotate(90deg); }
+  .entry-body { display: none; padding: 0 14px 16px; border-top: 1px solid var(--border); }
+  .entry.open .entry-body { display: block; padding-top: 12px; }
+  .entry-body h4 { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin: 14px 0 6px; }
+  .entry-body h4:first-child { margin-top: 0; }
+  .entry-body p { font-size: 0.84rem; line-height: 1.65; }
+  .entry-body ul { margin: 4px 0 0 18px; font-size: 0.83rem; line-height: 1.65; }
+  .example-item { background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 9px 11px; margin-bottom: 7px; }
+  .example-item .ex-title { font-weight: 700; font-size: 0.8rem; margin-bottom: 3px; }
+  .example-item .ex-req { font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace; font-size: 0.76rem;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: 6px 8px; white-space: pre-wrap; word-break: break-word; margin-bottom: 5px; }
+  .example-item .ex-note { font-size: 0.78rem; color: var(--muted); line-height: 1.55; }
+  .compare-box { background: var(--info-bg); color: var(--text); border-radius: 7px; padding: 9px 11px; font-size: 0.8rem; line-height: 1.6; margin-top: 10px; }
+  .compare-box b { color: var(--info-text); }
+
+  .cat-group-head { font-size: 1rem; font-weight: 700; margin: 22px 0 10px; display: flex; align-items: center; gap: 8px; }
+  .cat-group-head:first-child { margin-top: 0; }
+  .cat-group-head .cnt { font-size: 0.72rem; color: var(--muted); font-weight: 500; }
+  .no-results { font-size: 0.85rem; color: var(--muted); background: var(--surface); border: 1px dashed var(--border); border-radius: 10px; padding: 24px; text-align: center; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>HTTP Methods &amp; <span>Status Codes</span></h1>
+  <p>Plain-word meaning, multiple real examples, edge cases, and an architect's decision guide for which one to actually use</p>
+</header>
+
+<div class="wrap">
+  <div class="seg" id="topTabs">
+    <button data-tab="methods" class="active">Methods</button>
+    <button data-tab="status">Status Codes</button>
+  </div>
+
+  <!-- ══════════════════════════ METHODS TAB ══════════════════════════ -->
+  <div class="panel active" id="panel-methods">
+    <details class="card guide-card" open>
+      <summary>🧭 Decision Guide — "which method do I use?"
+        <div class="sub">Common real-world dilemmas, answered the way an architect would explain it</div>
+      </summary>
+      <div class="qa" id="methodGuide"></div>
+    </details>
+
+    <input type="text" id="methodSearch" placeholder="Search methods — e.g. &quot;idempotent&quot;, &quot;upload&quot;, &quot;delete&quot;…">
+    <div class="result-count" id="methodCount"></div>
+    <div id="methodResults"></div>
+  </div>
+
+  <!-- ══════════════════════════ STATUS CODES TAB ══════════════════════════ -->
+  <div class="panel" id="panel-status">
+    <details class="card guide-card" open>
+      <summary>🧭 Decision Guide — "which status code do I return?"
+        <div class="sub">The comparisons that actually come up when designing an API — 401 vs 403, 301 vs 308, 500 vs 502, and more</div>
+      </summary>
+      <div class="qa" id="statusGuide"></div>
+    </details>
+
+    <input type="text" id="statusSearch" placeholder="Search status codes — e.g. &quot;409&quot;, &quot;redirect&quot;, &quot;rate limit&quot;…">
+    <div class="chip-row" id="classChips"></div>
+    <div class="result-count" id="statusCount"></div>
+    <div id="statusResults"></div>
+  </div>
+</div>
+
+<script>
+// =============================================================================
+// DATA — methods, status codes, and the two decision guides. Everything below
+// this block is just search/filter/render over these arrays.
+// =============================================================================
+
+const METHODS = [
+  { name: 'GET', safe: true, idempotent: true, cacheable: true, body: 'Discouraged',
+    simple: "Ask the server for a copy of a resource — you're reading, not changing anything.",
+    whenToUse: "Any time the client wants to retrieve data and asking has no side effects: loading a page, fetching a list, checking a single record, searching by query string. If calling it five times in a row should be completely harmless, it's a GET.",
+    examples: [
+      { title: 'Fetch a single resource', req: 'GET /api/users/42 HTTP/1.1\nHost: api.example.com\nAccept: application/json', note: 'Standard read-by-ID.' },
+      { title: 'List with filters via query string', req: 'GET /api/orders?status=pending&page=2&limit=20 HTTP/1.1\nHost: api.example.com', note: 'Filtering/pagination belongs in the query string, not a body — keeps the request cacheable and bookmarkable.' },
+      { title: 'Conditional GET (cache revalidation)', req: 'GET /api/users/42 HTTP/1.1\nHost: api.example.com\nIf-None-Match: "abc123"', note: 'Server replies 304 Not Modified with no body if nothing changed — saves bandwidth.' },
+      { title: "A GET that looks safe but isn't (anti-pattern)", req: 'GET /api/users/42/delete HTTP/1.1', note: "A GET that deletes data is a real, well-known bug class — crawlers and prefetchers will 'click' GET links, silently destroying data. Never put a mutation behind a GET." },
+    ],
+    edgeCases: [
+      'A GET CAN technically carry a body per the HTTP spec, but many servers, proxies, and client libraries silently drop it — never design an API that requires a GET body.',
+      'Very long query strings can hit URL-length limits (commonly ~2000-8000 chars across browsers/proxies) — switch designs (or pragmatically use POST) if a filter payload is genuinely huge.',
+      'Caching is opt-out, not opt-in: a GET response CAN be cached by default unless you explicitly say Cache-Control: no-store — say so explicitly for sensitive/user-specific data.',
+    ],
+    bestPractices: [
+      'Never perform a write, delete, email, or charge behind a GET.',
+      'Put all filtering/sorting/pagination in the query string so the request stays cacheable and shareable as a URL.',
+      'Support conditional requests (ETag/If-None-Match) for anything expensive to regenerate.',
+    ],
+    commonMistakes: [
+      "Building 'delete via GET' links for convenience — bots and browsers will pre-fetch/crawl them and delete data unintentionally.",
+      'Returning different data for the same GET URL without saying so via Vary or Cache-Control — breaks caching assumptions clients and proxies rely on.',
+    ] },
+  { name: 'HEAD', safe: true, idempotent: true, cacheable: true, body: 'No',
+    simple: 'Exactly like GET, but the server sends only the headers — no body at all.',
+    whenToUse: 'When you need to know something ABOUT a resource — does it exist, how big is it, has it changed — without downloading it.',
+    examples: [
+      { title: 'Check existence before downloading', req: 'HEAD /files/report.pdf HTTP/1.1\nHost: files.example.com', note: '200 with Content-Length and ETag, but no body — confirm the file exists and its size before committing to a full download.' },
+      { title: 'Validate before a resumable download', req: 'HEAD /files/large-video.mp4 HTTP/1.1', note: 'Check Accept-Ranges and Content-Length upfront so a download manager knows resuming is possible.' },
+      { title: 'Bulk link/health checker', req: 'HEAD /page-1234 HTTP/1.1', note: 'A crawler verifying thousands of links return 200 without downloading each full page body — far cheaper than GET at scale.' },
+    ],
+    edgeCases: [
+      "HEAD's response headers MUST be identical to what GET would return for the same resource (same Content-Length, ETag, etc.) — a server that computes these differently for HEAD is spec-non-compliant.",
+      'Some frameworks auto-generate HEAD by running the GET handler and dropping the body — convenient, but means it costs the same server work as GET unless implemented separately.',
+    ],
+    bestPractices: ['Implement it as "run the GET logic, skip sending the body" so headers always match reality.', 'Use it for existence/metadata checks instead of a wasteful full GET.'],
+    commonMistakes: ['Returning different Content-Length or status than GET would for the same resource.', "Forgetting to implement it at all in a hand-rolled router (most frameworks add it automatically, but not all)."] },
+  { name: 'POST', safe: false, idempotent: false, cacheable: false, body: 'Yes',
+    simple: "Submit something to be processed — usually 'create a new thing' or 'do an action', and the outcome depends on the server.",
+    whenToUse: "Creating a resource whose URL you don't control yet, non-idempotent actions (send an email, charge a payment, trigger a job), or anything that doesn't cleanly map to GET/PUT/DELETE.",
+    examples: [
+      { title: 'Create a new resource', req: 'POST /api/orders HTTP/1.1\nContent-Type: application/json\n\n{"item":"widget","qty":3}', note: '-> 201 Created, Location: /api/orders/789 — the server assigns the ID.' },
+      { title: 'Trigger a non-CRUD action (RPC-style)', req: 'POST /api/orders/789/cancel HTTP/1.1', note: "No resource is being created here — this is an action/verb endpoint, and that's a legitimate use of POST." },
+      { title: 'Login', req: 'POST /api/login HTTP/1.1\n\n{"username":"ada","password":"..."}', note: 'Creates a session/token — inherently feels non-idempotent even though technically repeatable.' },
+      { title: "Complex search that doesn't fit in a URL", req: 'POST /api/search/advanced HTTP/1.1\n\n{"filters": {...50 fields...}}', note: 'A pragmatic exception to "search = GET" when the filter payload is too large/complex for a query string.' },
+    ],
+    edgeCases: [
+      "POST is NOT idempotent by spec, and clients/proxies will NOT automatically retry a failed POST the way they retry a GET/PUT/DELETE — a flaky network can leave the client unsure whether it succeeded, leading to accidental double-submits (the classic 'double-charge on refresh' bug).",
+      "Write POST handlers with real-world side effects (payments especially) to be idempotent anyway via a client-supplied Idempotency-Key, even though the method itself doesn't guarantee it.",
+      "A 'search via POST' endpoint isn't cacheable by default and isn't bookmarkable — use it only when GET genuinely can't carry the payload.",
+    ],
+    bestPractices: ['Return 201 Created + Location when a POST creates a resource.', 'Support an Idempotency-Key header for POSTs with real side effects so a retry never double-executes.', "Reserve POST for creation and actions that don't fit PUT/PATCH/DELETE."],
+    commonMistakes: ['Using POST for every write (including updates/deletes) instead of the more specific PUT/PATCH/DELETE — throws away idempotency guarantees you get for free otherwise.', 'Not protecting payment/order-creation endpoints against duplicate submission from a double-click or retry.'] },
+  { name: 'PUT', safe: false, idempotent: true, cacheable: false, body: 'Yes',
+    simple: "Replace a resource entirely with what you're sending — or create it at that exact URL if it doesn't exist yet.",
+    whenToUse: "When the CLIENT knows/controls the resource's URL and is sending the COMPLETE representation, not a partial update. Classic use: 'upload this to exactly this path,' 'set this config key to exactly this value.'",
+    examples: [
+      { title: 'Full replace of an existing resource', req: 'PUT /api/users/42 HTTP/1.1\n\n{"name":"Ada","email":"ada@example.com","role":"admin"}', note: '-> 200/204. Any field you omit is treated as cleared, not left alone — this is a full replace.' },
+      { title: 'Create at a client-chosen URL', req: "PUT /api/documents/report-2026 HTTP/1.1", note: "-> 201 Created if it didn't exist before — the client picked the slug, not the server." },
+      { title: 'Idempotent retry after a timeout', req: 'PUT /api/users/42 (same body, sent twice)', note: "Network times out before the response arrives; the client safely retries the EXACT same PUT — because it's idempotent, sending it twice produces the same end state, unlike POST." },
+      { title: 'Uploading a file to a known path (object storage style)', req: 'PUT /files/avatar.png HTTP/1.1\nContent-Type: image/png\n\n<binary>', note: 'S3-style object storage APIs use PUT exactly this way.' },
+    ],
+    edgeCases: [
+      "PUT means REPLACE, not merge — a PUT handler that only updates fields present in the body and leaves the rest alone is actually PATCH semantics wearing a PUT name.",
+      'Because PUT is idempotent by definition, a server with any side effect that differs between the first and a repeated identical PUT (e.g. incrementing a counter every call) violates the contract and breaks safe automatic retries.',
+      'A PUT to a not-yet-existing URL is allowed to create it (201) — but only works when the client is the one deciding the URL/ID.',
+    ],
+    bestPractices: ['Require the full resource representation — if your server actually merges partial bodies, call that endpoint PATCH instead.', 'Return 201 when it created a resource, 200/204 when it replaced one.', "Support If-Match with the resource's ETag for safe concurrent-write conflict detection."],
+    commonMistakes: ['Implementing PUT as a partial update (merge) — breaks the idempotency guarantee clients rely on.', "Letting PUT create resources with server-generated IDs — if the server picks the ID, that's POST's job."] },
+  { name: 'PATCH', safe: false, idempotent: 'Usually, not guaranteed', cacheable: false, body: 'Yes',
+    simple: 'Apply a partial update — change only the fields you send, leave everything else alone.',
+    whenToUse: "Updating just one or two fields of a larger resource without re-sending the whole thing — e.g. 'mark this order as shipped' without resubmitting the entire order.",
+    examples: [
+      { title: 'Simple field update (JSON Merge Patch style)', req: 'PATCH /api/users/42 HTTP/1.1\nContent-Type: application/merge-patch+json\n\n{"email":"new@example.com"}', note: 'Only the email field changes — everything else on the user stays exactly as it was.' },
+      { title: 'JSON Patch (RFC 6902) — explicit operations', req: 'PATCH /api/orders/789 HTTP/1.1\nContent-Type: application/json-patch+json\n\n[{"op":"replace","path":"/status","value":"shipped"}]', note: 'More expressive — supports add/remove/replace/move/test against exact paths.' },
+      { title: 'A non-idempotent patch (edge case worth knowing)', req: 'PATCH /api/posts/5 HTTP/1.1\n\n{"op":"increment","field":"viewCount"}', note: 'Sending this twice produces a DIFFERENT result each time — PATCH is often assumed idempotent, but this proves that assumption is false unless you design against it.' },
+    ],
+    edgeCases: [
+      "Unlike PUT, PATCH is NOT guaranteed idempotent — whether a given patch is safe to retry depends entirely on what the patch document says. Prefer 'set field to value' over 'increment/append' to keep retries safe.",
+      "Two common, incompatible PATCH formats exist in the wild — JSON Merge Patch (RFC 7396, a partial object) and JSON Patch (RFC 6902, a list of operations) — document which one your API uses.",
+      "RFC 7396's Merge Patch defines null as 'remove this field' — surprises people expecting null to mean 'set the value to null.'",
+    ],
+    bestPractices: ['Pick one patch format and document it clearly.', "Design operations to be idempotent where possible (absolute 'set', not relative 'increment').", 'Support If-Match for concurrent-write safety, same as PUT.'],
+    commonMistakes: ["Assuming PATCH is automatically safe to retry the way PUT is — it isn't unless you designed it that way.", "Silently accepting fields the client didn't intend to touch because of a badly implemented merge."] },
+  { name: 'DELETE', safe: false, idempotent: true, cacheable: false, body: 'Optional, uncommon',
+    simple: 'Remove the resource at this URL.',
+    whenToUse: "Deleting a specific, identified resource — a user, an order, a file. The classic REST 'D' in CRUD.",
+    examples: [
+      { title: 'Delete a specific resource', req: 'DELETE /api/orders/789 HTTP/1.1', note: '-> 204 No Content.' },
+      { title: 'Idempotent retry (delete already done)', req: 'DELETE /api/orders/789 HTTP/1.1 (sent twice)', note: "First call succeeds but the response is lost to a network error; client retries. Spec-correct behavior: still a success-shaped response (204 or 404), NOT a 500 — that's what makes DELETE idempotent." },
+      { title: 'Soft-delete vs hard-delete (architecture decision)', req: 'DELETE /api/users/42', note: 'The HTTP method only dictates the client-facing contract ("no longer available at this URL") — whether the implementation is a real row deletion or a deleted_at=now() soft delete is an internal decision.' },
+    ],
+    edgeCases: [
+      '"Idempotent" for DELETE means calling it N times has the same net EFFECT (resource gone), not the identical status code every time — 204 on first success, 404 on a retry are both fine; an ERROR (like 500) purely because it was already deleted would violate idempotency.',
+      "A DELETE body is technically legal but poorly/inconsistently supported by proxies and client libraries — don't rely on it.",
+      'Bulk delete-by-filter (DELETE /api/orders?status=cancelled) is a common but non-standard extension — dangerous and easy to fat-finger; guard it well.',
+    ],
+    bestPractices: ['Return 204 on success, or 200 with the final deleted state if useful to the client.', "Treat 'delete something already deleted' as success or a soft 404, not a hard error.", 'Require extra confirmation/auth for bulk-delete-by-filter endpoints.'],
+    commonMistakes: ['Returning 500 when DELETE is called twice on the same resource — defeats the entire point of idempotency and makes safe retries impossible.', 'Designing a server so a retried DELETE causes real damage on the second call.'] },
+  { name: 'OPTIONS', safe: true, idempotent: true, cacheable: 'Preflight cacheable via Access-Control-Max-Age', body: 'No (usually)',
+    simple: "Ask the server what you're even allowed to do with this resource, without doing anything yet.",
+    whenToUse: '(1) CORS preflight — the browser sends this automatically before a non-simple cross-origin request; (2) API discovery — asking what methods an endpoint supports, with no side effects.',
+    examples: [
+      { title: 'Browser-issued CORS preflight (automatic — you never write this by hand)', req: 'OPTIONS /api/orders HTTP/1.1\nOrigin: https://app.example.com\nAccess-Control-Request-Method: DELETE', note: 'Server replies with Access-Control-Allow-Methods/Headers/Origin; only if the browser is satisfied does it send the real DELETE.' },
+      { title: 'Manual API discovery', req: 'OPTIONS /api/orders/789 HTTP/1.1', note: '-> 204 No Content, Allow: GET, PUT, DELETE — tells a developer/client exactly what this specific resource supports.' },
+      { title: 'Server-wide OPTIONS (asterisk-form)', req: 'OPTIONS * HTTP/1.1', note: 'Asks about the server itself, not a specific resource — rarely used outside proxy diagnostics.' },
+    ],
+    edgeCases: [
+      "You almost never hand-write OPTIONS handling for CORS — framework CORS middleware handles the preflight response; hand-rolling it is a common source of subtly broken CORS.",
+      "The Allow header should be authoritative — if it says GET, PUT but DELETE is also silently accepted, that mismatch breaks well-behaved clients doing capability discovery.",
+    ],
+    bestPractices: ["Let your framework's CORS middleware own preflight responses.", 'Keep Allow accurate and in sync with what methods are actually implemented.'],
+    commonMistakes: ["Not realizing a cross-origin request with a custom header or non-simple method (PUT/DELETE/PATCH) triggers an automatic preflight OPTIONS BEFORE your real request — if the server answers it wrong, the real request never fires, which looks like 'my API call does nothing' in the console."] },
+  { name: 'TRACE', safe: true, idempotent: true, cacheable: false, body: 'No',
+    simple: 'Ask the server to echo back exactly what request it received — a diagnostic loopback, not something apps use.',
+    whenToUse: 'Debugging what a request looks like after passing through proxies that might have altered it. In practice: essentially never used, and usually disabled entirely.',
+    examples: [
+      { title: 'Diagnosing proxy rewriting (rare, ops-only)', req: 'TRACE / HTTP/1.1\nX-Custom-Header: test', note: 'If enabled, the response body echoes the exact request as the server received it — reveals whether an intermediate proxy modified/stripped/added headers.' },
+    ],
+    edgeCases: [
+      "TRACE is the mechanism behind Cross-Site Tracing (XST), a historical attack combining TRACE with XSS to read HttpOnly cookies (which JavaScript normally can't touch) by getting the browser to TRACE a request and read the echoed cookie header back from the response body. Virtually every production server disables TRACE by default today because of this.",
+      "Because of XST, security scanners flag an enabled TRACE as a finding even though the method is formally 'safe' — safe/idempotent is about server-side side effects, not about whether a method enables a larger attack chain.",
+    ],
+    bestPractices: ['Leave TRACE disabled in production unless you have an explicit, temporary operational reason to enable it for proxy debugging.'],
+    commonMistakes: ["Enabling TRACE 'just in case' on a public server — essentially no legitimate application use, and a well-documented attack technique attached to it."] },
+  { name: 'CONNECT', safe: false, idempotent: false, cacheable: false, body: 'No',
+    simple: 'Ask a proxy to open a raw, tunneled connection to somewhere else — used to establish HTTPS through an HTTP proxy.',
+    whenToUse: "You don't call this in application code — your HTTP client library issues it automatically when making an HTTPS request through an HTTP proxy.",
+    examples: [
+      { title: 'HTTPS through a corporate/forward proxy (automatic)', req: 'CONNECT api.example.com:443 HTTP/1.1', note: 'Proxy replies 200 Connection Established, then the client performs a normal TLS handshake directly with the target through that now-transparent tunnel.' },
+    ],
+    edgeCases: [
+      "Once a CONNECT tunnel is established, the proxy can no longer see or filter what flows through it — that's the point, it's encrypted TLS traffic. This is exactly why proxies needing to inspect HTTPS traffic (some corporate security appliances) do TLS-terminating MITM instead, which brings its own certificate-trust complications.",
+      "An open/misconfigured proxy accepting CONNECT to arbitrary hosts:ports is a classic way to turn it into a general-purpose network pivot/SSRF tool.",
+    ],
+    bestPractices: ['If you operate a forward proxy, restrict CONNECT to expected ports (443) and consider host allowlisting to prevent SSRF-style abuse.'],
+    commonMistakes: ['Running an open proxy that accepts CONNECT to any host:port with no restriction — a significant, well-known abuse vector.'] },
+];
+
+const METHOD_GUIDE = [
+  { q: 'Updating a resource — PUT or PATCH?', a: "Sending the ENTIRE resource, fine with missing fields being cleared? Use PUT. Sending just the field(s) that changed, everything else stays untouched? Use PATCH. When in doubt, PATCH is usually the safer default for a public API, since clients naturally want to change one thing at a time." },
+  { q: 'Fetching data with a huge or sensitive filter — GET with query string, or POST?', a: "Prefer GET with a query string — it's cacheable, bookmarkable, and matches HTTP semantics. Switch to a pragmatic POST-as-search only when the filter payload is genuinely too large/complex for a URL. A POST body isn't inherently 'more secure' over an unencrypted connection — always use HTTPS regardless." },
+  { q: 'Creating a resource — does the client or the server decide the ID/URL?', a: 'Server decides the ID (auto-increment, UUID) → POST to a collection (POST /orders), server responds 201 with Location. Client decides the exact URL/slug (like an S3 object key) → PUT to that exact URL (PUT /files/avatar.png).' },
+  { q: "An operation doesn't map to Create/Read/Update/Delete at all (e.g. \"cancel order\", \"send invoice\") — what method?", a: "POST, as an action/RPC-style endpoint (POST /orders/789/cancel). Forcing every action into PUT/PATCH/DELETE just to look 'more RESTful' usually produces a worse, less honest API than a clearly-named POST action." },
+  { q: 'Is it safe to let my HTTP client automatically retry a failed request?', a: 'Blind automatic retries are safe for GET/HEAD/PUT/DELETE/OPTIONS (all idempotent) but NOT for POST or an arbitrary PATCH — for those, either skip auto-retry or use a server-side Idempotency-Key to deduplicate.' },
+];
+
+const STATUS_CODES = [
+  // ── 1xx Informational ──
+  { code: 100, name: '100 Continue', cls: '1xx', meaning: 'The server got your headers and you should go ahead and send the body.',
+    whenToReturn: "Send automatically (most frameworks handle it) when a client sends Expect: 100-continue and you're willing to accept the body — lets the client avoid uploading a large body to a request you'd reject anyway.",
+    examples: [{ title: 'Large file upload preflight', note: 'Client sends headers with Expect: 100-continue; server checks auth/size limits first, replies 100 Continue if fine, client then streams the (large) body.' }] },
+  { code: 101, name: '101 Switching Protocols', cls: '1xx', meaning: 'The server agrees to switch to the protocol you asked for in the Upgrade header.',
+    whenToReturn: 'Automatically sent when accepting a WebSocket handshake or an HTTP/1.1→HTTP/2 cleartext upgrade.',
+    examples: [{ title: 'WebSocket handshake', note: 'Client sends Upgrade: websocket + Connection: Upgrade; server replies 101 and the connection now speaks WebSocket.' }] },
+  { code: 103, name: '103 Early Hints', cls: '1xx', meaning: "Here are some headers (like which assets to preload) before the final response is ready — it's still coming.",
+    whenToReturn: 'When the final response takes a while but you already know some resources (CSS/fonts) the page will need, so the browser can start fetching them early.',
+    examples: [{ title: 'Preloading page assets', note: 'Server sends 103 with Link: </style.css>; rel=preload while still computing the page, then sends the real 200 with the full response.' }] },
+
+  // ── 2xx Success ──
+  { code: 200, name: '200 OK', cls: '2xx', meaning: "It worked, here's the result.",
+    whenToReturn: 'The default success response for GET/PUT/PATCH (and sometimes POST) when there is a body to return.',
+    examples: [
+      { title: 'Successful GET', note: 'GET /api/users/42 -> 200 with the user JSON.' },
+      { title: 'Successful update with a body to return', note: 'PUT /api/users/42 -> 200 with the updated user object.' },
+      { title: 'Action endpoint with a result', note: 'POST /api/orders/789/cancel -> 200 with {"status":"cancelled"} — an action, not a creation, so 201 would be wrong here.' },
+    ], compare: 'vs 201/204 — see the decision guide below.' },
+  { code: 201, name: '201 Created', cls: '2xx', meaning: 'Your request created a new resource, and here is where to find it.',
+    whenToReturn: 'After a successful POST (or a PUT to a not-yet-existing URL) that creates something — should come with a Location header.',
+    examples: [
+      { title: 'Creating via POST to a collection', note: 'POST /api/orders -> 201 Created, Location: /api/orders/789, body is the new order.' },
+      { title: 'Creating via PUT to a client-chosen URL', note: "PUT /files/avatar.png (didn't exist before) -> 201 Created." },
+    ] },
+  { code: 202, name: '202 Accepted', cls: '2xx', meaning: "I took your request, but haven't finished (or even started) processing it yet.",
+    whenToReturn: 'For async/queued work — the actual processing happens later. Often paired with a Location/status URL the client can poll.',
+    examples: [
+      { title: 'Queued background job', note: 'POST /api/reports/generate -> 202 Accepted, Location: /api/reports/jobs/55 — client polls that URL for completion.' },
+      { title: 'Async bulk delete', note: 'DELETE /api/orders?status=stale -> 202 if the deletion is actually handled by a background sweep, not synchronously.' },
+    ] },
+  { code: 203, name: '203 Non-Authoritative Information', cls: '2xx', meaning: 'A 200-equivalent response, but the info came through a transforming proxy, not unmodified straight from the origin.',
+    whenToReturn: 'Rare — a proxy/gateway that modifies the response before passing it on can use this instead of silently claiming it is the untouched origin response.',
+    examples: [{ title: 'Proxy-modified content', note: 'A caching/transforming proxy resizes images before forwarding, marking the response 203 instead of 200 to be transparent about the modification.' }] },
+  { code: 204, name: '204 No Content', cls: '2xx', meaning: 'It worked, and there is genuinely nothing to send back.',
+    whenToReturn: "Successful DELETE, successful PUT/PATCH when you don't want to echo the resource back, or any action that succeeds with no meaningful body.",
+    examples: [
+      { title: 'Successful delete', note: 'DELETE /api/orders/789 -> 204, empty body.' },
+      { title: 'Update with no need to echo the result', note: "PUT /api/settings/theme -> 204 if the client already knows what it sent." },
+    ] },
+  { code: 205, name: '205 Reset Content', cls: '2xx', meaning: 'Like 204, but also telling the client UI to reset itself (e.g. clear a form) after this.',
+    whenToReturn: 'Rare — mostly meaningful for a browser-rendered form: server processed the submission and tells the browser to reset the form fields.',
+    examples: [{ title: 'Form reset after submission', note: 'A traditional (non-JS) HTML form POSTs; server replies 205 to clear the fields instead of re-rendering them.' }] },
+  { code: 206, name: '206 Partial Content', cls: '2xx', meaning: "Here's the specific byte range you asked for, not the whole resource.",
+    whenToReturn: 'Response to a Range request — video/audio seeking, resumable downloads.',
+    examples: [
+      { title: 'Resuming an interrupted download', note: 'Range: bytes=1000000- -> 206 with Content-Range: bytes 1000000-4999999/5000000, sending only the remaining bytes.' },
+      { title: 'Video seeking', note: 'A browser video player sends Range requests as the user scrubs the timeline; the server responds 206 for each chunk.' },
+    ] },
+
+  // ── 3xx Redirection ──
+  { code: 300, name: '300 Multiple Choices', cls: '3xx', meaning: "There are several possible representations of what you asked for, and I'm not automatically picking one.",
+    whenToReturn: 'Rare — genuinely ambiguous content negotiation where the server wants the client to choose.',
+    examples: [{ title: 'Ambiguous format request', note: 'A request for /report could mean .pdf, .csv, or .html and the server cannot reliably infer which — responds 300 with a list of links instead of guessing.' }] },
+  { code: 301, name: '301 Moved Permanently', cls: '3xx', meaning: "This resource's URL has changed for good — update your bookmarks/links.",
+    whenToReturn: "A permanent URL change where clients possibly changing a POST to a GET on redirect is acceptable (historically common behavior, though not spec-mandated). For guaranteed method/body preservation, prefer 308.",
+    examples: [
+      { title: 'Old URL scheme retired', note: 'GET /old-product-page -> 301 Location: /products/new-product-page — permanently, update your links.' },
+      { title: 'Non-www to www, enforced site-wide', note: 'GET http://example.com/ -> 301 Location: https://www.example.com/' },
+    ], compare: '<b>vs 308</b> — 301 has historically ambiguous method-preservation behavior across clients; 308 is the unambiguous modern choice when the method/body must survive the redirect.' },
+  { code: 302, name: '302 Found', cls: '3xx', meaning: 'This resource is temporarily somewhere else right now.',
+    whenToReturn: "A temporary redirect where the method might change to GET (historically). This is the most misused code in HTTP — long used to mean 'POST succeeded, go look at this other page' when 303 is the correct code for that.",
+    examples: [
+      { title: 'Temporary maintenance redirect', note: 'GET /checkout -> 302 Location: /maintenance while a specific feature is temporarily down.' },
+      { title: "Legacy 'redirect after POST' (imprecise but common)", note: 'POST /login -> 302 Location: /dashboard — works because browsers convert to GET on 302 almost universally, but 303 states the intent unambiguously.' },
+    ], compare: "<b>vs 303/307</b> — 302's method-preservation behavior is technically inconsistent across old clients; use 303 for 'GET this other page after my POST' and 307 for 'temporarily redirected, keep the same method/body.'" },
+  { code: 303, name: '303 See Other', cls: '3xx', meaning: 'Go look at this OTHER resource, using GET, regardless of what method you used for this request.',
+    whenToReturn: 'The correct code for the Post/Redirect/Get pattern — after a successful POST, redirect to a GET-able page so a refresh does not resubmit the form.',
+    examples: [{ title: 'Post/Redirect/Get after form submission', note: 'POST /orders -> 303 Location: /orders/789 — browser does a GET for /orders/789; refresh now safely re-GETs instead of re-POSTing.' }] },
+  { code: 304, name: '304 Not Modified', cls: '3xx', meaning: 'You already have the latest version — here is confirmation, no body.',
+    whenToReturn: 'Response to a conditional GET (If-None-Match / If-Modified-Since) when the resource has not changed.',
+    examples: [{ title: 'Cache revalidation', note: 'GET with If-None-Match: "abc123" where the current ETag is still "abc123" -> 304, empty body, client reuses its cached copy.' }] },
+  { code: 305, name: '305 Use Proxy', cls: '3xx', meaning: 'You must access this resource through the specified proxy.',
+    whenToReturn: 'Never — deprecated for security reasons (could route sensitive traffic through an attacker-specified proxy) and unsupported by modern browsers.',
+    examples: [] },
+  { code: 307, name: '307 Temporary Redirect', cls: '3xx', meaning: 'Temporarily somewhere else — and unlike 302, you MUST resend the exact same method and body.',
+    whenToReturn: 'A temporary redirect where preserving the method matters — e.g. redirecting a POST/PUT temporarily without silently downgrading it to GET.',
+    examples: [{ title: 'Temporarily redirecting a write', note: 'POST /api/v1/orders -> 307 Location: /api/v2/orders during a migration — the POST body is guaranteed to be resent as a POST.' }] },
+  { code: 308, name: '308 Permanent Redirect', cls: '3xx', meaning: 'Permanently somewhere else — and the method/body must stay exactly the same.',
+    whenToReturn: "The modern, unambiguous choice for 'this moved for good' whenever the request isn't a plain GET, or you want zero ambiguity about method preservation.",
+    examples: [{ title: 'API version retired permanently', note: 'Any method to /api/v1/* -> 308 Location: /api/v2/* — clients keep using whatever method/body they originally sent.' }],
+    compare: '<b>vs 301</b> — same permanence, but 308 guarantees the method/body are preserved on redirect.' },
+
+  // ── 4xx Client Error ──
+  { code: 400, name: '400 Bad Request', cls: '4xx', meaning: "I can't even understand this request — it's malformed.",
+    whenToReturn: 'Broken JSON, wrong data type, a required field missing entirely, an unparseable query parameter — syntactically wrong, independent of business rules.',
+    examples: [
+      { title: 'Malformed JSON body', note: "POST with a body that isn't valid JSON at all -> 400, 'could not parse request body.'" },
+      { title: 'Wrong type', note: '{"age": "twenty"} where age must be a number -> 400.' },
+      { title: 'Missing required field', note: 'Creating a user with no email field at all -> 400.' },
+    ], compare: 'vs 422 — see the decision guide below.' },
+  { code: 401, name: '401 Unauthorized', cls: '4xx', meaning: "I don't know who you are (or your credentials are invalid/expired) — misleadingly named, it actually means UNAUTHENTICATED.",
+    whenToReturn: 'No credentials were sent, or the ones sent are invalid/expired. Always pair with a WWW-Authenticate header.',
+    examples: [
+      { title: 'Missing token', note: 'GET /api/profile with no Authorization header at all -> 401.' },
+      { title: 'Expired token', note: 'A valid-looking but expired JWT -> 401, prompting the client to refresh/re-login.' },
+    ], compare: 'vs 403 — see the decision guide below.' },
+  { code: 402, name: '402 Payment Required', cls: '4xx', meaning: 'Reserved for future use by the original spec — in practice now used informally by some APIs for billing/paywall situations.',
+    whenToReturn: "Not standardized behavior; some usage-metered APIs use it for 'plan limit hit, pay to continue' — document it clearly if you use it this way.",
+    examples: [{ title: 'Paywall / usage-based billing block', note: 'An API metering usage per plan might return 402 once a hard billing limit is hit, distinct from a 429 rate limit.' }] },
+  { code: 403, name: '403 Forbidden', cls: '4xx', meaning: "I know exactly who you are — you're just not allowed to do this.",
+    whenToReturn: 'The user is authenticated but lacks permission for this specific action/resource.',
+    examples: [
+      { title: 'Insufficient role', note: 'A logged-in non-admin calling DELETE /api/admin/users/9 -> 403.' },
+      { title: 'Resource-level ownership check', note: "User A trying to view User B's private order -> 403 (or arguably 404, see comparison)." },
+    ], compare: 'vs 401 — see the decision guide below.' },
+  { code: 404, name: '404 Not Found', cls: '4xx', meaning: "There's nothing here.",
+    whenToReturn: "The URL doesn't correspond to any resource, OR (a deliberate choice) you don't want to reveal a resource exists to someone unauthorized to see it.",
+    examples: [
+      { title: 'Genuinely does not exist', note: 'GET /api/users/999999 where no such ID exists -> 404.' },
+      { title: 'Deliberately hiding existence for privacy', note: "GET /api/private-docs/42 owned by someone else -> some APIs return 404 instead of 403 so an attacker can't even confirm the resource exists." },
+    ], compare: "vs 403 — returning 404 instead of 403 to hide existence is a legitimate, common security pattern; pick one behavior and apply it consistently." },
+  { code: 405, name: '405 Method Not Allowed', cls: '4xx', meaning: 'This URL exists, but not for the method you just used.',
+    whenToReturn: 'The resource exists but does not support this verb — must include an Allow header listing what IS supported.',
+    examples: [{ title: 'Read-only endpoint', note: 'DELETE /api/reports/monthly-summary -> 405, Allow: GET, HEAD.' }] },
+  { code: 406, name: '406 Not Acceptable', cls: '4xx', meaning: "I can't produce a response in any format you said you'd accept.",
+    whenToReturn: "The client's Accept header lists only formats the server genuinely cannot produce for this resource.",
+    examples: [{ title: 'Unsupported requested format', note: 'Accept: application/xml on an API that only ever returns JSON, with no fallback -> 406.' }] },
+  { code: 407, name: '407 Proxy Authentication Required', cls: '4xx', meaning: 'Same idea as 401, but for a PROXY along the way, not the origin server.',
+    whenToReturn: 'Sent by a proxy (not the origin) when it requires its own credentials before forwarding your request.',
+    examples: [{ title: 'Corporate proxy auth', note: "A forward proxy requiring domain credentials before relaying traffic -> 407, Proxy-Authenticate header." }] },
+  { code: 408, name: '408 Request Timeout', cls: '4xx', meaning: 'You took too long to send the request, so I gave up waiting.',
+    whenToReturn: 'A server-side idle timeout on an incomplete request — the client opened a connection and started sending, but stalled.',
+    examples: [{ title: 'Slow client / stalled upload', note: 'A client sends headers very slowly (or a partial upload stalls) and the server closes the connection with 408 after its timeout.' }] },
+  { code: 409, name: '409 Conflict', cls: '4xx', meaning: "This request conflicts with the resource's current state.",
+    whenToReturn: "A duplicate unique value (username taken), a version mismatch on a concurrent edit, or any 'this can't happen given what's already there' situation.",
+    examples: [
+      { title: 'Duplicate unique constraint', note: "POST /api/users with an email that's already registered -> 409." },
+      { title: 'Concurrent edit conflict', note: 'PUT with an If-Match ETag that no longer matches because someone else updated it first — some APIs use 409 here, others use 412.' },
+    ], compare: '<b>vs 422</b> — 409 is specifically about conflicting with existing STATE (a duplicate, a stale version); 422 is a business-rule failure independent of existing state.' },
+  { code: 410, name: '410 Gone', cls: '4xx', meaning: "This used to exist, and it's not coming back — unlike 404, a deliberate, known, permanent removal.",
+    whenToReturn: "You know for certain the resource was intentionally and permanently deleted and want to say so explicitly, e.g. so search engines de-index it faster.",
+    examples: [{ title: 'Deliberately deleted content', note: 'GET /old-campaign-page for a page explicitly taken down for good -> 410 instead of 404, signaling "this is not coming back."' }] },
+  { code: 411, name: '411 Length Required', cls: '4xx', meaning: 'You need to tell me Content-Length before I will accept this body.',
+    whenToReturn: "The server requires a known content length upfront and the client didn't provide one.",
+    examples: [{ title: 'Rejecting a chunked-only upload', note: 'A strict upload endpoint refusing chunked transfer encoding without an explicit Content-Length -> 411.' }] },
+  { code: 412, name: '412 Precondition Failed', cls: '4xx', meaning: 'One of the conditions you attached (If-Match, If-Unmodified-Since) was not met, so I did not do it.',
+    whenToReturn: 'The classic optimistic-concurrency response: client sent If-Match with an ETag that no longer matches.',
+    examples: [{ title: 'Optimistic concurrency conflict', note: 'PUT with If-Match: "old-etag" where the document has since changed -> 412, telling the client to re-fetch and retry instead of overwriting someone else\'s change.' }] },
+  { code: 413, name: '413 Content Too Large', cls: '4xx', meaning: "The body you sent is bigger than I'm willing to accept.",
+    whenToReturn: 'A request body exceeds a configured size limit — file upload caps, JSON body size limits.',
+    examples: [{ title: 'Upload exceeds size limit', note: 'POST /api/uploads with a 500MB file against a 50MB limit -> 413. (Previously named "Payload Too Large".)' }] },
+  { code: 414, name: '414 URI Too Long', cls: '4xx', meaning: 'The URL itself is too long for me to process.',
+    whenToReturn: "A GET's query string grew unreasonably large — often a sign a GET-as-search should really be a POST, or something is generating looping URLs.",
+    examples: [{ title: 'Runaway query string', note: 'A client bug that keeps appending redirect parameters on every hop eventually produces a URL long enough to trip this.' }] },
+  { code: 415, name: '415 Unsupported Media Type', cls: '4xx', meaning: "I don't know how to handle the format of the body you sent.",
+    whenToReturn: "The request's Content-Type isn't one this endpoint knows how to parse.",
+    examples: [{ title: 'Wrong content type for the endpoint', note: 'POST with Content-Type: application/xml to a JSON-only API -> 415.' }] },
+  { code: 416, name: '416 Range Not Satisfiable', cls: '4xx', meaning: 'The byte range you asked for does not exist in this resource.',
+    whenToReturn: "A Range request asks for bytes beyond the resource's actual size.",
+    examples: [{ title: 'Range past end of file', note: 'Range: bytes=999999999- on a 500KB file -> 416, Content-Range: bytes */512000 telling the client the real size.' }] },
+  { code: 417, name: '417 Expectation Failed', cls: '4xx', meaning: 'You said Expect: 100-continue, but I cannot/will not meet that expectation.',
+    whenToReturn: "Extremely rare — a server that doesn't support the Expect mechanism, or rejects the request before a body would arrive.", examples: [] },
+  { code: 418, name: "418 I'm a teapot", cls: '4xx', meaning: "An April Fools' joke from RFC 2324 (Hyper Text Coffee Pot Control Protocol) some APIs use as an Easter egg.",
+    whenToReturn: "Never seriously — RFC 9110 explicitly reserves it as 'Unused.' A few APIs return it deliberately as a joke on specific endpoints.", examples: [] },
+  { code: 421, name: '421 Misdirected Request', cls: '4xx', meaning: "This request landed at a server not actually configured to handle it, likely due to a connection being reused incorrectly.",
+    whenToReturn: 'Mostly relevant to HTTP/2 connection coalescing — a server realizing a request came in over a connection meant for a different origin.', examples: [] },
+  { code: 422, name: '422 Unprocessable Content', cls: '4xx', meaning: 'I understood this request perfectly, but it fails a validation/business rule.',
+    whenToReturn: 'Syntactically valid, semantically wrong — an end date before a start date, an already-cancelled order being cancelled again.',
+    examples: [
+      { title: 'Business-rule validation failure', note: '{"startDate":"2026-06-01","endDate":"2026-05-01"} — both are valid dates, but the combination is nonsensical -> 422.' },
+      { title: 'Invalid state transition', note: 'POST /orders/789/ship on an order already cancelled -> 422 — the request is well-formed, it just cannot be applied right now.' },
+    ], compare: 'vs 400 — see the decision guide below.' },
+  { code: 423, name: '423 Locked', cls: '4xx', meaning: "This resource is locked (a WebDAV concept) and can't be acted on right now.",
+    whenToReturn: 'Almost exclusively WebDAV (document/file-locking systems) — rare outside that world.', examples: [] },
+  { code: 424, name: '424 Failed Dependency', cls: '4xx', meaning: 'This request failed because an earlier, related request in the same batch failed (a WebDAV concept).',
+    whenToReturn: 'Also almost exclusively WebDAV — a multi-step operation where one step\'s failure cascades.', examples: [] },
+  { code: 425, name: '425 Too Early', cls: '4xx', meaning: "I'm not willing to process a request that might be replayed (sent via TLS 1.3's 0-RTT early data).",
+    whenToReturn: "A server rejects a request arriving via 0-RTT if it's not confident the operation is safe to potentially process twice.", examples: [] },
+  { code: 426, name: '426 Upgrade Required', cls: '4xx', meaning: 'You need to switch to a different protocol version to continue.',
+    whenToReturn: 'A server refusing to serve a request over an outdated protocol, asking the client to Upgrade (e.g. requiring TLS).',
+    examples: [{ title: 'Requiring a protocol upgrade', note: 'A server that refuses plaintext HTTP/1.0 and requires at least HTTP/1.1 with TLS -> 426, Upgrade header naming what it wants.' }] },
+  { code: 428, name: '428 Precondition Required', cls: '4xx', meaning: 'You need to make this request conditional (If-Match or similar) before I will accept it.',
+    whenToReturn: "Forcing clients to use optimistic concurrency control rather than blindly overwriting — protects against the 'lost update' problem.",
+    examples: [{ title: 'Forcing safe concurrent writes', note: "PUT with no If-Match at all, on an endpoint that requires one -> 428, telling the client to fetch the current ETag first." }] },
+  { code: 429, name: '429 Too Many Requests', cls: '4xx', meaning: "You've made too many requests in too short a time — slow down.",
+    whenToReturn: 'Rate limiting, specifically for THIS client/API key/IP — pair with Retry-After.',
+    examples: [{ title: 'API rate limit exceeded', note: 'A client exceeding 100 requests/minute on a metered API -> 429, Retry-After: 30.' }], compare: 'vs 503 — see the decision guide below.' },
+  { code: 431, name: '431 Request Header Fields Too Large', cls: '4xx', meaning: 'Your headers (individually or in total) are too big for me to process.',
+    whenToReturn: 'A client sending an excessively large cookie, an enormous Authorization token, or just too many headers overall.',
+    examples: [{ title: 'Oversized cookie/header', note: 'A cookie grown to tens of kilobytes through accumulated bad session data -> 431.' }] },
+  { code: 451, name: '451 Unavailable For Legal Reasons', cls: '4xx', meaning: "This content isn't available due to a legal demand (a court order, a takedown notice).",
+    whenToReturn: 'Deliberately and transparently — the whole point of this code is to make legally-mandated removal visible rather than quietly returning a 403/404.',
+    examples: [{ title: 'Court-ordered content block', note: 'A page blocked in a specific jurisdiction due to a legal order -> 451, ideally with a Link header explaining the legal basis.' }] },
+
+  // ── 5xx Server Error ──
+  { code: 500, name: '500 Internal Server Error', cls: '5xx', meaning: "Something broke on my end, and I don't have a more specific code for it.",
+    whenToReturn: "An unhandled exception, a bug — genuinely YOUR code/infrastructure's fault, not the caller's. A malformed request from the caller is a 4xx, not a 500.",
+    examples: [{ title: 'Unhandled exception', note: "A null/attribute error deep in business logic that wasn't caught -> 500, ideally logged with a correlation/request ID." }], compare: 'vs 502/504 — see the decision guide below.' },
+  { code: 501, name: '501 Not Implemented', cls: '5xx', meaning: "I don't support this functionality at all.",
+    whenToReturn: 'The server does not recognize/support this method in general (not just for one resource — that is 405) — e.g. a server that never implements PATCH.',
+    examples: [{ title: 'Unimplemented method server-wide', note: 'A minimal server that only ever implements GET/POST returns 501 for PATCH/DELETE entirely, everywhere.' }] },
+  { code: 502, name: '502 Bad Gateway', cls: '5xx', meaning: "I'm a proxy/gateway, and the upstream server I talked to sent back an invalid or garbage response.",
+    whenToReturn: 'Your service calls a downstream dependency and that dependency responded, but with something broken/unparseable.',
+    examples: [{ title: 'Broken upstream response', note: 'Your API gateway forwards to an internal service that crashes mid-response, returning a malformed/truncated response -> 502.' }] },
+  { code: 503, name: '503 Service Unavailable', cls: '5xx', meaning: "I'm temporarily unable to handle this — overloaded, or down for maintenance — try again later.",
+    whenToReturn: 'Planned maintenance, or the server/service is overloaded for EVERYONE, not just one client. Pair with Retry-After.',
+    examples: [
+      { title: 'Planned maintenance window', note: 'The whole API returns 503 with Retry-After: 3600 during a scheduled deployment.' },
+      { title: 'Overload/circuit-breaker tripped', note: 'A service under heavy load starts shedding requests with 503 rather than queuing until it falls over entirely.' },
+    ], compare: 'vs 429 — see the decision guide below.' },
+  { code: 504, name: '504 Gateway Timeout', cls: '5xx', meaning: "I'm a proxy/gateway, and the upstream server I called never responded in time.",
+    whenToReturn: 'Your service calls a downstream dependency and it simply never answered within your timeout — distinct from 502, where the upstream DID respond, just badly.',
+    examples: [{ title: 'Slow/hung downstream dependency', note: "A payment provider's API hangs and your gateway's timeout expires waiting -> 504, not 500 — the failure is in a dependency, not your own code." }] },
+  { code: 505, name: '505 HTTP Version Not Supported', cls: '5xx', meaning: 'I do not support the HTTP version you used.',
+    whenToReturn: "Extremely rare in the modern web — a server that genuinely can't speak the protocol version the client used.", examples: [] },
+  { code: 506, name: '506 Variant Also Negotiates', cls: '5xx', meaning: 'Internal server misconfiguration in content negotiation.',
+    whenToReturn: 'Never deliberately — signals a server configuration bug in transparent content negotiation (rare, mostly historical Apache feature).', examples: [] },
+  { code: 507, name: '507 Insufficient Storage', cls: '5xx', meaning: "I can't complete this because I'm out of storage space (a WebDAV concept, sometimes used more generally).",
+    whenToReturn: 'A server-side storage quota/capacity failure.', examples: [] },
+  { code: 508, name: '508 Loop Detected', cls: '5xx', meaning: 'I detected an infinite loop while processing this request (a WebDAV concept).',
+    whenToReturn: 'A WebDAV server detecting a recursive/circular reference while processing a deeply nested operation.', examples: [] },
+  { code: 510, name: '510 Not Extended', cls: '5xx', meaning: 'This request needs further extensions I require but that were not provided.',
+    whenToReturn: 'Extremely rare — tied to an obscure, little-adopted HTTP extension framework.', examples: [] },
+  { code: 511, name: '511 Network Authentication Required', cls: '5xx', meaning: 'You need to authenticate with this NETWORK (not this server/API) before your traffic will even get through.',
+    whenToReturn: 'Captive portals — the login page a hotel/airport wifi shows before letting any real traffic through.',
+    examples: [{ title: 'Captive portal login', note: 'Connecting to public wifi and having every request redirected to a login page until you authenticate -> 511, though many captive portals actually just intercept traffic without sending it.' }] },
+];
+
+const STATUS_GUIDE = [
+  { q: 'User submitted bad data — 400 or 422?', a: "400 Bad Request = the request itself is malformed (broken JSON, wrong type, a required field missing entirely). 422 Unprocessable Content = syntactically fine and understood, but fails a business-rule/semantic check (an end date before a start date, a well-formed but invalid state transition). Many APIs blur this and just use 400 for both — fine too, but 422 gives clients a more precise signal." },
+  { q: 'Not logged in vs logged in but not allowed — 401 or 403?', a: "401 Unauthorized actually means UNAUTHENTICATED — you don't know who this is, or their credentials are missing/invalid; always pair it with WWW-Authenticate. 403 Forbidden means 'I know exactly who you are, and you're still not allowed to do this.' Returning 401 for a pure permissions failure is one of the most common status-code mistakes in the wild." },
+  { q: 'Resource moved — 301, 302, 307, or 308?', a: 'Permanent + method/body may change (rare, mostly legacy) → 301. Permanent + method/body MUST stay identical → 308 (the correct modern default for "moved for good"). Temporary + method may change → 302 (the historically ambiguous one). Temporary + method MUST stay identical → 307. When unsure, 307/308 are the unambiguous modern choices.' },
+  { q: 'Avoiding the "confirm resubmission" browser prompt after a POST?', a: 'Use Post/Redirect/Get: after a successful POST, respond 303 See Other pointing at a GET-able results page instead of rendering the result directly. The browser then does a GET for that page, so a refresh re-does the safe GET, not the POST.' },
+  { q: 'Creating a resource that already exists — 200, 201, or 409?', a: "Didn't exist, now created → 201 Created. Already existed and this create conflicts with that (duplicate unique key) → 409 Conflict. Some APIs treat a duplicate create as idempotent success and return 200/204 with the existing resource instead — legitimate, just be consistent and document it." },
+  { q: 'Rate limiting vs the server being overloaded — 429 or 503?', a: '429 Too Many Requests = THIS CLIENT specifically is over their limit — slow them down, ideally with Retry-After. 503 Service Unavailable = the server/service itself is overloaded or down for maintenance, for EVERYONE, not just this client — also pairs well with Retry-After.' },
+  { q: 'My server errored — 500, or something more specific?', a: "An unhandled exception with no better classification, genuinely your fault → 500. A malformed request from the caller → that's a 4xx, not 500 (500 should mean YOUR code/infrastructure failed, not that the caller sent something wrong). Calling an upstream dependency that failed or is unreachable → 502 Bad Gateway (upstream sent garbage) or 504 Gateway Timeout (upstream never responded) — using a bare 500 for 'a downstream service is down' hides useful diagnostic info from whoever's debugging the alert at 3am." },
+  { q: 'DELETE succeeded — 200, 202, or 204?', a: "204 No Content is the default — the delete happened, nothing meaningful to send back. Use 200 with a body if you want to return the final state of the (now-deleted) resource. Use 202 Accepted only if the deletion is genuinely asynchronous (queued, not done yet when you respond)." },
+  { q: 'An async job was accepted but is not done yet — 200 or 202?', a: '202 Accepted explicitly says "I took this, but it is not finished, check back later" (often with a Location header pointing at a status-polling endpoint). Returning 200 for work that has not actually completed is misleading to any client that reasonably assumes 200 means done.' },
+];
+
+// =============================================================================
+// RENDER — shared helpers + per-tab render functions
+// =============================================================================
+
+function escHtml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+function renderGuide(containerId, items) {
+  const html = items.map((item, i) => `
+    <div class="qa-item" data-qidx="${i}">
+      <div class="qa-q" data-qtoggle="${i}"><span class="qmark">Q.</span> ${escHtml(item.q)}</div>
+      <div class="qa-a">${escHtml(item.a)}</div>
+    </div>`).join('');
+  const el = document.getElementById(containerId);
+  el.innerHTML = html;
+  el.querySelectorAll('[data-qtoggle]').forEach(q => {
+    q.addEventListener('click', () => q.closest('.qa-item').classList.toggle('open'));
+  });
+}
+
+// ── Methods tab ──
+const methodState = { search: '' };
+
+function methodBadges(m) {
+  const b = (label, ok) => `<span class="badge ${ok === true ? 'b-ok' : ok === false ? 'b-neutral' : 'b-warn'}">${escHtml(label)}</span>`;
+  return [
+    b('Safe: ' + (m.safe ? 'Yes' : 'No'), m.safe),
+    b('Idempotent: ' + (m.idempotent === true ? 'Yes' : m.idempotent === false ? 'No' : m.idempotent), m.idempotent === true ? true : m.idempotent === false ? false : null),
+  ].join('');
+}
+
+function methodCardHtml(m, isOpen) {
+  const ex = m.examples.map(e => `
+    <div class="example-item">
+      <div class="ex-title">${escHtml(e.title)}</div>
+      <div class="ex-req">${escHtml(e.req)}</div>
+      <div class="ex-note">${escHtml(e.note)}</div>
+    </div>`).join('');
+  return `
+    <div class="entry${isOpen ? ' open' : ''}" data-method="${escHtml(m.name)}" id="m-${escHtml(m.name)}">
+      <div class="entry-head" data-mtoggle="${escHtml(m.name)}">
+        <span class="entry-name">${escHtml(m.name)}</span>
+        ${methodBadges(m)}
+        <span class="entry-summary">${escHtml(m.simple)}</span>
+        <span class="chev">▶</span>
+      </div>
+      <div class="entry-body">
+        <h4>When to Use</h4><p>${escHtml(m.whenToUse)}</p>
+        <h4>Properties</h4>
+        <p>Cacheable: ${escHtml(String(m.cacheable))} &nbsp;·&nbsp; Request body: ${escHtml(m.body)}</p>
+        <h4>Examples</h4>
+        ${ex}
+        <h4>Edge Cases</h4>
+        <ul>${m.edgeCases.map(x => `<li>${escHtml(x)}</li>`).join('')}</ul>
+        <h4>Best Practices</h4>
+        <ul>${m.bestPractices.map(x => `<li>${escHtml(x)}</li>`).join('')}</ul>
+        <h4>Common Mistakes</h4>
+        <ul>${m.commonMistakes.map(x => `<li>${escHtml(x)}</li>`).join('')}</ul>
+      </div>
+    </div>`;
+}
+
+function methodMatches(m) {
+  if (!methodState.search) return true;
+  const q = methodState.search.toLowerCase();
+  const hay = [m.name, m.simple, m.whenToUse, ...m.edgeCases, ...m.bestPractices, ...m.commonMistakes,
+    ...m.examples.map(e => e.title + ' ' + e.note)].join(' ').toLowerCase();
+  return hay.includes(q);
+}
+
+let openMethod = null;
+function renderMethods() {
+  const filtered = METHODS.filter(methodMatches);
+  document.getElementById('methodCount').textContent = `${filtered.length} of ${METHODS.length} methods shown`;
+  document.getElementById('methodResults').innerHTML = filtered.length
+    ? filtered.map(m => methodCardHtml(m, openMethod === m.name)).join('')
+    : `<div class="no-results">No methods match your search.</div>`;
+  document.querySelectorAll('[data-mtoggle]').forEach(el => {
+    el.addEventListener('click', () => {
+      const name = el.dataset.mtoggle;
+      openMethod = openMethod === name ? null : name;
+      renderMethods();
+    });
+  });
+}
+
+document.getElementById('methodSearch').addEventListener('input', e => { methodState.search = e.target.value; renderMethods(); });
+
+// ── Status Codes tab ──
+const statusState = { search: '', cls: 'all' };
+const CLASS_LABELS = { '1xx': '1xx Informational', '2xx': '2xx Success', '3xx': '3xx Redirection', '4xx': '4xx Client Error', '5xx': '5xx Server Error' };
+const CLASS_BADGE = { '1xx': 'b-info', '2xx': 'b-ok', '3xx': 'b-info', '4xx': 'b-warn', '5xx': 'b-err' };
+
+function renderClassChips() {
+  const classes = ['all', '1xx', '2xx', '3xx', '4xx', '5xx'];
+  document.getElementById('classChips').innerHTML = classes.map(c =>
+    `<button class="chip${statusState.cls === c ? ' active' : ''}" data-cls="${c}">${c === 'all' ? 'All' : c}</button>`
+  ).join('');
+  document.querySelectorAll('.chip[data-cls]').forEach(chip => {
+    chip.addEventListener('click', () => { statusState.cls = chip.dataset.cls; renderClassChips(); renderStatus(); });
+  });
+}
+
+function statusMatches(s) {
+  if (statusState.cls !== 'all' && s.cls !== statusState.cls) return false;
+  if (!statusState.search) return true;
+  const q = statusState.search.toLowerCase();
+  const hay = [String(s.code), s.name, s.meaning, s.whenToReturn, s.compare || '',
+    ...s.examples.map(e => e.title + ' ' + e.note)].join(' ').toLowerCase();
+  return hay.includes(q);
+}
+
+let openStatus = null;
+function statusCardHtml(s) {
+  const isOpen = openStatus === s.code;
+  const ex = s.examples.map(e => `
+    <div class="example-item">
+      <div class="ex-title">${escHtml(e.title)}</div>
+      <div class="ex-note">${escHtml(e.note)}</div>
+    </div>`).join('');
+  return `
+    <div class="entry${isOpen ? ' open' : ''}" id="s-${s.code}">
+      <div class="entry-head" data-stoggle="${s.code}">
+        <span class="entry-name">${escHtml(s.name)}</span>
+        <span class="badge ${CLASS_BADGE[s.cls]}">${s.cls}</span>
+        <span class="entry-summary">${escHtml(s.meaning)}</span>
+        <span class="chev">▶</span>
+      </div>
+      <div class="entry-body">
+        <h4>What It Means (as the client receiving it)</h4><p>${escHtml(s.meaning)}</p>
+        <h4>When to Return It (as the architect)</h4><p>${escHtml(s.whenToReturn)}</p>
+        ${ex ? `<h4>Examples</h4>${ex}` : ''}
+        ${s.compare ? `<div class="compare-box">${s.compare.includes('<b>') ? s.compare : escHtml(s.compare)}</div>` : ''}
+      </div>
+    </div>`;
+}
+
+function renderStatus() {
+  const filtered = STATUS_CODES.filter(statusMatches);
+  document.getElementById('statusCount').textContent = `${filtered.length} of ${STATUS_CODES.length} status codes shown`;
+  if (!filtered.length) {
+    document.getElementById('statusResults').innerHTML = `<div class="no-results">No status codes match your filters.</div>`;
+    return;
+  }
+  const classesPresent = statusState.cls === 'all' ? ['1xx', '2xx', '3xx', '4xx', '5xx'] : [statusState.cls];
+  let html = '';
+  classesPresent.forEach(cls => {
+    const inClass = filtered.filter(s => s.cls === cls);
+    if (!inClass.length) return;
+    html += `<div class="cat-group-head">${CLASS_LABELS[cls]} <span class="cnt">${inClass.length}</span></div>`;
+    html += inClass.map(statusCardHtml).join('');
+  });
+  document.getElementById('statusResults').innerHTML = html;
+  document.querySelectorAll('[data-stoggle]').forEach(el => {
+    el.addEventListener('click', () => {
+      const code = Number(el.dataset.stoggle);
+      openStatus = openStatus === code ? null : code;
+      renderStatus();
+    });
+  });
+}
+
+document.getElementById('statusSearch').addEventListener('input', e => { statusState.search = e.target.value; renderStatus(); });
+
+// ── Top-level tabs ──
+document.querySelectorAll('#topTabs button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#topTabs button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+// ── Init ──
+renderGuide('methodGuide', METHOD_GUIDE);
+renderGuide('statusGuide', STATUS_GUIDE);
+renderMethods();
+renderClassChips();
+renderStatus();
+</script>
+</body>
+</html>

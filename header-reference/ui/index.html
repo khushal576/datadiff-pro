@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HTTP Header Reference</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f4f6fb; --surface: #ffffff; --border: #dde1ef;
+    --text: #1c2035; --muted: #6b7180; --accent: #4f5ef0;
+    --req-bg: rgba(79,94,240,0.10); --req-text: #4f5ef0;
+    --res-bg: rgba(21,128,61,0.10); --res-text: #15803d;
+    --both-bg: rgba(180,83,9,0.10); --both-text: #b45309;
+    --dep-bg: rgba(220,38,38,0.08); --dep-text: #b91c1c;
+    --leg-bg: rgba(107,113,128,0.12); --leg-text: #6b7180;
+  }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; padding: 24px 20px 60px;
+  }
+  header { max-width: 1280px; margin: 0 auto 18px; }
+  header h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.5px; }
+  header h1 span { color: var(--accent); }
+  header p { color: var(--muted); font-size: 0.85rem; margin-top: 2px; }
+
+  .layout { max-width: 1280px; margin: 0 auto; display: grid; grid-template-columns: 250px 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+
+  /* ── sidebar ── */
+  .sidebar { position: sticky; top: 20px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px; max-height: calc(100vh - 40px); overflow-y: auto; }
+  @media (max-width: 860px) { .sidebar { position: static; max-height: none; } }
+  .cat-item {
+    display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+    background: none; border: none; cursor: pointer; border-radius: 7px;
+    padding: 8px 9px; font-size: 0.82rem; color: var(--text); margin-bottom: 2px;
+  }
+  .cat-item:hover { background: var(--bg); }
+  .cat-item.active { background: var(--req-bg); color: var(--accent); font-weight: 700; }
+  .cat-item .ic { font-size: 1rem; flex: none; }
+  .cat-item .lbl { flex: 1; }
+  .cat-item .cnt { font-size: 0.68rem; color: var(--muted); background: var(--bg); border-radius: 10px; padding: 1px 7px; }
+  .cat-item.active .cnt { color: var(--accent); }
+  .sidebar hr { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
+
+  /* ── controls ── */
+  .controls { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 16px; }
+  input[type="text"] {
+    width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 9px 12px; font-size: 0.9rem;
+  }
+  input[type="text"]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .filter-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; align-items: center; }
+  .filter-row .flabel { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-right: 2px; }
+  .chip {
+    cursor: pointer; border: 1px solid var(--border); background: var(--bg); color: var(--muted);
+    border-radius: 20px; padding: 4px 11px; font-size: 0.74rem; font-weight: 600;
+  }
+  .chip:hover { border-color: var(--accent); }
+  .chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .result-count { font-size: 0.78rem; color: var(--muted); margin-top: 10px; }
+
+  /* ── category group ── */
+  .cat-group { margin-bottom: 22px; }
+  .cat-group-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+  .cat-group-head h2 { font-size: 1.02rem; font-weight: 700; display: flex; align-items: center; gap: 7px; }
+  .cat-group-head .cnt { font-size: 0.74rem; color: var(--muted); }
+  .cat-group-desc { font-size: 0.8rem; color: var(--muted); line-height: 1.55; margin-bottom: 10px; max-width: 760px; }
+
+  /* ── header card ── */
+  .hcard { background: var(--surface); border: 1px solid var(--border); border-radius: 9px; margin-bottom: 8px; overflow: hidden; scroll-margin-top: 20px; }
+  .hcard.flash { animation: flashHi 1.4s ease; }
+  @keyframes flashHi { 0% { border-color: var(--accent); box-shadow: 0 0 0 3px var(--req-bg); } 100% { border-color: var(--border); box-shadow: none; } }
+  .hcard-head { display: flex; align-items: center; gap: 10px; padding: 11px 14px; cursor: pointer; }
+  .hcard-head:hover { background: var(--bg); }
+  .hcard-name { font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace; font-weight: 700; font-size: 0.88rem; flex: none; }
+  .hcard-summary { font-size: 0.8rem; color: var(--muted); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .badge { flex: none; font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; border-radius: 5px; padding: 2px 7px; }
+  .badge.side-request { background: var(--req-bg); color: var(--req-text); }
+  .badge.side-response { background: var(--res-bg); color: var(--res-text); }
+  .badge.side-both { background: var(--both-bg); color: var(--both-text); }
+  .badge.status-deprecated { background: var(--dep-bg); color: var(--dep-text); }
+  .badge.status-legacy { background: var(--leg-bg); color: var(--leg-text); }
+  .badge.status-non-standard { background: var(--leg-bg); color: var(--leg-text); }
+  .chev { flex: none; color: var(--muted); font-size: 0.7rem; transition: transform 0.15s; }
+  .hcard.open .chev { transform: rotate(90deg); }
+  .hcard-body { display: none; padding: 0 14px 14px; border-top: 1px solid var(--border); }
+  .hcard.open .hcard-body { display: block; padding-top: 12px; }
+  .hcard-desc { font-size: 0.84rem; line-height: 1.65; margin-bottom: 10px; }
+  .hcard-example-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .hcard-example {
+    flex: 1; font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace; font-size: 0.8rem;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; word-break: break-all;
+  }
+  button.copy-mini {
+    flex: none; cursor: pointer; border: 1px solid var(--border); background: var(--surface);
+    border-radius: 6px; font-size: 0.72rem; padding: 6px 10px; color: var(--muted);
+  }
+  button.copy-mini:hover { border-color: var(--accent); color: var(--accent); }
+  .hcard-meta { font-size: 0.76rem; color: var(--muted); margin-bottom: 8px; }
+  .hcard-related { font-size: 0.78rem; color: var(--muted); display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .related-link {
+    cursor: pointer; font-family: monospace; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 5px; padding: 2px 7px; color: var(--accent); font-size: 0.76rem;
+  }
+  .related-link:hover { border-color: var(--accent); }
+  .no-results { font-size: 0.85rem; color: var(--muted); background: var(--surface); border: 1px dashed var(--border);
+    border-radius: 10px; padding: 24px; text-align: center; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>HTTP Header <span>Reference</span></h1>
+  <p>A browsable glossary of widely-used HTTP headers — grouped by what they're actually for, not just alphabetically</p>
+</header>
+
+<div class="layout">
+  <nav class="sidebar" id="sidebar"></nav>
+
+  <div class="col-main">
+    <div class="controls">
+      <input type="text" id="search" placeholder="Search by name or what it does — e.g. &quot;cache&quot;, &quot;cors&quot;, &quot;cookie&quot;…">
+      <div class="filter-row">
+        <span class="flabel">Side</span>
+        <button class="chip active" data-filter="side" data-val="all">All</button>
+        <button class="chip" data-filter="side" data-val="request">Request</button>
+        <button class="chip" data-filter="side" data-val="response">Response</button>
+        <button class="chip" data-filter="side" data-val="both">Both</button>
+      </div>
+      <div class="filter-row">
+        <span class="flabel">Status</span>
+        <button class="chip active" data-filter="status" data-val="all">All</button>
+        <button class="chip" data-filter="status" data-val="standard">Standard</button>
+        <button class="chip" data-filter="status" data-val="legacy">Legacy</button>
+        <button class="chip" data-filter="status" data-val="non-standard">Non-standard</button>
+        <button class="chip" data-filter="status" data-val="deprecated">Deprecated</button>
+      </div>
+      <div class="result-count" id="resultCount"></div>
+    </div>
+
+    <div id="results"></div>
+  </div>
+</div>
+
+<script>
+// =============================================================================
+// DATA — categories and headers. This is the whole glossary; everything below
+// is just search/filter/render over this array. No network calls, ever.
+// =============================================================================
+
+const CATEGORIES = [
+  { key: 'general',    icon: '🔌', label: 'General & Connection Control',
+    desc: 'Headers about the connection or the message itself, not about any particular resource — they apply to almost any request or response, on either side.' },
+  { key: 'request',    icon: '🧾', label: 'Request Identity & Context',
+    desc: 'What a client sends to say who it is, what host it wants, and where the request came from.' },
+  { key: 'negotiation', icon: '🤝', label: 'Content Negotiation',
+    desc: 'Lets a client state what representations (format, language, encoding) it can handle, and the server confirm what it actually sent — so both sides agree on the shape of the data.' },
+  { key: 'body',       icon: '📦', label: 'Message Body / Representation Metadata',
+    desc: 'Describe the actual bytes in the body: what type they are, how long, how they’re encoded, and in what language.' },
+  { key: 'caching',    icon: '🗄️', label: 'Caching',
+    desc: 'Control whether a response can be stored and reused instead of re-fetched, for how long, and how to cheaply check whether a cached copy is still fresh.' },
+  { key: 'range',      icon: '✂️', label: 'Range Requests (Partial Content)',
+    desc: 'Let a client ask for only part of a resource — resuming a download or seeking inside a video — instead of the whole thing every time.' },
+  { key: 'redirect',   icon: '🔀', label: 'Redirection',
+    desc: 'Tell a client that what it asked for now lives somewhere else, and where to go instead.' },
+  { key: 'cookies',    icon: '🍪', label: 'Cookies',
+    desc: 'The mechanism HTTP uses to carry small pieces of state — like a session ID — between an otherwise-stateless client and server.' },
+  { key: 'auth',       icon: '🔐', label: 'Authentication & Authorization',
+    desc: 'Prove identity to a server or proxy, and let the server/proxy say what kind of proof it wants.' },
+  { key: 'cors',       icon: '🌐', label: 'CORS (Cross-Origin Resource Sharing)',
+    desc: 'The negotiation browsers and servers do to decide whether a script running on one origin may read a response from a different origin.' },
+  { key: 'security',   icon: '🛡️', label: 'Security Headers',
+    desc: 'Response headers a server sends to make the browser enforce extra restrictions on its own — beyond whatever the page’s own code does.' },
+  { key: 'proxies',    icon: '🛰️', label: 'Proxies & Forwarding',
+    desc: 'Track a request’s path through proxies and load balancers, so the origin server (or logs) can still see the real client and protocol.' },
+  { key: 'server',     icon: '🖥️', label: 'Server & Response Metadata',
+    desc: 'What a server says about itself, what it allows, or how long a client should wait before retrying.' },
+  { key: 'modern',     icon: '✨', label: 'Modern Web Platform & Extension Headers',
+    desc: 'Newer or non-standard headers used by browsers and APIs for fetch metadata, privacy signals, client hints, and app-specific request tracing.' },
+];
+
+// side: 'request' | 'response' | 'both'
+// status: 'standard' | 'legacy' | 'non-standard' | 'deprecated'
+const HEADERS = [
+  // ── General & Connection Control ─────────────────────────────────────────
+  { name: 'Connection', category: 'general', side: 'both', status: 'standard',
+    summary: 'Controls whether this TCP connection stays open afterward, and names other hop-by-hop headers to strip.',
+    description: '<code>Connection: keep-alive</code> (the HTTP/1.1 default) tells the other side to reuse this connection for further requests; <code>Connection: close</code> says to shut it down after this message. It can also list header names that apply only to this one hop and must be removed by any proxy forwarding the message onward — that’s how <code>Connection: Upgrade</code> pairs with the <code>Upgrade</code> header.',
+    example: 'Connection: keep-alive', spec: 'RFC 9112 §9.6', related: ['Keep-Alive', 'Upgrade'] },
+  { name: 'Keep-Alive', category: 'general', side: 'both', status: 'legacy',
+    summary: 'Tunes how long an idle persistent connection stays open and how many requests it’ll serve.',
+    description: 'Only meaningful alongside <code>Connection: keep-alive</code>. In HTTP/1.1 persistent connections are already the default, and most of this tuning now happens in server/proxy config instead — this header is mostly a holdover for HTTP/1.0-era compatibility.',
+    example: 'Keep-Alive: timeout=5, max=1000', spec: 'RFC 7230 (informative)', related: ['Connection'] },
+  { name: 'Date', category: 'general', side: 'both', status: 'standard',
+    summary: 'The date/time the message was generated (GMT) — the trusted clock reference for cache-freshness math.',
+    description: 'Almost always a response header in practice: servers stamp every response so clients and caches compute age/expiry against a trustworthy clock instead of their own local one. Format is fixed — <code>Sun, 06 Nov 1994 08:49:37 GMT</code> — no other date format is valid here.',
+    example: 'Date: Tue, 15 Sep 2026 10:00:00 GMT', spec: 'RFC 9110', related: ['Expires', 'Age', 'Cache-Control'] },
+  { name: 'Via', category: 'general', side: 'both', status: 'standard',
+    summary: 'Records each proxy/gateway a message passed through, for loop detection and transparency.',
+    description: 'Every intermediary that forwards a message is supposed to append itself (protocol + pseudonym or host), building a visible chain. Used to detect request loops and see how many hops a message crossed — distinct from <code>X-Forwarded-For</code>, which records client IPs, not hop identities.',
+    example: 'Via: 1.1 proxy1.example.com, 1.1 proxy2.example.com', spec: 'RFC 9110', related: ['X-Forwarded-For', 'Forwarded', 'Max-Forwards'] },
+  { name: 'Trailer', category: 'general', side: 'both', status: 'standard',
+    summary: 'Lists header field names that will appear AFTER the body, in a chunked-encoding trailer section.',
+    description: 'Only relevant with <code>Transfer-Encoding: chunked</code>. Normally headers must arrive before the body since the client needs them upfront — a trailer lets the sender compute a value (like a checksum) while streaming the body and attach it at the very end. <code>Trailer</code> announces which field names to expect there.',
+    example: 'Trailer: Content-MD5', spec: 'RFC 9112 §6.5', related: ['Transfer-Encoding', 'TE'] },
+  { name: 'Transfer-Encoding', category: 'general', side: 'both', status: 'standard',
+    summary: 'Says the body is encoded for safe transfer over this connection (usually chunked) — independent of Content-Encoding.',
+    description: '<code>chunked</code> lets a sender start transmitting before it knows the total length: the body is split into length-prefixed chunks ending in a zero-length chunk. This is a hop-by-hop transfer coding, not a property of the resource (that’s <code>Content-Encoding</code>). A message must never carry both <code>Content-Length</code> and <code>Transfer-Encoding: chunked</code> — that ambiguity is the root cause of most HTTP request smuggling.',
+    example: 'Transfer-Encoding: chunked', spec: 'RFC 9112 §6.1', related: ['Content-Length', 'Trailer', 'TE'] },
+  { name: 'TE', category: 'general', side: 'request', status: 'standard',
+    summary: 'Lets a client say which transfer codings (besides plain chunked) it accepts, and whether it can handle trailers.',
+    description: 'The transfer-coding sibling of <code>Accept-Encoding</code>. In real traffic the only common value is <code>TE: trailers</code> — telling the server the client can process a chunked trailer section.',
+    example: 'TE: trailers, gzip;q=0.5', spec: 'RFC 9110', related: ['Transfer-Encoding', 'Trailer'] },
+  { name: 'Upgrade', category: 'general', side: 'both', status: 'standard',
+    summary: 'Asks to switch the connection to a different protocol on top of the same TCP connection.',
+    description: 'A client sends <code>Upgrade: websocket</code> with <code>Connection: Upgrade</code>; if the server agrees, it replies <code>101 Switching Protocols</code> and the connection now speaks the new protocol. This is how WebSocket handshakes ride on an ordinary HTTP request, and how cleartext HTTP/1.1 could historically upgrade to HTTP/2.',
+    example: 'Upgrade: websocket', spec: 'RFC 9110 §7.8', related: ['Connection'] },
+  { name: 'Pragma', category: 'general', side: 'request', status: 'legacy',
+    summary: 'An HTTP/1.0-era catch-all header — in practice only Pragma: no-cache survives, echoing Cache-Control: no-cache.',
+    description: 'Defined generically in HTTP/1.0 as extensible, but only one value ever mattered in practice. Sent by some clients alongside <code>Cache-Control</code> purely for compatibility with very old HTTP/1.0-only caches; in modern code, <code>Cache-Control</code> alone is authoritative.',
+    example: 'Pragma: no-cache', spec: 'RFC 9111 §5.4', related: ['Cache-Control'] },
+  { name: 'Warning', category: 'general', side: 'response', status: 'deprecated',
+    summary: 'Carried extra info about a response (e.g. a cache serving stale content) without changing the status code — removed from the current caching spec.',
+    description: 'Used values like <code>110 Response is Stale</code> to flag caveats without failing the request outright. RFC 9111 (the current HTTP caching spec) formally removed <code>Warning</code> — it was inconsistently implemented, and freshness info is better derived directly from <code>Age</code>/<code>Cache-Control</code>. Still seen in older logs and legacy proxies.',
+    example: 'Warning: 110 anderson/1.3.37 "Response is stale"', spec: 'Removed in RFC 9111 (was RFC 7234 §5.5)', related: ['Age', 'Cache-Control'] },
+
+  // ── Request Identity & Context ───────────────────────────────────────────
+  { name: 'Host', category: 'request', side: 'request', status: 'standard',
+    summary: 'Names the target host (and port) the request is meant for — mandatory on every HTTP/1.1 request.',
+    description: 'The header that makes virtual hosting possible: many domains can share one IP, and the server picks which site to serve based on <code>Host</code>. Missing it on HTTP/1.1 is a <code>400 Bad Request</code>. It’s also the classic target of Host-header attacks (cache poisoning, poisoned password-reset links) when an app trusts it blindly to build absolute URLs.',
+    example: 'Host: api.example.com', spec: 'RFC 9112 §3.2', related: ['Origin'] },
+  { name: 'User-Agent', category: 'request', side: 'request', status: 'standard',
+    summary: 'Identifies the client software making the request — browser, library, bot, or script.',
+    description: 'A free-text product/version string, historically used both for legitimate content adaptation and for less legitimate browser-sniffing. Trivially spoofed, and increasingly supplemented (not replaced) by structured <code>Sec-CH-UA</code> client hints for more reliable, privacy-conscious detection.',
+    example: 'User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36', spec: 'RFC 9110', related: ['Sec-CH-UA'] },
+  { name: 'Referer', category: 'request', side: 'request', status: 'standard',
+    summary: 'The URL of the page that linked to or triggered this request — misspelled in the original spec and stuck that way forever.',
+    description: 'Tells the server where the request "came from" — useful for analytics and abuse detection, and a well-known privacy/security leak: full URLs (including tokens in query strings) can leak cross-origin unless <code>Referrer-Policy</code> restricts what’s sent. Not sent by default on HTTPS→HTTP downgrade navigations, and often trimmed to origin-only by modern browsers.',
+    example: 'Referer: https://example.com/search?q=widgets', spec: 'RFC 9110', related: ['Referrer-Policy', 'Origin'] },
+  { name: 'Origin', category: 'request', side: 'request', status: 'standard',
+    summary: 'The scheme+host+port the initiating script runs on — the identity CORS decisions are actually made against.',
+    description: 'Unlike <code>Referer</code>, <code>Origin</code> carries no path — just enough to identify the origin, nothing about which page you were on. Browsers add it automatically on cross-origin fetch/XHR requests and on POSTs; servers echo it back (allow-listed) via <code>Access-Control-Allow-Origin</code> to grant cross-origin read access.',
+    example: 'Origin: https://app.example.com', spec: 'RFC 6454', related: ['Access-Control-Allow-Origin', 'Host', 'Referer'] },
+  { name: 'From', category: 'request', side: 'request', status: 'legacy',
+    summary: 'An email address for the human responsible for the request — meant for well-behaved bots to self-identify.',
+    description: 'Rarely used outside crawler etiquette (a search-engine bot might send <code>From: crawler@example.com</code> so a site operator has somewhere to complain). Essentially never sent by browsers.',
+    example: 'From: webmaster@example.com', spec: 'RFC 9110', related: ['User-Agent'] },
+  { name: 'Expect', category: 'request', side: 'request', status: 'standard',
+    summary: 'Asks the server to confirm it will accept the request before the client sends a (possibly large) body.',
+    description: 'In practice this means exactly one value: <code>Expect: 100-continue</code>. The client sends headers, waits for a <code>100 Continue</code>, then sends the body — avoiding wasted upload bandwidth if the server was going to reject the request anyway (bad auth, too large, etc). Widely but not perfectly supported by older intermediaries.',
+    example: 'Expect: 100-continue', spec: 'RFC 9110', related: ['Content-Length'] },
+  { name: 'Max-Forwards', category: 'request', side: 'request', status: 'standard',
+    summary: 'Caps how many proxy hops a TRACE or OPTIONS request may travel before a proxy must answer it directly.',
+    description: 'Each proxy that forwards the request decrements the value by one; when it reaches zero, that proxy responds itself instead of passing the request further along. Used to debug a proxy chain hop by hop — mostly relevant to <code>TRACE</code>.',
+    example: 'Max-Forwards: 5', spec: 'RFC 9110', related: ['Via'] },
+
+  // ── Content Negotiation ──────────────────────────────────────────────────
+  { name: 'Accept', category: 'negotiation', side: 'request', status: 'standard',
+    summary: 'Which media types the client can handle in the response, with optional quality weights.',
+    description: 'A comma-separated list of MIME types (<code>application/json</code>, <code>text/html</code>, <code>*/*</code>) each with an optional <code>;q=</code> weight from 0 to 1 expressing preference order. The server picks a representation matching (ideally) the highest-weighted type it can produce and echoes its choice in the response’s <code>Content-Type</code>.',
+    example: 'Accept: application/json, text/html;q=0.9, */*;q=0.1', spec: 'RFC 9110', related: ['Content-Type', 'Vary'] },
+  { name: 'Accept-Charset', category: 'negotiation', side: 'request', status: 'deprecated',
+    summary: 'Which character encodings the client can handle — mostly moot now that UTF-8 is universal.',
+    description: 'Was meant to negotiate charset the same way <code>Accept</code> negotiates media type. In modern practice virtually everything is UTF-8, so this header is rarely sent and most servers ignore it; formally deprecated in current HTTP semantics.',
+    example: 'Accept-Charset: utf-8, iso-8859-1;q=0.5', spec: 'Deprecated (was RFC 7231 §5.3.3)', related: ['Content-Type'] },
+  { name: 'Accept-Encoding', category: 'negotiation', side: 'request', status: 'standard',
+    summary: 'Which content codings (compression) the client can decode.',
+    description: 'Tells the server it’s safe to compress the body — <code>gzip</code>, <code>br</code> (Brotli), <code>deflate</code>, <code>identity</code> (no coding). The server compresses accordingly and reports what it used via <code>Content-Encoding</code>. A response that varies by this header must list it in <code>Vary</code>, or caches can serve the wrong (compressed/uncompressed) copy to the wrong client.',
+    example: 'Accept-Encoding: gzip, br', spec: 'RFC 9110', related: ['Content-Encoding', 'Vary'] },
+  { name: 'Accept-Language', category: 'negotiation', side: 'request', status: 'standard',
+    summary: 'Which human languages, in what order of preference, the client wants the response in.',
+    description: 'A weighted list of language tags (<code>en-US</code>, <code>fr;q=0.8</code>). Servers use it to pick a localized representation, echoing the choice in <code>Content-Language</code>. Also a known fingerprinting signal — an unusual language list can help identify a client across sessions.',
+    example: 'Accept-Language: en-US,en;q=0.9,hi;q=0.8', spec: 'RFC 9110', related: ['Content-Language', 'Vary'] },
+  { name: 'Vary', category: 'negotiation', side: 'response', status: 'standard',
+    summary: 'Lists which request headers a cache must also match on before reusing this cached response.',
+    description: 'If a response’s content genuinely differs based on <code>Accept-Encoding</code> or <code>Accept-Language</code>, the server must say so via <code>Vary</code>, or a cache might serve, say, a gzip response to a client that can’t decompress it. <code>Vary: *</code> means effectively uncacheable by a shared cache.',
+    example: 'Vary: Accept-Encoding, Accept-Language', spec: 'RFC 9110', related: ['Accept-Encoding', 'Accept-Language', 'Cache-Control'] },
+
+  // ── Message Body / Representation Metadata ───────────────────────────────
+  { name: 'Content-Type', category: 'body', side: 'both', status: 'standard',
+    summary: 'The media type (MIME type) of the body, optionally with a charset or boundary parameter.',
+    description: 'Tells the receiver how to parse the bytes that follow — <code>application/json</code>, <code>text/html; charset=utf-8</code>, <code>multipart/form-data; boundary=...</code>. Trusting a client-supplied <code>Content-Type</code> without also validating actual content is a classic source of MIME-confusion and upload-validation bugs.',
+    example: 'Content-Type: application/json; charset=utf-8', spec: 'RFC 9110', related: ['Accept', 'X-Content-Type-Options'] },
+  { name: 'Content-Length', category: 'body', side: 'both', status: 'standard',
+    summary: 'The exact size of the body, in bytes, when the body length is known upfront.',
+    description: 'Lets the receiver know exactly when the body ends without needing chunked framing. Must never appear alongside <code>Transfer-Encoding: chunked</code> in the same message — two different, disagreeing intermediaries reading a message with both is the classic HTTP request-smuggling setup.',
+    example: 'Content-Length: 348', spec: 'RFC 9112 §6.2', related: ['Transfer-Encoding'] },
+  { name: 'Content-Encoding', category: 'body', side: 'both', status: 'standard',
+    summary: 'What compression (if any) was applied to the body — the receiver must reverse it before reading the actual content.',
+    description: 'A property of the representation, not the transfer — unlike <code>Transfer-Encoding</code>, this survives being cached and re-served as-is. Common values: <code>gzip</code>, <code>br</code>, <code>deflate</code>.',
+    example: 'Content-Encoding: gzip', spec: 'RFC 9110', related: ['Accept-Encoding', 'Transfer-Encoding'] },
+  { name: 'Content-Language', category: 'body', side: 'both', status: 'standard',
+    summary: 'The human language(s) the body is written in.',
+    description: 'Echoes back what <code>Accept-Language</code> negotiated, or simply states the language of a static resource that isn’t negotiated at all.',
+    example: 'Content-Language: en-US', spec: 'RFC 9110', related: ['Accept-Language'] },
+  { name: 'Content-Location', category: 'body', side: 'both', status: 'standard',
+    summary: 'The specific URL of the exact representation returned, when it differs from the request URL (e.g. after content negotiation).',
+    description: 'If a request to <code>/document</code> negotiated down to a French, JSON representation, <code>Content-Location</code> might point at <code>/document.fr.json</code> — useful for caching that specific variant directly. Not to be confused with the redirect header <code>Location</code>.',
+    example: 'Content-Location: /document.fr.json', spec: 'RFC 9110', related: ['Location', 'Vary'] },
+  { name: 'Content-Disposition', category: 'body', side: 'response', status: 'standard',
+    summary: 'Suggests whether the body should be displayed inline or downloaded as a file, and what filename to use.',
+    description: 'The header behind "Save As" dialogs: <code>Content-Disposition: attachment; filename="report.pdf"</code> forces a download instead of inline rendering. Also used inside each part of a <code>multipart/form-data</code> body to name form fields and uploaded files.',
+    example: 'Content-Disposition: attachment; filename="report.pdf"', spec: 'RFC 6266', related: ['Content-Type'] },
+
+  // ── Caching ───────────────────────────────────────────────────────────────
+  { name: 'Cache-Control', category: 'caching', side: 'both', status: 'standard',
+    summary: 'Directives controlling whether, where, and for how long a message may be cached and reused.',
+    description: 'The central caching header, sent by both requests and responses. Common response directives: <code>no-store</code> (never cache), <code>no-cache</code> (cache it, but revalidate every time), <code>max-age=N</code> (fresh for N seconds), <code>private</code>/<code>public</code> (who’s allowed to cache it), <code>immutable</code>.',
+    example: 'Cache-Control: no-cache, max-age=0', spec: 'RFC 9111 §5.2', related: ['Expires', 'ETag', 'Age'] },
+  { name: 'Expires', category: 'caching', side: 'response', status: 'legacy',
+    summary: 'An absolute date/time after which the response is considered stale — superseded by Cache-Control: max-age.',
+    description: 'Predates <code>Cache-Control</code>. Still honored by caches that don’t understand <code>max-age</code>, but wherever both are present, <code>max-age</code> wins — an absolute-date header is also fragile against clock skew between client and server, which relative <code>max-age</code> avoids entirely.',
+    example: 'Expires: Thu, 01 Dec 2026 16:00:00 GMT', spec: 'RFC 9111 §5.3', related: ['Cache-Control', 'Date'] },
+  { name: 'Age', category: 'caching', side: 'response', status: 'standard',
+    summary: 'How many seconds ago (per the cache) this response was generated or last validated by the origin.',
+    description: 'Added by intermediate caches, not the origin server — lets a client compute the response’s true remaining freshness (<code>max-age - Age</code>) even after it’s passed through one or more caching layers.',
+    example: 'Age: 120', spec: 'RFC 9111 §5.1', related: ['Cache-Control', 'Date'] },
+  { name: 'ETag', category: 'caching', side: 'response', status: 'standard',
+    summary: 'An opaque identifier for a specific version of a resource, used for cheap freshness checks and conflict detection.',
+    description: 'A client stores the ETag, then sends it back via <code>If-None-Match</code> on the next request; if it still matches, the server replies <code>304 Not Modified</code> with no body, saving bandwidth. Also used for optimistic-concurrency writes via <code>If-Match</code>. A "weak" ETag (<code>W/"..."</code>) means semantically-equivalent, not byte-identical.',
+    example: 'ETag: "33a64df551425fcc55e4d42a148795d9f25f89e"', spec: 'RFC 9110', related: ['If-None-Match', 'If-Match', 'Last-Modified'] },
+  { name: 'Last-Modified', category: 'caching', side: 'response', status: 'standard',
+    summary: 'When the resource was last changed, at whatever precision the server can reliably provide.',
+    description: 'The older, coarser sibling of <code>ETag</code> (one-second resolution, easy to get wrong across replicas/filesystems). Paired with <code>If-Modified-Since</code> for freshness checks the same way <code>ETag</code> pairs with <code>If-None-Match</code>; use both together when possible — ETag as the authoritative check, Last-Modified as a fallback.',
+    example: 'Last-Modified: Wed, 21 Oct 2015 07:28:00 GMT', spec: 'RFC 9110', related: ['If-Modified-Since', 'ETag'] },
+  { name: 'If-None-Match', category: 'caching', side: 'request', status: 'standard',
+    summary: 'Asks the server to send the full response only if it does NOT match this ETag — the standard "have I got the latest?" check.',
+    description: 'On GET, a match means <code>304 Not Modified</code>, no body. On a write (PUT/DELETE), <code>If-None-Match: *</code> is the "only if it doesn’t already exist" idiom — useful for create-without-overwrite semantics.',
+    example: 'If-None-Match: "33a64df551425fcc55e4d42a148795d9f25f89e"', spec: 'RFC 9110', related: ['ETag', 'Cache-Control'] },
+  { name: 'If-Modified-Since', category: 'caching', side: 'request', status: 'standard',
+    summary: 'Asks the server to send the full response only if it changed after this timestamp.',
+    description: 'The date-based counterpart to <code>If-None-Match</code>. Less precise (one-second granularity, and a resource can change twice within a second without detection) — prefer <code>ETag</code>/<code>If-None-Match</code> when the server supports it.',
+    example: 'If-Modified-Since: Wed, 21 Oct 2015 07:28:00 GMT', spec: 'RFC 9110', related: ['Last-Modified', 'If-None-Match'] },
+  { name: 'If-Match', category: 'caching', side: 'request', status: 'standard',
+    summary: 'Only perform the request if the resource’s current ETag matches — the standard optimistic-concurrency guard for writes.',
+    description: 'On a PUT/PATCH/DELETE, this prevents a "lost update": if someone else changed the resource since you last read its ETag, the server responds <code>412 Precondition Failed</code> instead of blindly overwriting their change.',
+    example: 'If-Match: "33a64df551425fcc55e4d42a148795d9f25f89e"', spec: 'RFC 9110', related: ['ETag', 'If-Unmodified-Since'] },
+  { name: 'If-Unmodified-Since', category: 'caching', side: 'request', status: 'standard',
+    summary: 'Only perform the request if the resource has NOT changed since this timestamp — the date-based sibling of If-Match.',
+    description: 'Same optimistic-concurrency purpose as <code>If-Match</code>, using a timestamp instead of an opaque ETag — same lower precision trade-off as <code>If-Modified-Since</code>.',
+    example: 'If-Unmodified-Since: Wed, 21 Oct 2015 07:28:00 GMT', spec: 'RFC 9110', related: ['If-Match', 'Last-Modified'] },
+
+  // ── Range Requests ────────────────────────────────────────────────────────
+  { name: 'Range', category: 'range', side: 'request', status: 'standard',
+    summary: 'Asks for only a byte range of the resource, not the whole thing.',
+    description: 'Powers resumable downloads and video/audio seeking: <code>Range: bytes=1000-1999</code> asks for exactly those bytes. The server replies <code>206 Partial Content</code> with <code>Content-Range</code>, or <code>416 Range Not Satisfiable</code> if the range doesn’t exist — or just ignores it and sends the whole <code>200</code> if it doesn’t support ranges at all.',
+    example: 'Range: bytes=1000-1999', spec: 'RFC 9110 §14', related: ['Content-Range', 'Accept-Ranges', 'If-Range'] },
+  { name: 'Content-Range', category: 'range', side: 'response', status: 'standard',
+    summary: 'States which byte range this partial response covers, and the total resource size.',
+    description: 'Sent alongside a <code>206 Partial Content</code> (or a <code>416</code>) to say exactly what slice of the full resource this body represents.',
+    example: 'Content-Range: bytes 1000-1999/5000', spec: 'RFC 9110 §14.4', related: ['Range', 'Accept-Ranges'] },
+  { name: 'Accept-Ranges', category: 'range', side: 'response', status: 'standard',
+    summary: 'Advertises whether the server supports range requests for this resource at all.',
+    description: 'Usually <code>Accept-Ranges: bytes</code>, or <code>none</code> to explicitly say it doesn’t support partial content — lets a client (like a download manager) know upfront whether resuming is even possible.',
+    example: 'Accept-Ranges: bytes', spec: 'RFC 9110 §14.3', related: ['Range'] },
+  { name: 'If-Range', category: 'range', side: 'request', status: 'standard',
+    summary: 'Makes a Range request conditional: only send the partial content if the resource is still the exact version you already have part of.',
+    description: 'Solves a real bug class: if you’d already downloaded bytes 0-999 and the file changed since, blindly requesting bytes 1000-1999 next would silently stitch together two different versions. <code>If-Range</code> (an ETag or date) makes the server send the FULL new resource instead if it changed, so the client can start over cleanly.',
+    example: 'If-Range: "33a64df551425fcc55e4d42a148795d9f25f89e"', spec: 'RFC 9110 §13.1.5', related: ['Range', 'ETag'] },
+
+  // ── Redirection ───────────────────────────────────────────────────────────
+  { name: 'Location', category: 'redirect', side: 'response', status: 'standard',
+    summary: 'Where the client should go instead — required on 3xx redirects, also used on 201 Created for the new resource’s URL.',
+    description: 'The header that makes a <code>3xx</code> status code actually actionable: it names the target URL. Also doubles as "here’s the URL of the thing you just created" on a <code>201 Created</code> response.',
+    example: 'Location: https://example.com/new-page', spec: 'RFC 9110', related: ['Content-Location'] },
+  { name: 'Refresh', category: 'redirect', side: 'response', status: 'non-standard',
+    summary: 'Tells the browser to reload or redirect after N seconds — a non-standard header with the same effect as an HTML meta-refresh tag.',
+    description: 'Never formally standardized in an RFC but supported by every major browser: <code>Refresh: 5; url=https://example.com</code> reloads to that URL after 5 seconds. A proper <code>3xx</code> + <code>Location</code> is almost always the better-specified choice.',
+    example: 'Refresh: 5; url=https://example.com/', spec: 'Non-standard (widely implemented)', related: ['Location'] },
+
+  // ── Cookies ───────────────────────────────────────────────────────────────
+  { name: 'Cookie', category: 'cookies', side: 'request', status: 'standard',
+    summary: 'Sends previously-stored name=value pairs back to the server that set them.',
+    description: 'The client automatically re-attaches every cookie whose domain/path/security attributes match the request. Multiple cookies are semicolon-separated on one line — unlike most headers, this one is never repeated per cookie.',
+    example: 'Cookie: session_id=abc123; theme=dark', spec: 'RFC 6265', related: ['Set-Cookie'] },
+  { name: 'Set-Cookie', category: 'cookies', side: 'response', status: 'standard',
+    summary: 'Asks the browser to store a cookie, with attributes controlling its lifetime, scope, and security.',
+    description: 'Key attributes: <code>Expires</code>/<code>Max-Age</code> (lifetime), <code>Domain</code>/<code>Path</code> (scope), <code>Secure</code> (HTTPS-only), <code>HttpOnly</code> (unreadable from JavaScript — blocks XSS cookie theft), <code>SameSite</code> (<code>Strict</code>/<code>Lax</code>/<code>None</code>, the primary CSRF defense at the cookie layer). Sent once per cookie, as separate header lines.',
+    example: 'Set-Cookie: session_id=abc123; HttpOnly; Secure; SameSite=Lax', spec: 'RFC 6265', related: ['Cookie'] },
+
+  // ── Authentication & Authorization ───────────────────────────────────────
+  { name: 'Authorization', category: 'auth', side: 'request', status: 'standard',
+    summary: 'Carries the client’s credentials for the origin server — a scheme name plus scheme-specific data.',
+    description: 'Format is <code>&lt;scheme&gt; &lt;credentials&gt;</code>: <code>Basic base64(user:pass)</code>, <code>Bearer &lt;token&gt;</code> (OAuth2/JWT), <code>Digest ...</code>. Never logged, never put in a URL, and — unlike cookies — not automatically re-sent cross-origin or on redirects to a different host by fetch/XHR unless the app does it explicitly.',
+    example: 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...', spec: 'RFC 9110', related: ['WWW-Authenticate'] },
+  { name: 'WWW-Authenticate', category: 'auth', side: 'response', status: 'standard',
+    summary: 'Sent with a 401 to tell the client which auth scheme(s) the server accepts and how to authenticate.',
+    description: 'Triggers the browser’s native Basic-auth login prompt when the scheme is <code>Basic</code>. For API auth (Bearer/OAuth2) it’s more often just read by client code rather than shown to a human directly.',
+    example: 'WWW-Authenticate: Basic realm="Restricted Area"', spec: 'RFC 9110', related: ['Authorization'] },
+  { name: 'Proxy-Authenticate', category: 'auth', side: 'response', status: 'standard',
+    summary: 'The proxy equivalent of WWW-Authenticate — sent with a 407 to request credentials for THIS proxy, not the origin server.',
+    description: 'Keeps proxy authentication cleanly separate from origin-server authentication, since a request may need to satisfy both independently on its way through.',
+    example: 'Proxy-Authenticate: Basic realm="proxy"', spec: 'RFC 9110', related: ['Proxy-Authorization'] },
+  { name: 'Proxy-Authorization', category: 'auth', side: 'request', status: 'standard',
+    summary: 'The proxy equivalent of Authorization — credentials for a proxy along the way, not the origin server.',
+    description: 'Hop-by-hop: meant for the next proxy only, and (correctly implemented) stripped before the request continues past that proxy toward the origin.',
+    example: 'Proxy-Authorization: Basic dXNlcjpwYXNz', spec: 'RFC 9110', related: ['Proxy-Authenticate'] },
+
+  // ── CORS ──────────────────────────────────────────────────────────────────
+  { name: 'Access-Control-Allow-Origin', category: 'cors', side: 'response', status: 'standard',
+    summary: 'Which origin(s) are allowed to read this response from a cross-origin script.',
+    description: 'Either an exact origin echoing back the request’s <code>Origin</code>, or <code>*</code> for "any origin" (only valid when the response carries no credentials). Missing or mismatched, and the browser lets the response arrive over the wire but blocks the script from reading it — CORS is a browser-enforced read restriction, not a network-level block.',
+    example: 'Access-Control-Allow-Origin: https://app.example.com', spec: 'Fetch Standard (WHATWG)', related: ['Origin', 'Access-Control-Allow-Credentials'] },
+  { name: 'Access-Control-Allow-Methods', category: 'cors', side: 'response', status: 'standard',
+    summary: 'Which HTTP methods are allowed for cross-origin requests to this resource — answers the preflight’s question.',
+    description: 'Returned in response to an OPTIONS preflight for methods beyond the CORS-safelisted set (GET/HEAD/POST with simple content types).',
+    example: 'Access-Control-Allow-Methods: GET, POST, PUT, DELETE', spec: 'Fetch Standard (WHATWG)', related: ['Access-Control-Request-Method'] },
+  { name: 'Access-Control-Allow-Headers', category: 'cors', side: 'response', status: 'standard',
+    summary: 'Which request headers are allowed on the actual cross-origin request — the preflight’s answer for custom headers.',
+    description: 'If your fetch sets a custom header like <code>X-API-Key</code>, the browser preflights first, and the server must explicitly allow that header name here or the real request never gets sent.',
+    example: 'Access-Control-Allow-Headers: Content-Type, X-API-Key', spec: 'Fetch Standard (WHATWG)', related: ['Access-Control-Request-Headers'] },
+  { name: 'Access-Control-Allow-Credentials', category: 'cors', side: 'response', status: 'standard',
+    summary: 'Whether the response may be read when the request was sent with cookies/credentials attached.',
+    description: 'Must be exactly <code>true</code> (a bare literal, not a list) to allow a credentialed cross-origin request through — and if this is set, <code>Access-Control-Allow-Origin</code> can no longer be the wildcard <code>*</code>; it must echo an exact origin.',
+    example: 'Access-Control-Allow-Credentials: true', spec: 'Fetch Standard (WHATWG)', related: ['Access-Control-Allow-Origin'] },
+  { name: 'Access-Control-Expose-Headers', category: 'cors', side: 'response', status: 'standard',
+    summary: 'Which response headers, beyond the small default safelist, JavaScript is allowed to read via fetch/XHR.',
+    description: 'By default cross-origin script code can only read a handful of "safelisted" response headers (Content-Type, Content-Length, a few others). Anything else — like a custom <code>X-Request-ID</code> — needs to be explicitly exposed here or <code>response.headers.get(...)</code> returns null for it.',
+    example: 'Access-Control-Expose-Headers: X-Request-ID, X-RateLimit-Remaining', spec: 'Fetch Standard (WHATWG)', related: ['Access-Control-Allow-Origin'] },
+  { name: 'Access-Control-Max-Age', category: 'cors', side: 'response', status: 'standard',
+    summary: 'How long (seconds) the browser may cache this preflight result before sending another OPTIONS.',
+    description: 'Lets a browser skip re-sending the OPTIONS preflight for every single cross-origin request to the same endpoint, up to this many seconds — pure performance, capped by a browser-specific maximum regardless of what the server asks for.',
+    example: 'Access-Control-Max-Age: 86400', spec: 'Fetch Standard (WHATWG)', related: ['Access-Control-Allow-Methods'] },
+  { name: 'Access-Control-Request-Method', category: 'cors', side: 'request', status: 'standard',
+    summary: 'Sent by the browser during a preflight OPTIONS to ask "will you allow this method for the real request?"',
+    description: 'Part of the automatic preflight the browser sends, never something app code sets directly — it’s asking permission for the method the real request is about to use.',
+    example: 'Access-Control-Request-Method: PUT', spec: 'Fetch Standard (WHATWG)', related: ['Access-Control-Allow-Methods'] },
+  { name: 'Access-Control-Request-Headers', category: 'cors', side: 'request', status: 'standard',
+    summary: 'Sent by the browser during a preflight OPTIONS to ask "will you allow these custom headers on the real request?"',
+    description: 'The header-name counterpart to <code>Access-Control-Request-Method</code> — lists every non-safelisted header name the real request intends to send.',
+    example: 'Access-Control-Request-Headers: content-type, x-api-key', spec: 'Fetch Standard (WHATWG)', related: ['Access-Control-Allow-Headers'] },
+
+  // ── Security Headers ─────────────────────────────────────────────────────
+  { name: 'Strict-Transport-Security', category: 'security', side: 'response', status: 'standard',
+    summary: 'Tells the browser to only ever connect to this host over HTTPS, for a given time, even if the user types http://.',
+    description: 'Once received, the browser auto-upgrades every future request to this host to HTTPS and refuses to proceed past certificate errors — closes the "first request over plain HTTP" window that a network attacker could otherwise intercept and strip. <code>includeSubDomains</code> extends it to every subdomain; <code>preload</code> opts into being hardcoded into browsers’ shipped HSTS list.',
+    example: 'Strict-Transport-Security: max-age=63072000; includeSubDomains; preload', spec: 'RFC 6797', related: [] },
+  { name: 'Content-Security-Policy', category: 'security', side: 'response', status: 'standard',
+    summary: 'A fine-grained allowlist of where scripts, styles, images, frames, etc. are allowed to load from — the primary defense-in-depth against XSS.',
+    description: 'Directives like <code>script-src \'self\'</code> or <code>default-src \'none\'; img-src https:</code> tell the browser to refuse to execute or load anything not on the allowlist, even if an attacker manages to inject a <code>&lt;script&gt;</code> tag into the page. Strict CSPs also disable inline scripts and <code>eval()</code> by default.',
+    example: "Content-Security-Policy: default-src 'self'; script-src 'self' cdn.example.com", spec: 'CSP Level 3 (W3C)', related: ['Content-Security-Policy-Report-Only', 'X-Frame-Options'] },
+  { name: 'Content-Security-Policy-Report-Only', category: 'security', side: 'response', status: 'standard',
+    summary: 'Same syntax as Content-Security-Policy, but only reports violations instead of blocking anything — for testing a policy safely before enforcing it.',
+    description: 'Lets a team see what a proposed CSP would have blocked, via violation reports, without actually breaking the live site — the standard rollout path before switching to the enforcing header.',
+    example: "Content-Security-Policy-Report-Only: default-src 'self'; report-uri /csp-reports", spec: 'CSP Level 3 (W3C)', related: ['Content-Security-Policy'] },
+  { name: 'X-Content-Type-Options', category: 'security', side: 'response', status: 'standard',
+    summary: 'Stops the browser from MIME-sniffing the body into a different type than what Content-Type declared.',
+    description: 'The one meaningful value is <code>nosniff</code>. Without it, a browser might decide a file served as <code>text/plain</code> is "actually" HTML or JavaScript based on its content and execute it — a real vector for turning an unrelated upload endpoint into an XSS delivery mechanism.',
+    example: 'X-Content-Type-Options: nosniff', spec: 'Fetch Standard / widely implemented', related: ['Content-Type'] },
+  { name: 'X-Frame-Options', category: 'security', side: 'response', status: 'legacy',
+    summary: 'Controls whether this page may be embedded in an iframe — the original clickjacking defense, superseded by CSP’s frame-ancestors.',
+    description: '<code>DENY</code> or <code>SAMEORIGIN</code> (an <code>ALLOW-FROM</code> variant existed but was inconsistently supported and is obsolete). <code>Content-Security-Policy: frame-ancestors</code> is the modern, more flexible replacement, but many sites still send both for older-browser coverage.',
+    example: 'X-Frame-Options: SAMEORIGIN', spec: 'RFC 7034 (informational)', related: ['Content-Security-Policy'] },
+  { name: 'Referrer-Policy', category: 'security', side: 'response', status: 'standard',
+    summary: 'Controls how much of the Referer header the browser sends on outgoing requests/navigations from this page.',
+    description: 'Values range from <code>no-referrer</code> (send nothing) through <code>strict-origin-when-cross-origin</code> (the modern browser default — full URL same-origin, origin-only cross-origin, nothing on downgrade) to <code>unsafe-url</code> (always send the full URL, rarely appropriate).',
+    example: 'Referrer-Policy: strict-origin-when-cross-origin', spec: 'Referrer Policy (W3C)', related: ['Referer'] },
+  { name: 'Permissions-Policy', category: 'security', side: 'response', status: 'standard',
+    summary: 'Enables or disables browser features (camera, geolocation, USB, etc.) for this page and any iframes it embeds.',
+    description: 'Successor to the earlier <code>Feature-Policy</code> header. Lets a top-level page lock down which powerful APIs even an embedded third-party iframe is allowed to invoke — defense in depth beyond just trusting that iframe’s own code.',
+    example: 'Permissions-Policy: geolocation=(), camera=(), microphone=()', spec: 'Permissions Policy (W3C)', related: [] },
+  { name: 'X-XSS-Protection', category: 'security', side: 'response', status: 'deprecated',
+    summary: 'Used to toggle a browser’s built-in reflected-XSS filter — that filter has been removed from every modern browser, so this header now does nothing.',
+    description: "Chrome, Edge, and Safari all removed their XSS auditors (they caused their own security bugs and false positives); Firefox never implemented one. A proper <code>Content-Security-Policy</code> is the actual current defense — this header is kept around only for very old browser compatibility and is effectively inert everywhere else.",
+    example: 'X-XSS-Protection: 1; mode=block', spec: 'Deprecated / removed from modern browsers', related: ['Content-Security-Policy'] },
+  { name: 'Cross-Origin-Opener-Policy', category: 'security', side: 'response', status: 'standard',
+    summary: 'Isolates this page’s browsing context from cross-origin popups/openers it interacts with, blocking a class of side-channel attacks.',
+    description: '<code>same-origin</code> puts the page in its own isolated process group, severing the JS-level relationship an attacker-controlled popup could otherwise exploit (e.g. probing <code>window.length</code> or leaking timing via Spectre-class side channels). Often paired with <code>Cross-Origin-Embedder-Policy</code> to unlock powerful APIs like <code>SharedArrayBuffer</code>.',
+    example: 'Cross-Origin-Opener-Policy: same-origin', spec: 'HTML Standard (WHATWG)', related: ['Cross-Origin-Embedder-Policy'] },
+  { name: 'Cross-Origin-Embedder-Policy', category: 'security', side: 'response', status: 'standard',
+    summary: 'Requires every cross-origin resource this page embeds to explicitly opt in, or it won’t load.',
+    description: '<code>require-corp</code> blocks any cross-origin image/script/etc. that doesn’t serve <code>Cross-Origin-Resource-Policy</code> (or CORS headers) granting permission — required, alongside COOP, to enable cross-origin isolation and APIs like high-resolution timers or <code>SharedArrayBuffer</code>.',
+    example: 'Cross-Origin-Embedder-Policy: require-corp', spec: 'Fetch Standard (WHATWG)', related: ['Cross-Origin-Opener-Policy', 'Cross-Origin-Resource-Policy'] },
+  { name: 'Cross-Origin-Resource-Policy', category: 'security', side: 'response', status: 'standard',
+    summary: 'Lets a server explicitly declare who may load this resource cross-origin, independent of CORS.',
+    description: '<code>same-origin</code>, <code>same-site</code>, or <code>cross-origin</code>. Unlike CORS (which is about letting JS *read* a response), this is enforced even for "no-cors" loads like <code>&lt;img&gt;</code> tags — protects against cross-origin data leaks that don’t need CORS to succeed at all (e.g. pixel-timing side channels).',
+    example: 'Cross-Origin-Resource-Policy: same-site', spec: 'Fetch Standard (WHATWG)', related: ['Cross-Origin-Embedder-Policy'] },
+  { name: 'Clear-Site-Data', category: 'security', side: 'response', status: 'standard',
+    summary: 'Tells the browser to wipe cookies, storage, and/or cache for this origin — typically sent on logout.',
+    description: 'Directives like <code>"cache", "cookies", "storage"</code> let a logout endpoint proactively clear everything client-side rather than relying only on server-side session invalidation — reduces the window for session-fixation-style reuse of leftover local data.',
+    example: 'Clear-Site-Data: "cache", "cookies", "storage"', spec: 'W3C', related: ['Set-Cookie'] },
+  { name: 'Upgrade-Insecure-Requests', category: 'security', side: 'both', status: 'standard',
+    summary: 'A signal (request from browser, or response/meta from a server) preferring the HTTPS version of a resource when both exist.',
+    description: "Sent by browsers automatically on every navigation; a server can also send it in a response to hint that mixed-content resources should be auto-upgraded to HTTPS rather than blocked outright. Complements HSTS but is weaker — it's a preference/best-effort signal, not an enforced upgrade.",
+    example: 'Upgrade-Insecure-Requests: 1', spec: 'W3C', related: ['Strict-Transport-Security'] },
+  { name: 'Expect-CT', category: 'security', side: 'response', status: 'deprecated',
+    summary: 'Used to require Certificate Transparency compliance for a site’s TLS certificate — deprecated now that CT enforcement is built into browsers directly.',
+    description: 'Was meant to catch mis-issued certificates by requiring them to be publicly logged. Chrome enforces CT for all publicly-trusted certificates regardless of this header now, making it redundant; formally deprecated and removed from current browsers.',
+    example: 'Expect-CT: max-age=86400, enforce', spec: 'Deprecated (was RFC-track draft)', related: ['Strict-Transport-Security'] },
+
+  // ── Proxies & Forwarding ──────────────────────────────────────────────────
+  { name: 'X-Forwarded-For', category: 'proxies', side: 'both', status: 'non-standard',
+    summary: 'The de-facto standard way a proxy/load balancer records the original client IP, since the direct TCP connection’s IP is now the proxy’s.',
+    description: 'Never formalized in an RFC (the standardized replacement is <code>Forwarded</code>), but overwhelmingly the one actually used in practice. A comma-separated chain as it passes through multiple proxies — an application must trust only the entries added by ITS OWN infrastructure, never blindly trust the whole header, since a client can freely set an arbitrary value for this "header" itself before it reaches the first real proxy.',
+    example: 'X-Forwarded-For: 203.0.113.5, 70.41.3.18', spec: 'Non-standard (de facto)', related: ['Forwarded', 'X-Forwarded-Proto'] },
+  { name: 'X-Forwarded-Host', category: 'proxies', side: 'both', status: 'non-standard',
+    summary: 'The original Host header value, when a proxy rewrites Host before forwarding to a backend.',
+    description: 'Lets a backend that sits behind a proxy (which may talk to it via an internal hostname) still know what the client actually typed — needed for building correct absolute URLs, but just as trust-sensitive as <code>X-Forwarded-For</code> if not stripped/overwritten at the trust boundary.',
+    example: 'X-Forwarded-Host: app.example.com', spec: 'Non-standard (de facto)', related: ['Host', 'Forwarded'] },
+  { name: 'X-Forwarded-Proto', category: 'proxies', side: 'both', status: 'non-standard',
+    summary: 'Says whether the original client connection was HTTP or HTTPS, when TLS is terminated at a proxy/load balancer.',
+    description: 'A backend that only speaks plaintext HTTP internally still needs to know the original request was HTTPS — for building correct <code>https://</code> URLs and enforcing "redirect HTTP to HTTPS" logic correctly instead of redirect-looping.',
+    example: 'X-Forwarded-Proto: https', spec: 'Non-standard (de facto)', related: ['Forwarded'] },
+  { name: 'Forwarded', category: 'proxies', side: 'both', status: 'standard',
+    summary: 'The standardized, structured replacement for the X-Forwarded-* family — one header carrying for/by/proto/host in one syntax.',
+    description: 'Formally specified, but adoption lags far behind the older <code>X-Forwarded-*</code> headers it was meant to replace — most real infrastructure still emits the non-standard family. Same trust-boundary caution applies: only values added by your own trusted proxies are meaningful.',
+    example: 'Forwarded: for=203.0.113.5;proto=https;by=198.51.100.1', spec: 'RFC 7239', related: ['X-Forwarded-For', 'X-Forwarded-Proto'] },
+
+  // ── Server & Response Metadata ────────────────────────────────────────────
+  { name: 'Server', category: 'server', side: 'response', status: 'standard',
+    summary: 'Identifies the server software handling the request — optional, and often deliberately vague or omitted for security.',
+    description: 'A free-text product/version string like <code>nginx/1.25.3</code>. Advertising exact versions makes it trivial for an attacker to look up known CVEs for that exact build — many production deployments intentionally minimize or blank this out.',
+    example: 'Server: nginx/1.25.3', spec: 'RFC 9110', related: ['User-Agent', 'X-Powered-By'] },
+  { name: 'Allow', category: 'server', side: 'response', status: 'standard',
+    summary: 'Lists the HTTP methods a resource actually supports — required on a 405 Method Not Allowed response.',
+    description: 'Also returned on <code>OPTIONS</code> responses as a way to ask a server "what can I do here?" without guessing.',
+    example: 'Allow: GET, POST, HEAD, OPTIONS', spec: 'RFC 9110', related: [] },
+  { name: 'Retry-After', category: 'server', side: 'response', status: 'standard',
+    summary: 'Tells the client how long to wait before trying again — sent with 429 Too Many Requests or 503 Service Unavailable.',
+    description: 'Either a number of seconds or an absolute HTTP date. A well-behaved client (or rate-limit-aware library) should back off for at least this long instead of retrying immediately and making the overload/throttling worse.',
+    example: 'Retry-After: 120', spec: 'RFC 9110', related: [] },
+  { name: 'X-Powered-By', category: 'server', side: 'response', status: 'non-standard',
+    summary: 'A non-standard, informal header naming the backend framework (e.g. Express, PHP, ASP.NET) — same fingerprinting risk as Server.',
+    description: 'Not part of any spec; some frameworks add it by default and many security-conscious deployments strip it for the same reason they minimize <code>Server</code> — less free reconnaissance for an attacker.',
+    example: 'X-Powered-By: Express', spec: 'Non-standard', related: ['Server'] },
+
+  // ── Modern Web Platform & Extension Headers ──────────────────────────────
+  { name: 'X-Requested-With', category: 'modern', side: 'request', status: 'non-standard',
+    summary: 'Historically used by JS libraries to flag an AJAX request — e.g. XMLHttpRequest.',
+    description: 'Never standardized, and largely a legacy convention from the jQuery/early-AJAX era for server-side code to distinguish "real" navigations from script-driven requests. Modern apps more often rely on <code>Accept</code>/<code>Sec-Fetch-*</code> or a dedicated custom header instead.',
+    example: 'X-Requested-With: XMLHttpRequest', spec: 'Non-standard', related: ['Sec-Fetch-Mode'] },
+  { name: 'DNT', category: 'modern', side: 'request', status: 'deprecated',
+    summary: '"Do Not Track" — a client’s request not to be tracked across sites, which servers were never obligated to honor.',
+    description: 'Purely advisory with no enforcement mechanism; most sites ignored it, and most major browsers have since removed the UI to send it at all in favor of stronger built-in tracking protections that don’t rely on trusting the tracker to comply.',
+    example: 'DNT: 1', spec: 'Deprecated (W3C draft abandoned)', related: [] },
+  { name: 'Sec-Fetch-Site', category: 'modern', side: 'request', status: 'standard',
+    summary: 'Automatically set by the browser: the relationship between the request’s origin and the destination — same-origin, same-site, cross-site, or none.',
+    description: "Can't be set or overridden by page JavaScript — that's what makes it trustworthy server-side for exactly the kind of decisions CSRF defenses need (\"reject state-changing requests where Sec-Fetch-Site is cross-site\"), unlike Referer which can be suppressed or spoofed in more scenarios.",
+    example: 'Sec-Fetch-Site: cross-site', spec: 'Fetch Metadata (W3C)', related: ['Sec-Fetch-Mode', 'Origin'] },
+  { name: 'Sec-Fetch-Mode', category: 'modern', side: 'request', status: 'standard',
+    summary: 'Automatically set by the browser: how the request was made — navigate, cors, no-cors, same-origin, websocket.',
+    description: 'Part of the same browser-controlled Fetch Metadata family as <code>Sec-Fetch-Site</code> — lets a server distinguish, say, a top-level navigation from a background <code>fetch()</code> call, again without trusting anything page script could tamper with.',
+    example: 'Sec-Fetch-Mode: navigate', spec: 'Fetch Metadata (W3C)', related: ['Sec-Fetch-Site'] },
+  { name: 'Sec-Fetch-Dest', category: 'modern', side: 'request', status: 'standard',
+    summary: 'Automatically set by the browser: what the request is FOR — document, image, script, style, iframe, etc.',
+    description: 'Lets a server apply different policy per destination — e.g. rejecting a sensitive JSON endpoint from ever being requested as an <code>&lt;img&gt;</code> or <code>&lt;script&gt;</code> destination, closing off certain cross-origin data-leak techniques.',
+    example: 'Sec-Fetch-Dest: image', spec: 'Fetch Metadata (W3C)', related: ['Sec-Fetch-Site'] },
+  { name: 'Sec-Fetch-User', category: 'modern', side: 'request', status: 'standard',
+    summary: 'Automatically set by the browser: whether this navigation was directly triggered by a real user action (e.g. clicking a link).',
+    description: 'Present and <code>?1</code> only for user-initiated top-level navigations — helps a server distinguish a genuine user click from a script-driven redirect chain.',
+    example: 'Sec-Fetch-User: ?1', spec: 'Fetch Metadata (W3C)', related: ['Sec-Fetch-Mode'] },
+  { name: 'Sec-CH-UA', category: 'modern', side: 'request', status: 'standard',
+    summary: 'A structured, low-entropy client hint naming the browser brand(s) and version — the modern, more private alternative to parsing User-Agent.',
+    description: 'Part of the User-Agent Client Hints proposal: instead of a single dense, spoofable string, the server gets a small structured list and can ask for more detail (full version, platform) only if it actually needs it, via an <code>Accept-CH</code> response header — reduces passive fingerprinting surface by default.',
+    example: 'Sec-CH-UA: "Chromium";v="128", "Not;A=Brand";v="24"', spec: 'Client Hints (WICG)', related: ['User-Agent', 'Sec-CH-UA-Platform'] },
+  { name: 'Sec-CH-UA-Mobile', category: 'modern', side: 'request', status: 'standard',
+    summary: 'A client hint: whether the browser is running in a mobile-optimized mode.',
+    description: 'A simple boolean-style hint (<code>?0</code>/<code>?1</code>) sent alongside <code>Sec-CH-UA</code> for basic responsive-serving decisions without needing full User-Agent parsing.',
+    example: 'Sec-CH-UA-Mobile: ?0', spec: 'Client Hints (WICG)', related: ['Sec-CH-UA'] },
+  { name: 'Sec-CH-UA-Platform', category: 'modern', side: 'request', status: 'standard',
+    summary: 'A client hint naming the underlying OS platform (e.g. "Windows", "Android", "Linux").',
+    description: 'Another structured, opt-in-detail client hint in the same family as <code>Sec-CH-UA</code> — available by default at low precision, with the server able to request more specificity via <code>Accept-CH</code> if genuinely needed.',
+    example: 'Sec-CH-UA-Platform: "Linux"', spec: 'Client Hints (WICG)', related: ['Sec-CH-UA'] },
+  { name: 'Save-Data', category: 'modern', side: 'request', status: 'standard',
+    summary: 'A client hint: the user has opted into a reduced-data mode — a hint to serve lighter content.',
+    description: 'Set when the user has enabled a "Lite" / data-saver browser setting. A server can honor it by serving lower-resolution images, skipping non-essential assets, or disabling autoplay video.',
+    example: 'Save-Data: on', spec: 'Client Hints (WICG)', related: [] },
+  { name: 'X-Request-ID', category: 'modern', side: 'both', status: 'non-standard',
+    summary: 'An app-assigned unique ID for one request, echoed through logs/responses to correlate a single request across services.',
+    description: 'No standard header name for this exists (you’ll also see <code>X-Correlation-ID</code>, <code>X-Trace-ID</code>, or vendor-specific names) — purely a convention teams adopt for distributed tracing/debugging, often generated at the edge/gateway and propagated through every downstream service call.',
+    example: 'X-Request-ID: 8f14e45f-ceea-4e8d-9c7b-3d1a2f9e7c11', spec: 'Non-standard (convention)', related: [] },
+];
+
+// =============================================================================
+// STATE + RENDER
+// =============================================================================
+
+const state = { search: '', category: 'all', side: 'all', status: 'all', openHeader: null };
+
+function normalize(s) { return s.toLowerCase(); }
+
+function matches(h) {
+  if (state.category !== 'all' && h.category !== state.category) return false;
+  if (state.side !== 'all' && h.side !== state.side) return false;
+  if (state.status !== 'all' && h.status !== state.status) return false;
+  if (state.search) {
+    const q = normalize(state.search);
+    const hay = normalize(h.name + ' ' + h.summary + ' ' + h.description.replace(/<[^>]+>/g, ''));
+    if (!hay.includes(q)) return false;
+  }
+  return true;
+}
+
+function catInfo(key) { return CATEGORIES.find(c => c.key === key); }
+
+function renderSidebar() {
+  const counts = {};
+  HEADERS.forEach(h => { counts[h.category] = (counts[h.category] || 0) + 1; });
+  const totalMatching = HEADERS.filter(matches).length;
+
+  let html = `<button class="cat-item${state.category === 'all' ? ' active' : ''}" data-cat="all">
+      <span class="ic">📚</span><span class="lbl">All Categories</span><span class="cnt">${HEADERS.length}</span>
+    </button><hr>`;
+  html += CATEGORIES.map(c => `
+    <button class="cat-item${state.category === c.key ? ' active' : ''}" data-cat="${c.key}">
+      <span class="ic">${c.icon}</span><span class="lbl">${c.label}</span><span class="cnt">${counts[c.key] || 0}</span>
+    </button>`).join('');
+
+  document.getElementById('sidebar').innerHTML = html;
+  document.querySelectorAll('.cat-item').forEach(btn => {
+    btn.addEventListener('click', () => { state.category = btn.dataset.cat; renderAll(); });
+  });
+}
+
+function escHtml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+function headerCardHtml(h) {
+  const isOpen = state.openHeader === h.name;
+  const sideBadge = `<span class="badge side-${h.side}">${h.side}</span>`;
+  const statusBadge = (h.status === 'deprecated' || h.status === 'legacy' || h.status === 'non-standard')
+    ? `<span class="badge status-${h.status}">${h.status}</span>` : '';
+  const relatedHtml = h.related.length
+    ? `<div class="hcard-related">Related: ${h.related.map(r => `<span class="related-link" data-jump="${escHtml(r)}">${escHtml(r)}</span>`).join('')}</div>`
+    : '';
+  return `
+    <div class="hcard${isOpen ? ' open' : ''}" data-header="${escHtml(h.name)}" id="hdr-${escHtml(h.name)}">
+      <div class="hcard-head" data-toggle="${escHtml(h.name)}">
+        <span class="hcard-name">${escHtml(h.name)}</span>
+        ${sideBadge}${statusBadge}
+        <span class="hcard-summary">${escHtml(h.summary)}</span>
+        <span class="chev">▶</span>
+      </div>
+      <div class="hcard-body">
+        <div class="hcard-desc">${h.description}</div>
+        <div class="hcard-example-row">
+          <div class="hcard-example">${escHtml(h.example)}</div>
+          <button class="copy-mini" data-copy="${escHtml(h.example)}">📋 Copy</button>
+        </div>
+        <div class="hcard-meta">Spec: ${escHtml(h.spec)}</div>
+        ${relatedHtml}
+      </div>
+    </div>`;
+}
+
+function renderResults() {
+  const filtered = HEADERS.filter(matches);
+  document.getElementById('resultCount').textContent =
+    `${filtered.length} of ${HEADERS.length} headers shown`;
+
+  if (filtered.length === 0) {
+    document.getElementById('results').innerHTML = `<div class="no-results">No headers match your filters. Try clearing the search or filters.</div>`;
+    return;
+  }
+
+  const cats = state.category === 'all' ? CATEGORIES.map(c => c.key) : [state.category];
+  let html = '';
+  cats.forEach(catKey => {
+    const inCat = filtered.filter(h => h.category === catKey);
+    if (inCat.length === 0) return;
+    const c = catInfo(catKey);
+    html += `
+      <div class="cat-group">
+        <div class="cat-group-head"><h2>${c.icon} ${escHtml(c.label)}</h2><span class="cnt">${inCat.length}</span></div>
+        <div class="cat-group-desc">${escHtml(c.desc)}</div>
+        ${inCat.map(headerCardHtml).join('')}
+      </div>`;
+  });
+  document.getElementById('results').innerHTML = html;
+
+  document.querySelectorAll('[data-toggle]').forEach(el => {
+    el.addEventListener('click', () => {
+      const name = el.dataset.toggle;
+      state.openHeader = state.openHeader === name ? null : name;
+      renderResults();
+      if (state.openHeader === name) {
+        document.getElementById('hdr-' + name.replace(/"/g, '\\"'))?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    });
+  });
+  document.querySelectorAll('[data-copy]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try { await navigator.clipboard.writeText(btn.dataset.copy); btn.textContent = '✓ Copied'; setTimeout(() => btn.textContent = '📋 Copy', 1200); }
+      catch (err) { alert('Could not access clipboard — copy manually.'); }
+    });
+  });
+  document.querySelectorAll('[data-jump]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      jumpToHeader(el.dataset.jump);
+    });
+  });
+}
+
+function jumpToHeader(name) {
+  const target = HEADERS.find(h => h.name === name);
+  if (!target) return;
+  state.search = ''; document.getElementById('search').value = '';
+  state.side = 'all'; state.status = 'all';
+  document.querySelectorAll('.chip[data-filter="side"]').forEach(c => c.classList.toggle('active', c.dataset.val === 'all'));
+  document.querySelectorAll('.chip[data-filter="status"]').forEach(c => c.classList.toggle('active', c.dataset.val === 'all'));
+  state.category = 'all';
+  state.openHeader = name;
+  renderAll();
+  requestAnimationFrame(() => {
+    const el = document.getElementById('hdr-' + name);
+    if (el) {
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      el.classList.add('flash');
+      setTimeout(() => el.classList.remove('flash'), 1400);
+    }
+  });
+}
+
+function renderAll() {
+  renderSidebar();
+  renderResults();
+}
+
+document.getElementById('search').addEventListener('input', (e) => { state.search = e.target.value; renderAll(); });
+
+document.querySelectorAll('.chip[data-filter]').forEach(chip => {
+  chip.addEventListener('click', () => {
+    const filter = chip.dataset.filter;
+    document.querySelectorAll(`.chip[data-filter="${filter}"]`).forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    state[filter] = chip.dataset.val;
+    renderAll();
+  });
+});
+
+renderAll();
+</script>
+</body>
+</html>

@@ -29,3 +29,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# DataFrame Studio runtime state (saved templates) — not source
+df-studio/data/

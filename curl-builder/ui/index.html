@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>cURL Builder</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f4f6fb; --surface: #ffffff; --border: #dde1ef;
+    --text: #1c2035; --muted: #6b7180; --accent: #4f5ef0;
+    --ok-bg: rgba(21,128,61,0.08); --ok-text: #15803d; --ok-border: rgba(21,128,61,0.3);
+    --warn-bg: rgba(217,119,6,0.08); --warn-text: #b45309; --warn-border: rgba(217,119,6,0.3);
+    --code-bg: #1c2035; --code-text: #e7e9f5; --code-accent: #8ab4ff;
+  }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; padding: 24px 20px 60px;
+  }
+  header { max-width: 1280px; margin: 0 auto 20px; }
+  header h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.5px; }
+  header h1 span { color: var(--accent); }
+  header p { color: var(--muted); font-size: 0.85rem; margin-top: 2px; }
+  .trust-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--ok-bg); color: var(--ok-text);
+    border: 1px solid var(--ok-border); border-radius: 20px;
+    padding: 5px 12px; font-size: 0.78rem; font-weight: 600; margin-top: 10px;
+  }
+
+  .layout { max-width: 1280px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+
+  .col-right { position: sticky; top: 20px; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 18px; margin-bottom: 16px;
+  }
+  .card h2 { font-size: 1rem; font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+  .card .hint { font-size: 0.78rem; color: var(--muted); margin-bottom: 12px; line-height: 1.5; }
+  .card summary h2 { display: inline-flex; }
+
+  details.card { padding: 0; }
+  details.card > summary { list-style: none; cursor: pointer; padding: 18px; display: flex; justify-content: space-between; align-items: center; }
+  details.card > summary::-webkit-details-marker { display: none; }
+  details.card > summary .chev { color: var(--muted); font-size: 0.75rem; transition: transform 0.15s; }
+  details.card[open] > summary .chev { transform: rotate(90deg); }
+  details.card > .body { padding: 0 18px 18px; }
+  details.card > summary .count-badge {
+    background: var(--bg); color: var(--muted); border: 1px solid var(--border);
+    border-radius: 20px; padding: 1px 8px; font-size: 0.7rem; font-weight: 700; margin-left: 8px;
+  }
+
+  label {
+    font-size: 0.78rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.5px; color: var(--muted); display: block; margin-bottom: 6px;
+  }
+  select, input[type="text"], input[type="password"], input[type="number"] {
+    background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 7px 10px; font-size: 0.85rem; width: 100%;
+  }
+  select { cursor: pointer; }
+  textarea {
+    width: 100%; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px;
+    font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
+    font-size: 0.82rem; resize: vertical; min-height: 90px; line-height: 1.5;
+  }
+  textarea:focus, select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .field { margin-bottom: 12px; }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; }
+  .row > .field { flex: 1; min-width: 160px; }
+
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; align-items: center; }
+  button.action {
+    cursor: pointer; border: none; border-radius: 7px;
+    background: var(--accent); color: #fff; font-weight: 600;
+    font-size: 0.82rem; padding: 8px 16px;
+  }
+  button.action:hover { opacity: 0.88; }
+  button.action.secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+  button.action.secondary:hover { border-color: var(--accent); color: var(--accent); }
+  button.action.small { padding: 5px 11px; font-size: 0.76rem; }
+
+  .chip { cursor: pointer; border: 1px solid var(--border); background: var(--bg); color: var(--muted);
+    border-radius: 20px; padding: 4px 11px; font-size: 0.74rem; font-weight: 600; }
+  .chip:hover { border-color: var(--accent); color: var(--accent); }
+  .chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+
+  /* dynamic key/value row lists */
+  .kv-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+  .kv-row { display: flex; gap: 6px; align-items: center; }
+  .kv-row input[type="checkbox"] { width: 16px; height: 16px; flex: none; accent-color: var(--accent); }
+  .kv-row input[type="text"] { flex: 1; min-width: 0; }
+  .kv-row .kv-key { flex: 0 0 34%; }
+  .kv-row select.kv-mime { flex: 0 0 130px; font-size: 0.76rem; padding: 6px 6px; }
+  .kv-row button.kv-remove {
+    flex: none; cursor: pointer; border: 1px solid var(--border); background: var(--surface);
+    color: var(--muted); border-radius: 6px; width: 28px; height: 28px; font-size: 0.85rem; line-height: 1;
+  }
+  .kv-row button.kv-remove:hover { border-color: #dc2626; color: #dc2626; }
+  .kv-row.disabled input[type="text"] { opacity: 0.45; }
+  .file-toggle { flex: none; display: flex; align-items: center; gap: 4px; font-size: 0.7rem; color: var(--muted); cursor: pointer; user-select: none; }
+  .file-toggle input { accent-color: var(--accent); }
+
+  .seg { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; width: fit-content; }
+  .seg button { cursor: pointer; border: none; background: var(--surface); color: var(--muted);
+    font-size: 0.78rem; font-weight: 600; padding: 7px 14px; border-right: 1px solid var(--border); }
+  .seg button:last-child { border-right: none; }
+  .seg button.active { background: var(--accent); color: #fff; }
+
+  .check-field { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .check-field input { width: 16px; height: 16px; accent-color: var(--accent); flex: none; }
+  .check-field label { text-transform: none; letter-spacing: normal; font-weight: 500; font-size: 0.85rem; color: var(--text); margin-bottom: 0; }
+  .check-field .sub-hint { font-size: 0.72rem; color: var(--muted); margin-left: 24px; display: block; margin-top: -6px; margin-bottom: 8px; }
+  .check-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 16px; }
+  @media (max-width: 520px) { .check-grid { grid-template-columns: 1fr; } }
+
+  .divider { border-top: 1px dashed var(--border); margin: 16px 0; }
+
+  /* output panel */
+  .out-head { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+  .out-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  pre.cmd {
+    background: var(--code-bg); color: var(--code-text); border-radius: 10px;
+    padding: 16px; font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
+    font-size: 0.82rem; line-height: 1.65; overflow-x: auto; white-space: pre; margin-bottom: 10px;
+  }
+  pre.cmd .flag { color: var(--code-accent); }
+  pre.cmd .cmt { color: #8b91ab; }
+  .resolved-url { font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace; font-size: 0.78rem;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 8px 10px;
+    word-break: break-all; margin-bottom: 10px; }
+  .warn-box { font-size: 0.78rem; background: var(--warn-bg); color: var(--warn-text); border: 1px solid var(--warn-border);
+    border-radius: 7px; padding: 9px 12px; margin-bottom: 10px; display: none; line-height: 1.6; }
+  .warn-box.show { display: block; }
+  .warn-box ul { margin: 2px 0 0 18px; }
+  .copied-flash { color: var(--ok-text); font-size: 0.76rem; font-weight: 600; opacity: 0; transition: opacity 0.2s; }
+  .copied-flash.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>cURL <span>Builder</span></h1>
+  <p>Pick your request piece by piece — get a copy-pasteable curl command for bash, cmd.exe, or PowerShell</p>
+  <div class="trust-badge">🔒 100% client-side — this tool builds a command string, it never sends your request anywhere</div>
+</header>
+
+<div class="layout">
+
+  <!-- ================= LEFT COLUMN: builder form ================= -->
+  <div class="col-left">
+
+    <div class="card">
+      <div class="btn-row" style="margin:0 0 12px;">
+        <button class="action secondary small" id="btnExample">Load example</button>
+        <button class="action secondary small" id="btnReset">Reset all</button>
+      </div>
+      <h2>Request</h2>
+      <div class="row">
+        <div class="field" style="flex: 0 0 130px;">
+          <label for="method">Method</label>
+          <select id="method">
+            <option>GET</option>
+            <option>POST</option>
+            <option>PUT</option>
+            <option>PATCH</option>
+            <option>DELETE</option>
+            <option>HEAD</option>
+            <option>OPTIONS</option>
+            <option value="__custom">Custom…</option>
+          </select>
+        </div>
+        <div class="field" id="customMethodField" style="display:none; flex: 0 0 130px;">
+          <label for="customMethod">Custom method</label>
+          <input type="text" id="customMethod" placeholder="LOCK">
+        </div>
+        <div class="field" style="flex: 3; min-width: 280px;">
+          <label for="url">URL</label>
+          <input type="text" id="url" placeholder="https://api.example.com/v1/users/42">
+        </div>
+      </div>
+    </div>
+
+    <details class="card" id="detQuery">
+      <summary><h2>Query Parameters <span class="count-badge" id="queryCount">0</span></h2><span class="chev">▶</span></summary>
+      <div class="body">
+        <p class="hint">Appended to the URL above (URL-encoded automatically). Uncheck a row to keep it in the list but leave it out of the command.</p>
+        <div class="kv-list" id="queryList"></div>
+        <button class="action secondary small" id="addQuery">+ Add parameter</button>
+      </div>
+    </details>
+
+    <details class="card" id="detAuth">
+      <summary><h2>Authentication</h2><span class="chev">▶</span></summary>
+      <div class="body">
+        <div class="field">
+          <label for="authType">Type</label>
+          <select id="authType">
+            <option value="none">None</option>
+            <option value="basic">Basic Auth</option>
+            <option value="digest">Digest Auth</option>
+            <option value="bearer">Bearer Token</option>
+            <option value="apikey">API Key</option>
+          </select>
+        </div>
+
+        <div id="authBasic" class="auth-panel" style="display:none;">
+          <div class="row">
+            <div class="field"><label for="basicUser">Username</label><input type="text" id="basicUser"></div>
+            <div class="field"><label for="basicPass">Password</label><input type="text" id="basicPass"></div>
+          </div>
+        </div>
+
+        <div id="authDigest" class="auth-panel" style="display:none;">
+          <div class="row">
+            <div class="field"><label for="digestUser">Username</label><input type="text" id="digestUser"></div>
+            <div class="field"><label for="digestPass">Password</label><input type="text" id="digestPass"></div>
+          </div>
+        </div>
+
+        <div id="authBearer" class="auth-panel" style="display:none;">
+          <div class="field"><label for="bearerToken">Token</label><input type="text" id="bearerToken" placeholder="eyJhbGciOi..."></div>
+        </div>
+
+        <div id="authApiKey" class="auth-panel" style="display:none;">
+          <div class="row">
+            <div class="field"><label for="apiKeyName">Key name</label><input type="text" id="apiKeyName" placeholder="X-API-Key"></div>
+            <div class="field"><label for="apiKeyValue">Key value</label><input type="text" id="apiKeyValue"></div>
+            <div class="field" style="flex: 0 0 150px;">
+              <label for="apiKeyLoc">Send in</label>
+              <select id="apiKeyLoc"><option value="header">Header</option><option value="query">Query param</option></select>
+            </div>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <details class="card" id="detHeaders">
+      <summary><h2>Headers <span class="count-badge" id="headerCount">0</span></h2><span class="chev">▶</span></summary>
+      <div class="body">
+        <p class="hint">Quick-add common headers, or add your own below. A header set here always wins over one auto-generated from Auth/Body settings.</p>
+        <div class="chip-row" id="headerChips"></div>
+        <div class="kv-list" id="headerList"></div>
+        <button class="action secondary small" id="addHeader">+ Add header</button>
+      </div>
+    </details>
+
+    <details class="card" id="detBody">
+      <summary><h2>Body</h2><span class="chev">▶</span></summary>
+      <div class="body">
+        <div class="seg" id="bodyTypeSeg">
+          <button data-val="none" class="active">None</button>
+          <button data-val="raw">Raw</button>
+          <button data-val="graphql">GraphQL</button>
+          <button data-val="urlencoded">Form URL-Encoded</button>
+          <button data-val="multipart">Multipart Form</button>
+          <button data-val="binary">Binary File</button>
+        </div>
+        <div style="height:12px;"></div>
+
+        <div id="bodyNone" class="body-panel"><p class="hint" style="margin:0;">No request body will be sent.</p></div>
+
+        <div id="bodyRaw" class="body-panel" style="display:none;">
+          <div class="field" style="max-width: 220px;">
+            <label for="rawFormat">Format</label>
+            <select id="rawFormat">
+              <option value="json">JSON</option>
+              <option value="xml">XML</option>
+              <option value="text">Plain text</option>
+              <option value="html">HTML</option>
+              <option value="js">JavaScript</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="rawContent">Content</label>
+            <textarea id="rawContent" placeholder='{&#10;  "name": "Ada Lovelace"&#10;}'></textarea>
+          </div>
+          <button class="action secondary small" id="btnPrettyJson">Pretty-print JSON</button>
+        </div>
+
+        <div id="bodyGraphql" class="body-panel" style="display:none;">
+          <div class="field"><label for="gqlQuery">Query</label><textarea id="gqlQuery" placeholder="query GetUser($id: ID!) {&#10;  user(id: $id) { id name }&#10;}"></textarea></div>
+          <div class="field"><label for="gqlVars">Variables (JSON)</label><textarea id="gqlVars" placeholder='{ "id": "42" }' style="min-height:60px;"></textarea></div>
+          <p class="hint" style="margin:0;">Sent as one JSON body: <code>{"query": ..., "variables": ...}</code> with <code>Content-Type: application/json</code>.</p>
+        </div>
+
+        <div id="bodyUrlencoded" class="body-panel" style="display:none;">
+          <p class="hint">Each field becomes one <code>--data-urlencode</code> argument — values are percent-encoded for you, so paste them raw.</p>
+          <div class="kv-list" id="urlencodedList"></div>
+          <button class="action secondary small" id="addUrlencoded">+ Add field</button>
+        </div>
+
+        <div id="bodyMultipart" class="body-panel" style="display:none;">
+          <p class="hint">Toggle "File" on a row to send it as <code>key=@path</code> instead of a literal value. Type the path as it exists on the machine that will <em>run</em> this command — this tool never touches your actual files.</p>
+          <div class="kv-list" id="multipartList"></div>
+          <button class="action secondary small" id="addMultipart">+ Add field</button>
+        </div>
+
+        <div id="bodyBinary" class="body-panel" style="display:none;">
+          <div class="field"><label for="binaryPath">File path (on the machine running curl)</label><input type="text" id="binaryPath" placeholder="/home/user/payload.bin"></div>
+          <p class="hint" style="margin:0;">Sent with <code>--data-binary @path</code> — the exact bytes go out, no charset re-encoding. Add a <code>Content-Type</code> header above if the API expects one (e.g. <code>application/octet-stream</code>).</p>
+        </div>
+      </div>
+    </details>
+
+    <details class="card" id="detCookies">
+      <summary><h2>Cookies <span class="count-badge" id="cookieCount">0</span></h2><span class="chev">▶</span></summary>
+      <div class="body">
+        <div class="kv-list" id="cookieList"></div>
+        <button class="action secondary small" id="addCookie">+ Add cookie</button>
+      </div>
+    </details>
+
+    <details class="card" id="detOptions">
+      <summary><h2>Options &amp; Flags</h2><span class="chev">▶</span></summary>
+      <div class="body">
+        <div class="check-grid">
+          <div class="check-field"><input type="checkbox" id="optLocation" checked><label for="optLocation">Follow redirects (-L)</label></div>
+          <div class="check-field"><input type="checkbox" id="optCompressed"><label for="optCompressed">Accept compressed response (--compressed)</label></div>
+          <div class="check-field"><input type="checkbox" id="optInclude"><label for="optInclude">Include response headers (-i)</label></div>
+          <div class="check-field"><input type="checkbox" id="optVerbose"><label for="optVerbose">Verbose (-v)</label></div>
+          <div class="check-field"><input type="checkbox" id="optSilent"><label for="optSilent">Silent (-s)</label></div>
+          <div class="check-field"><input type="checkbox" id="optInsecure"><label for="optInsecure">Skip TLS verification (-k)</label></div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="row">
+          <div class="field"><label for="optHttpVersion">HTTP version</label>
+            <select id="optHttpVersion">
+              <option value="">Default</option>
+              <option value="1.1">HTTP/1.1</option>
+              <option value="2">HTTP/2</option>
+              <option value="3">HTTP/3</option>
+            </select>
+          </div>
+          <div class="field"><label for="optConnectTimeout">Connect timeout (s)</label><input type="number" id="optConnectTimeout" placeholder="e.g. 10" min="0"></div>
+          <div class="field"><label for="optMaxTime">Max total time (s)</label><input type="number" id="optMaxTime" placeholder="e.g. 30" min="0"></div>
+          <div class="field"><label for="optRetry">Retries</label><input type="number" id="optRetry" placeholder="e.g. 3" min="0"></div>
+        </div>
+        <div class="row">
+          <div class="field"><label for="optUserAgent">User-Agent (-A)</label><input type="text" id="optUserAgent" placeholder="leave blank for curl's default"></div>
+          <div class="field"><label for="optReferer">Referer (-e)</label><input type="text" id="optReferer" placeholder="https://example.com/"></div>
+          <div class="field"><label for="optProxy">Proxy (-x)</label><input type="text" id="optProxy" placeholder="http://127.0.0.1:8080"></div>
+          <div class="field"><label for="optOutputFile">Save response to file (-o)</label><input type="text" id="optOutputFile" placeholder="response.json"></div>
+        </div>
+      </div>
+    </details>
+
+  </div>
+
+  <!-- ================= RIGHT COLUMN: live output ================= -->
+  <div class="col-right">
+    <div class="card">
+      <div class="out-head">
+        <h2 style="margin:0;">Generated command</h2>
+        <div class="out-controls">
+          <div class="seg" id="shellSeg">
+            <button data-val="bash" class="active">bash / zsh</button>
+            <button data-val="cmd">cmd.exe</button>
+            <button data-val="powershell">PowerShell</button>
+          </div>
+        </div>
+      </div>
+      <div class="out-controls" style="margin-bottom:10px;">
+        <div class="seg" id="formatSeg">
+          <button data-val="multiline" class="active">Multi-line</button>
+          <button data-val="singleline">Single line</button>
+        </div>
+        <button class="action small" id="btnCopy">📋 Copy</button>
+        <span class="copied-flash" id="copiedFlash">Copied!</span>
+      </div>
+
+      <div class="warn-box" id="warnBox"></div>
+
+      <label>Resolved URL</label>
+      <div class="resolved-url" id="resolvedUrl">—</div>
+
+      <label>Command</label>
+      <pre class="cmd" id="cmdOut">curl ...</pre>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(() => {
+  // ---------------------------------------------------------------------
+  // Small helpers
+  // ---------------------------------------------------------------------
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  // ---------------------------------------------------------------------
+  // Generic key/value row-list component
+  // Used for: query params, headers, cookies, urlencoded body fields,
+  // multipart body fields (the last one also carries an isFile flag).
+  // ---------------------------------------------------------------------
+  function makeRowList(containerId, countId, opts = {}) {
+    const container = $(containerId);
+    const rows = [];
+
+    function row(key = "", value = "", enabled = true, isFile = false, mime = "") {
+      return { key, value, enabled, isFile, mime };
+    }
+
+    function render() {
+      container.innerHTML = "";
+      rows.forEach((r, i) => {
+        const div = document.createElement("div");
+        div.className = "kv-row" + (r.enabled ? "" : " disabled");
+
+        const chk = document.createElement("input");
+        chk.type = "checkbox"; chk.checked = r.enabled;
+        chk.title = "Include in command";
+        chk.addEventListener("change", () => { r.enabled = chk.checked; div.className = "kv-row" + (r.enabled ? "" : " disabled"); generate(); });
+
+        const keyInput = document.createElement("input");
+        keyInput.type = "text"; keyInput.className = "kv-key"; keyInput.placeholder = opts.keyPlaceholder || "key";
+        keyInput.value = r.key;
+        keyInput.addEventListener("input", () => { r.key = keyInput.value; generate(); });
+
+        const valInput = document.createElement("input");
+        valInput.type = "text"; valInput.placeholder = r.isFile ? "/path/to/file" : (opts.valuePlaceholder || "value");
+        valInput.value = r.value;
+        valInput.addEventListener("input", () => { r.value = valInput.value; generate(); });
+
+        div.appendChild(chk);
+        div.appendChild(keyInput);
+        div.appendChild(valInput);
+
+        if (opts.withFileToggle) {
+          const lbl = document.createElement("label");
+          lbl.className = "file-toggle";
+          const fchk = document.createElement("input");
+          fchk.type = "checkbox"; fchk.checked = r.isFile;
+          fchk.addEventListener("change", () => { r.isFile = fchk.checked; render(); generate(); });
+          lbl.appendChild(fchk);
+          lbl.appendChild(document.createTextNode("File"));
+          div.appendChild(lbl);
+
+          if (r.isFile) {
+            const mimeInput = document.createElement("input");
+            mimeInput.type = "text"; mimeInput.placeholder = "type= (optional)";
+            mimeInput.style.flex = "0 0 130px"; mimeInput.style.fontSize = "0.76rem";
+            mimeInput.value = r.mime;
+            mimeInput.addEventListener("input", () => { r.mime = mimeInput.value; generate(); });
+            div.appendChild(mimeInput);
+          }
+        }
+
+        const rm = document.createElement("button");
+        rm.className = "kv-remove"; rm.type = "button"; rm.textContent = "✕";
+        rm.addEventListener("click", () => { rows.splice(i, 1); render(); generate(); });
+        div.appendChild(rm);
+
+        container.appendChild(div);
+      });
+      if (countId) $(countId).textContent = rows.length;
+    }
+
+    return {
+      add(k = "", v = "", enabled = true, isFile = false, mime = "") { rows.push(row(k, v, enabled, isFile, mime)); render(); generate(); },
+      clear() { rows.length = 0; render(); generate(); },
+      setAll(list) { rows.length = 0; list.forEach((r) => rows.push(row(r.k, r.v, r.enabled !== false, !!r.isFile, r.mime || ""))); render(); generate(); },
+      enabled() { return rows.filter((r) => r.enabled && r.key.trim() !== ""); },
+      all() { return rows; },
+    };
+  }
+
+  const queryList = makeRowList("queryList", "queryCount", { keyPlaceholder: "param", valuePlaceholder: "value" });
+  const headerList = makeRowList("headerList", "headerCount", { keyPlaceholder: "Header-Name", valuePlaceholder: "value" });
+  const cookieList = makeRowList("cookieList", "cookieCount", { keyPlaceholder: "name", valuePlaceholder: "value" });
+  const urlencodedList = makeRowList("urlencodedList", null, { keyPlaceholder: "field", valuePlaceholder: "value" });
+  const multipartList = makeRowList("multipartList", null, { keyPlaceholder: "field", valuePlaceholder: "value", withFileToggle: true });
+
+  $("addQuery").addEventListener("click", () => queryList.add());
+  $("addHeader").addEventListener("click", () => headerList.add());
+  $("addCookie").addEventListener("click", () => cookieList.add());
+  $("addUrlencoded").addEventListener("click", () => urlencodedList.add());
+  $("addMultipart").addEventListener("click", () => multipartList.add());
+
+  // Quick-add header chips
+  const HEADER_CHIPS = [
+    ["Accept", "application/json"],
+    ["Content-Type", "application/json"],
+    ["Accept-Language", "en-US,en;q=0.9"],
+    ["Cache-Control", "no-cache"],
+    ["X-Requested-With", "XMLHttpRequest"],
+    ["Accept-Encoding", "gzip, deflate, br"],
+  ];
+  const chipRow = $("headerChips");
+  HEADER_CHIPS.forEach(([k, v]) => {
+    const chip = document.createElement("button");
+    chip.type = "button"; chip.className = "chip"; chip.textContent = k + ": " + v;
+    chip.addEventListener("click", () => headerList.add(k, v));
+    chipRow.appendChild(chip);
+  });
+
+  // ---------------------------------------------------------------------
+  // Simple control wiring (method, auth type, body type, segmented toggles)
+  // ---------------------------------------------------------------------
+  $("method").addEventListener("change", () => {
+    $("customMethodField").style.display = $("method").value === "__custom" ? "" : "none";
+    generate();
+  });
+  $("customMethod").addEventListener("input", generate);
+  $("url").addEventListener("input", generate);
+
+  const AUTH_PANEL_IDS = { basic: "authBasic", digest: "authDigest", bearer: "authBearer", apikey: "authApiKey" };
+  $("authType").addEventListener("change", () => {
+    document.querySelectorAll(".auth-panel").forEach((p) => (p.style.display = "none"));
+    const t = $("authType").value;
+    if (AUTH_PANEL_IDS[t]) $(AUTH_PANEL_IDS[t]).style.display = "";
+    generate();
+  });
+  ["basicUser", "basicPass", "digestUser", "digestPass", "bearerToken", "apiKeyName", "apiKeyValue", "apiKeyLoc"]
+    .forEach((id) => $(id).addEventListener("input", generate));
+  $("apiKeyLoc").addEventListener("change", generate);
+
+  let bodyType = "none";
+  document.querySelectorAll("#bodyTypeSeg button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("#bodyTypeSeg button").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      bodyType = btn.dataset.val;
+      document.querySelectorAll(".body-panel").forEach((p) => (p.style.display = "none"));
+      $("body" + bodyType.charAt(0).toUpperCase() + bodyType.slice(1)).style.display = "";
+      generate();
+    });
+  });
+  ["rawFormat", "rawContent", "gqlQuery", "gqlVars", "binaryPath"].forEach((id) => $(id).addEventListener("input", generate));
+  $("rawFormat").addEventListener("change", generate);
+  $("btnPrettyJson").addEventListener("click", () => {
+    try {
+      $("rawContent").value = JSON.stringify(JSON.parse($("rawContent").value), null, 2);
+      generate();
+    } catch (e) { /* not valid JSON yet — leave as-is */ }
+  });
+
+  let shellTarget = "bash";
+  document.querySelectorAll("#shellSeg button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("#shellSeg button").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active"); shellTarget = btn.dataset.val; generate();
+    });
+  });
+  let multiline = true;
+  document.querySelectorAll("#formatSeg button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("#formatSeg button").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active"); multiline = btn.dataset.val === "multiline"; generate();
+    });
+  });
+
+  document.querySelectorAll('#detOptions input, #detOptions select').forEach((el) => {
+    el.addEventListener("input", generate); el.addEventListener("change", generate);
+  });
+
+  // ---------------------------------------------------------------------
+  // Shell-specific quoting
+  // ---------------------------------------------------------------------
+  function quote(str, shell) {
+    str = String(str);
+    if (shell === "cmd") return '"' + str.replace(/"/g, '\\"') + '"';
+    if (shell === "powershell") return "'" + str.replace(/'/g, "''") + "'";
+    return "'" + str.replace(/'/g, "'\\''") + "'"; // bash / zsh
+  }
+  function contJoiner(shell) {
+    if (shell === "cmd") return " ^\n  ";
+    if (shell === "powershell") return " `\n  ";
+    return " \\\n  ";
+  }
+
+  // ---------------------------------------------------------------------
+  // Core generator
+  // ---------------------------------------------------------------------
+  function buildQueryString(pairs) {
+    return pairs.map((p) => encodeURIComponent(p.key) + "=" + encodeURIComponent(p.value)).join("&");
+  }
+
+  function generate() {
+    const warnings = [];
+
+    // ---- method ----
+    let method = $("method").value;
+    if (method === "__custom") method = ($("customMethod").value || "GET").trim().toUpperCase();
+
+    // ---- auth ----
+    const authType = $("authType").value;
+    const autoHeaderKeys = new Set(); // lower-cased keys that auth/body will emit, so manual rows don't collide
+    const extraQueryFromAuth = [];
+    let authPart = null; // { flag tokens }
+
+    if (authType === "basic") {
+      authPart = { kind: "userpass", user: $("basicUser").value, pass: $("basicPass").value, digest: false };
+      autoHeaderKeys.add("authorization");
+    } else if (authType === "digest") {
+      authPart = { kind: "userpass", user: $("digestUser").value, pass: $("digestPass").value, digest: true };
+      autoHeaderKeys.add("authorization");
+    } else if (authType === "bearer") {
+      autoHeaderKeys.add("authorization");
+    } else if (authType === "apikey") {
+      const loc = $("apiKeyLoc").value;
+      const name = $("apiKeyName").value.trim() || "X-API-Key";
+      const val = $("apiKeyValue").value;
+      if (loc === "header") autoHeaderKeys.add(name.toLowerCase());
+      else extraQueryFromAuth.push({ key: name, value: val });
+    }
+
+    // ---- body ----
+    let contentTypeFromBody = null; // string or null
+    let bodyFlagBuilder = null; // fn(shell) -> array of arg strings
+    const RAW_CT = { json: "application/json", xml: "application/xml", text: "text/plain", html: "text/html", js: "application/javascript" };
+
+    if (bodyType === "raw") {
+      const fmt = $("rawFormat").value;
+      contentTypeFromBody = RAW_CT[fmt] || "text/plain";
+      const content = $("rawContent").value;
+      bodyFlagBuilder = (shell) => content ? ["--data-raw " + quote(content, shell)] : [];
+    } else if (bodyType === "graphql") {
+      contentTypeFromBody = "application/json";
+      bodyFlagBuilder = (shell) => {
+        const q = $("gqlQuery").value || "";
+        let vars = {};
+        try { vars = $("gqlVars").value.trim() ? JSON.parse($("gqlVars").value) : {}; }
+        catch (e) { warnings.push("GraphQL variables aren't valid JSON — sending an empty object instead."); }
+        const payload = JSON.stringify({ query: q, variables: vars });
+        return ["--data-raw " + quote(payload, shell)];
+      };
+    } else if (bodyType === "urlencoded") {
+      bodyFlagBuilder = (shell) => urlencodedList.enabled().map((r) => "--data-urlencode " + quote(r.key + "=" + r.value, shell));
+      if (urlencodedList.enabled().length === 0) bodyFlagBuilder = () => [];
+    } else if (bodyType === "multipart") {
+      autoHeaderKeys.add("content-type"); // curl sets its own boundary; a manual one would break the request
+      bodyFlagBuilder = (shell) => multipartList.enabled().map((r) => {
+        let v = r.isFile ? "@" + r.value + (r.mime ? ";type=" + r.mime : "") : r.value;
+        return "-F " + quote(r.key + "=" + v, shell);
+      });
+      if (multipartList.enabled().length === 0) bodyFlagBuilder = () => [];
+    } else if (bodyType === "binary") {
+      const path = $("binaryPath").value;
+      bodyFlagBuilder = (shell) => path ? ["--data-binary " + quote("@" + path, shell)] : [];
+    }
+    if (contentTypeFromBody) autoHeaderKeys.add("content-type");
+
+    // ---- URL + query params (including api-key-as-query) ----
+    let baseUrl = $("url").value.trim() || "https://";
+    const allQueryPairs = [...queryList.enabled().map((r) => ({ key: r.key, value: r.value })), ...extraQueryFromAuth];
+    let resolvedUrl = baseUrl;
+    if (allQueryPairs.length) {
+      const qs = buildQueryString(allQueryPairs);
+      resolvedUrl += (baseUrl.includes("?") ? "&" : "?") + qs;
+    }
+    $("resolvedUrl").textContent = resolvedUrl;
+
+    // ---- assemble, shell-aware ----
+    function assemble(shell) {
+      const parts = ["curl"];
+
+      if ($("optVerbose").checked) parts.push("-v");
+      if ($("optSilent").checked) parts.push("-s");
+      if ($("optInclude").checked) parts.push("-i");
+      if ($("optInsecure").checked) parts.push("-k");
+      if ($("optLocation").checked) parts.push("-L");
+      if ($("optCompressed").checked) parts.push("--compressed");
+      const hv = $("optHttpVersion").value;
+      if (hv) parts.push("--http" + hv);
+
+      if (method && method !== "GET") parts.push("-X " + method);
+      parts.push(quote(resolvedUrl, shell));
+
+      // headers: auto content-type first, then user rows (skipping ones overridden by auth/body), then bearer/apikey header
+      if (contentTypeFromBody && !headerList.enabled().some((r) => r.key.trim().toLowerCase() === "content-type")) {
+        parts.push("-H " + quote("Content-Type: " + contentTypeFromBody, shell));
+      }
+      if (authType === "bearer") {
+        parts.push("-H " + quote("Authorization: Bearer " + $("bearerToken").value, shell));
+      }
+      if (authType === "apikey" && $("apiKeyLoc").value === "header") {
+        const name = $("apiKeyName").value.trim() || "X-API-Key";
+        parts.push("-H " + quote(name + ": " + $("apiKeyValue").value, shell));
+      }
+      let skippedHeaders = 0;
+      headerList.enabled().forEach((r) => {
+        if (autoHeaderKeys.has(r.key.trim().toLowerCase())) { skippedHeaders++; return; }
+        parts.push("-H " + quote(r.key + ": " + r.value, shell));
+      });
+      if (skippedHeaders > 0) warnings.push(skippedHeaders + " manual header" + (skippedHeaders > 1 ? "s" : "") + " skipped — overridden by Authentication/Body settings.");
+
+      if (bodyType === "multipart" && headerList.enabled().some((r) => r.key.trim().toLowerCase() === "content-type")) {
+        warnings.push("A manual Content-Type header is ignored for multipart bodies — curl must set its own boundary.");
+      }
+
+      if (authPart) {
+        parts.push((authPart.digest ? "--digest " : "") + "-u " + quote(authPart.user + ":" + authPart.pass, shell));
+      }
+
+      if (cookieList.enabled().length) {
+        const cookieStr = cookieList.enabled().map((r) => r.key + "=" + r.value).join("; ");
+        parts.push("-b " + quote(cookieStr, shell));
+      }
+
+      if (bodyFlagBuilder) parts.push(...bodyFlagBuilder(shell));
+
+      const ua = $("optUserAgent").value.trim();
+      if (ua) parts.push("-A " + quote(ua, shell));
+      const ref = $("optReferer").value.trim();
+      if (ref) parts.push("-e " + quote(ref, shell));
+      const proxy = $("optProxy").value.trim();
+      if (proxy) parts.push("-x " + quote(proxy, shell));
+      const ct = $("optConnectTimeout").value;
+      if (ct) parts.push("--connect-timeout " + ct);
+      const mt = $("optMaxTime").value;
+      if (mt) parts.push("--max-time " + mt);
+      const retry = $("optRetry").value;
+      if (retry) parts.push("--retry " + retry);
+      const out = $("optOutputFile").value.trim();
+      if (out) parts.push("-o " + quote(out, shell));
+
+      return parts;
+    }
+
+    const parts = assemble(shellTarget);
+    const cmd = multiline ? parts.join(contJoiner(shellTarget)) : parts.join(" ");
+
+    $("cmdOut").textContent = cmd;
+
+    if (bodyType !== "none" && method === "GET") {
+      warnings.push("Method is GET but a body is set — many servers ignore a GET body. Consider POST/PUT if the API expects one.");
+    }
+    if (!baseUrl || baseUrl === "https://") {
+      warnings.push("URL is empty — fill it in above.");
+    }
+
+    const warnBox = $("warnBox");
+    if (warnings.length) {
+      warnBox.innerHTML = "⚠️ <strong>Heads up</strong><ul>" + warnings.map((w) => "<li>" + esc(w) + "</li>").join("") + "</ul>";
+      warnBox.classList.add("show");
+    } else {
+      warnBox.classList.remove("show");
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // Copy, reset, example
+  // ---------------------------------------------------------------------
+  $("btnCopy").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText($("cmdOut").textContent);
+      const flash = $("copiedFlash");
+      flash.classList.add("show");
+      setTimeout(() => flash.classList.remove("show"), 1400);
+    } catch (e) {
+      alert("Couldn't access the clipboard — select and copy the command manually.");
+    }
+  });
+
+  $("btnReset").addEventListener("click", () => {
+    $("method").value = "GET"; $("customMethodField").style.display = "none"; $("customMethod").value = "";
+    $("url").value = "";
+    queryList.clear(); headerList.clear(); cookieList.clear(); urlencodedList.clear(); multipartList.clear();
+    $("authType").value = "none"; $("authType").dispatchEvent(new Event("change"));
+    ["basicUser","basicPass","digestUser","digestPass","bearerToken","apiKeyName","apiKeyValue"].forEach((id) => $(id).value = "");
+    $("apiKeyLoc").value = "header";
+    document.querySelector('#bodyTypeSeg button[data-val="none"]').click();
+    $("rawContent").value = ""; $("gqlQuery").value = ""; $("gqlVars").value = ""; $("binaryPath").value = "";
+    $("optLocation").checked = true;
+    ["optCompressed","optInclude","optVerbose","optSilent","optInsecure"].forEach((id) => $(id).checked = false);
+    $("optHttpVersion").value = "";
+    ["optConnectTimeout","optMaxTime","optRetry","optUserAgent","optReferer","optProxy","optOutputFile"].forEach((id) => $(id).value = "");
+    generate();
+  });
+
+  $("btnExample").addEventListener("click", () => {
+    $("btnReset").click();
+    $("method").value = "POST";
+    $("url").value = "https://api.example.com/v1/users";
+    headerList.add("Accept", "application/json");
+    $("authType").value = "bearer"; $("authType").dispatchEvent(new Event("change"));
+    $("bearerToken").value = "YOUR_TOKEN_HERE";
+    document.querySelector('#bodyTypeSeg button[data-val="raw"]').click();
+    $("rawFormat").value = "json";
+    $("rawContent").value = JSON.stringify({ name: "Ada Lovelace", email: "ada@example.com" }, null, 2);
+    $("optCompressed").checked = true;
+    $("detAuth").open = true; $("detHeaders").open = true; $("detBody").open = true;
+    generate();
+  });
+
+  // ---------------------------------------------------------------------
+  // Init
+  // ---------------------------------------------------------------------
+  queryList.setAll([]); headerList.setAll([]); cookieList.setAll([]);
+  generate();
+})();
+</script>
+</body>
+</html>

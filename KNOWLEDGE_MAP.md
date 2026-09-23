@@ -21,6 +21,7 @@ misleads. If a file's job changes, update its row here in the same commit.
 | Actually wiring a tool's app into the site (routing)           | `main.py` (`app.mount(...)` calls, bottom of file) |
 | The Docker image / what gets copied into the container         | `Dockerfile` |
 | Ports, restart policy, env vars for the whole site              | `docker-compose.yml` |
+| Why the container runs `--workers 1` (not more)                 | `Dockerfile` (CMD comment) — pinned for DataFrame Studio's in-memory sessions, see `df-studio/CLAUDE.md` |
 | Architecture decisions, conventions, "why is it built this way" | `CLAUDE.md` |
 | GitHub auth setup for this device                               | `GITHUB_AUTH.md` |
 
@@ -162,11 +163,20 @@ straight to a public DNS-over-HTTPS provider (Cloudflare or Google).
   instead verified by curling the real provider endpoints directly.
 - **Coverage was deliberately expanded from 6 to 14 record types** after
   initial feedback that "all 14 record types" was the actual expectation,
-  not just the common six. Most domains will legitimately show "no records
-  found" for several of these (SRV/NAPTR/DNSKEY/DS/TLSA/SSHFP are all
-  niche) — that's the correct, honest result, not a sign the lookup missed
-  something. Don't hide empty sections to make the page look tidier; the
-  whole point is showing what was actually checked.
+  not just the common six. All 14 are still queried on every lookup — that
+  part hasn't changed.
+- **Empty record types are hidden by default now (reversed from an earlier
+  decision).** An earlier version of this file said "don't hide empty
+  sections... the whole point is showing what was actually checked" — the
+  owner later found seeing 8+ "no records found" sections on every lookup
+  was confusing rather than informative, so `renderResults()` now shows
+  only the record types with actual data, with the empty ones (still
+  queried, not skipped) tucked behind a "Show N record types with no
+  data" toggle (`buildRecordSection()` returns `{empty, html}`;
+  `toggleEmptyRecordTypes()` reveals them). Nothing is deleted or
+  unqueried — this is a default-visibility change, not a coverage
+  rollback. If this gets revisited again, update this note rather than
+  leaving both "don't hide" and "hide by default" claims in the file.
 - **SOA now gets a dedicated field-by-field breakdown** (`renderSoaFieldGrid()`)
   instead of going through the generic per-record-type table — it's a
   special case inside `renderResults()`'s loop. CAA still just gets light
@@ -283,6 +293,184 @@ serves the static page; it has no other routes and never sees any input.
 
 ---
 
+## Tool: cURL Builder — mounted at `/tools/curl-builder/`
+
+Entirely client-side — the Python backend (`curl-builder/server.py`) only
+serves the static page; it has no other routes and never sees any input.
+This tool only ever generates a command string; it never issues the
+request itself (deliberately, to avoid becoming an SSRF proxy — see its
+own `CLAUDE.md`).
+
+| If you need to change...                                            | Go to |
+|---------------------------------------------------------------------|-------|
+| Anything about the form fields (method, URL, auth, body, headers, cookies, flags) | `curl-builder/ui/index.html` — the relevant `<div class="card">`/`<details>` block |
+| The generic dynamic key/value row list (used by query params, headers, cookies, urlencoded + multipart body fields) | `index.html` — `makeRowList(...)` |
+| Shell-specific quoting/escaping (bash, cmd.exe, PowerShell)          | `index.html` — `quote()` and `contJoiner()` |
+| How the final curl command string is assembled from form state      | `index.html` — `generate()` / `assemble(shell)` |
+| Which manual headers get silently overridden by Auth/Body settings  | `index.html` — `autoHeaderKeys` inside `generate()` |
+| Whether the backend does anything beyond serving the page            | `curl-builder/server.py` (currently: nothing else, by design) |
+
+### Known non-obvious behavior
+
+- **No backend processing, intentionally** — same rationale as
+  Encode/Decode: nothing typed here (tokens, passwords, bodies) should
+  ever leave the browser, and a "run this for me" endpoint would let any
+  visitor make the server issue arbitrary outbound requests (SSRF). Don't
+  add one without re-raising that tradeoff with the owner first.
+- **Multipart bodies must never carry a manual `Content-Type` header** —
+  curl sets its own with the boundary; the generator already strips a
+  manual one and shows a warning, don't remove that guard.
+- **File fields are typed paths, not real uploads.** The browser never
+  reads the file; the path only needs to exist on whatever machine
+  actually runs the generated command.
+- Mounted at `/tools/curl-builder/` by `main.py` — this folder is a fully
+  self-contained ASGI app and doesn't need to know that.
+
+---
+
+## Tool: HTTP Header Reference — mounted at `/tools/header-reference/`
+
+Entirely client-side — the Python backend (`header-reference/server.py`)
+only serves the static page; the glossary itself is a data array baked
+into the page, no lookups of any kind happen over the network.
+
+| If you need to change...                                            | Go to |
+|-----------------------------------------------------------------------|-------|
+| Add, correct, or re-categorize a header                              | `header-reference/ui/index.html` — `HEADERS` array |
+| Add/edit a category or its plain-language definition                 | `index.html` — `CATEGORIES` array |
+| Search/filter behavior                                                | `index.html` — `matches()` |
+| The "Related" cross-reference chips (jump to another header)         | `index.html` — `jumpToHeader()` |
+| Sidebar per-category counts                                           | Computed live in `renderSidebar()` from `HEADERS` — never hand-maintained |
+| Whether the backend does anything beyond serving the page             | `header-reference/server.py` (currently: nothing else, by design) |
+
+### Known non-obvious behavior
+
+- **No backend processing, intentionally** — same rationale as
+  Encode/Decode and cURL Builder: nothing the user types (search text)
+  needs to leave the browser, and there's nothing to look up server-side
+  since the glossary is static data.
+- **Deliberately scoped to browse-only, not paste-and-analyze.** The user
+  was offered a choice between a browsable glossary, a paste-your-headers
+  analyzer, or both — they chose the glossary alone. Don't add a
+  paste-and-analyze mode unprompted; it needs its own header-text parser
+  that doesn't exist here.
+- **Each header has exactly one canonical entry, in exactly one
+  category** — a header relevant to more than one category (e.g. `Origin`
+  matters to both Request Context and CORS) lives under whichever
+  category best explains its primary purpose, and is cross-referenced via
+  `related` from the other category's entries instead of being
+  duplicated. Duplicating an entry would double-count it in search
+  results and in the sidebar's per-category counts.
+- **`related` array entries are exact, case-sensitive header names** —
+  `jumpToHeader()` does a plain equality lookup; a typo there just fails
+  silently (click does nothing) rather than erroring.
+- Mounted at `/tools/header-reference/` by `main.py` — this folder is a
+  fully self-contained ASGI app and doesn't need to know that.
+
+---
+
+## Tool: HTTP Methods & Status Codes — mounted at `/tools/http-methods-status/`
+
+Entirely client-side — the Python backend (`http-methods-status/server.py`)
+only serves the static page; both reference sets (methods, status codes)
+are data arrays baked into the page.
+
+| If you need to change...                                            | Go to |
+|-----------------------------------------------------------------------|-------|
+| Add/edit a method (examples, edge cases, best practices, mistakes)   | `http-methods-status/ui/index.html` — `METHODS` array |
+| Add/edit a status code (meaning, when-to-return, examples, compare)  | `index.html` — `STATUS_CODES` array (grouped by `cls`) |
+| Add/edit a Decision Guide question (either tab)                       | `index.html` — `METHOD_GUIDE` / `STATUS_GUIDE` arrays |
+| Search/filter behavior                                                | `index.html` — `methodMatches()` / `statusMatches()` |
+| Status class filter chips (1xx–5xx)                                   | `index.html` — `renderClassChips()` |
+| Whether the backend does anything beyond serving the page             | `http-methods-status/server.py` (currently: nothing else, by design) |
+
+### Known non-obvious behavior
+
+- **The Decision Guide is the reason this tool exists, not a bonus
+  feature.** It was built specifically to answer "which one do I pick"
+  questions (PUT vs PATCH, 401 vs 403, 301 vs 308, 500 vs 502, etc.) — if
+  you redesign this tool's layout, keep it prominent (open by default,
+  above the searchable list), don't collapse it into an afterthought.
+- **`compare` on a status-code entry is inserted as raw HTML, not
+  escaped** (so it can bold the "vs NNN" lead-in) — every other field
+  (`meaning`, `whenToReturn`, example notes) IS escaped via `escHtml()`.
+  Only hand-written trusted text belongs in `compare`.
+- **`compare` is deliberately sparse** — only set on the ~13 codes with a
+  genuinely common real-world confusion, not added to every code for
+  symmetry. Adding it everywhere would bury the comparisons that actually
+  matter.
+- **A method's `idempotent` field isn't always boolean** — PATCH uses the
+  string `'Usually, not guaranteed'` because that's the honest, spec-
+  accurate answer (idempotency there depends entirely on the patch
+  document's semantics). `methodBadges()` already handles the
+  string-vs-boolean split; don't assume boolean elsewhere.
+- **No backend processing, intentionally** — same rationale as every
+  other reference tool in this toolbox.
+- Mounted at `/tools/http-methods-status/` by `main.py` — this folder is
+  a fully self-contained ASGI app and doesn't need to know that.
+
+---
+
+## Tool: Cookie Lab — mounted at `/tools/cookie-lab/`
+
+No backend processing (`cookie-lab/server.py` only serves the static
+page) — but unlike every other client-side tool here, this one is **not
+purely static**. Its frontend performs real, persistent reads and writes
+against `document.cookie`, a live browser API — a deliberate live
+playground, not a generator (see the tool's own `CLAUDE.md` for the full
+rationale; don't mistake this for a "no backend processing" violation).
+
+| If you need to change...                                            | Go to |
+|-----------------------------------------------------------------------|-------|
+| The cookie-string builder / pre-click validation warnings             | `cookie-lab/ui/index.html` — `buildCookieString()` / `validateForm()` |
+| How a Set Cookie attempt is diagnosed (accepted/rejected + why)       | `index.html` — `setCookieLive()` / `diagnoseOutcome()` |
+| Parsing `document.cookie` into the live "Current Cookies" view        | `index.html` — `parseDocumentCookie()` / `renderCurrentCookies()` |
+| The "Configured This Session" memory + delete actions                 | `index.html` — `configuredCookies` Map, `recordConfigured()`, `deleteConfigured()` |
+| Suggested Experiments cards                                           | `index.html` — `EXPERIMENTS` array |
+| Theory/reference content, categories                                  | `index.html` — `THEORY` / `THEORY_CATEGORIES` arrays |
+| Decision Guide questions                                              | `index.html` — `COOKIE_GUIDE` array |
+| Whether the backend does anything beyond serving the page             | `cookie-lab/server.py` (currently: nothing else, by design) |
+
+### Known non-obvious behavior
+
+- **`Secure` will likely still succeed on `http://localhost:8000`, not
+  get rejected** — browsers treat `localhost` as a trustworthy origin
+  regardless of scheme, which is what the Secure check actually verifies.
+  The tool's copy reflects this as an honest live diagnosis, not a
+  canned "rejected" assumption — don't "correct" it to claim rejection.
+- **`HttpOnly` set via `document.cookie` drops the ENTIRE write, not just
+  that flag.** The checkbox stays enabled on purpose so the user can
+  trigger and observe this, rather than being grayed out.
+- **`Path` is validated differently than `Domain`** — an unrelated Path
+  is never rejected at set-time, only invisible from documents whose
+  path doesn't match it; `Domain` IS actively validated and can be
+  rejected outright. Copy throughout keeps this distinction precise.
+- **The "delete with wrong Path" demo deliberately omits `Max-Age`**
+  rather than using `Max-Age=0` — a `Max-Age=0` write to a path with no
+  existing cookie is a silent, invisible no-op that teaches nothing; the
+  real classic bug (a second, visible, empty-valued sibling cookie
+  appearing instead of a clean delete) requires the write to actually
+  persist, which needs no expiry at all.
+- **No true cross-subdomain `Domain` demo is possible** — this tool is a
+  single page on a single host; genuinely testing subdomain-sharing
+  behavior needs two real subdomains, which this deployment doesn't
+  have. That stays theory-only, stated explicitly in the Reference tab.
+- **jsdom (used during this tool's development) is not faithful for**:
+  the localhost-Secure exception, `SameSite=None`-requires-`Secure`
+  enforcement, HttpOnly's whole-write-drop behavior, `__Host-`/
+  `__Secure-` prefix enforcement, and the ~4KB size limit (confirmed
+  directly — a 5KB value round-tripped successfully under jsdom, where a
+  real browser would drop it) — its `tough-cookie`-backed jar doesn't
+  model these browser-specific behaviors. Changes touching them need
+  manual verification in a real browser against the running deployment.
+- Mounted at `/tools/cookie-lab/` by `main.py` — this folder is a fully
+  self-contained ASGI app and doesn't need to know that. Its default
+  cookie Path is `location.pathname` (not a hardcoded `/tools/cookie-lab/`)
+  for the same relative-path reason every tool's own API calls use
+  relative paths — see the root `CLAUDE.md`.
+
+---
+
 ## Tool: DataDiff Pro — mounted at `/tools/datadiff-pro/`
 
 ### Symptom → file
@@ -341,3 +529,59 @@ ui/index.html --POST /compare--> api/app.py
   `_unwrap_xml_lists`'s docstring in `core/normalizer.py`) — this is so XML
   and its JSON equivalent produce the same top-level shape. Don't "fix" this
   by unwrapping the root; it would break XML-vs-JSON comparisons.
+
+---
+
+## Tool: DataFrame Studio — mounted at `/tools/df-studio/`
+
+Click-driven pandas: load CSV/JSON/XML/Parquet, transform via UI
+(rename/drop/add column, filter, sort, or a free-form Query box with
+Check/Add-to-pipeline modes and quick-insert snippets), inspect
+(describe/info/nunique/value counts), export — as a file, as a standalone
+`.py` script, or save the pipeline as a reusable named template. Every
+step shows the pandas line it maps to. See `df-studio/CLAUDE.md` for the
+full picture.
+
+### Symptom → file
+
+| If you need to change...                                          | Go to |
+|-----------------------------------------------------------------------|-------|
+| Session state, the replay model, file loading, insights, script export, template replay, the Check/Add split (`preview_step`/`apply_step`) | `df-studio/engine.py` |
+| A transformation step's behavior or its generated pandas code line     | `df-studio/steps.py` (`STEP_HANDLERS`) |
+| API endpoints (`/load`, `/step`, `/step/check`, `/insight`, `/export`, `/script`, `/template/*`) | `df-studio/server.py` |
+| Saved-template storage (JSON on disk)                                  | `df-studio/templates_store.py` |
+| The frontend: grid (Tabulator.js), form-based step fields, Query box (Check/Add + snippets), pipeline panel, script/template panels | `df-studio/ui/index.html` |
+| Adding a brand-new form-based step type                                | `steps.py` (handler) **and** `ui/index.html` (`#f-<type>` fieldset + `<option>`) |
+| Adding a new Query-box quick-insert snippet                            | `ui/index.html` — `SNIPPETS` object only, no backend change |
+
+### Known non-obvious behavior (read before touching these areas)
+
+- **Sessions are in-memory only** (`engine.SESSIONS`) — restarting the
+  server drops every open session. No persistence to disk by design.
+- **The "current" DataFrame is always recomputed by replaying `steps` over
+  `original_df`** (`engine.recompute`), never mutated in place — this is
+  what makes removing a step from the middle of the pipeline just work.
+- **`add_column`/`filter_rows` use `df.eval`/`df.query(engine="python")`** —
+  arithmetic, comparisons, string concat on bare column names only, not
+  arbitrary Python. The Query box's `custom_code` step is the escape hatch
+  for that (real `exec()`, `pd`/`np` in scope, **no sandboxing** —
+  deliberate, single-user local tool; revisit before this is ever exposed
+  beyond one trusted user). Check mode (`/step/check`) still `exec()`s the
+  code — it's a "don't commit yet" toggle, not a safer sandbox.
+- **Step handlers raise plain `ValueError`, never `engine.StepError`** —
+  `StepError` is a subclass, so `except StepError` alone misses them. This
+  bit `engine.apply_template()` for real (a step failing mid-template
+  crashed with an unhandled 500 instead of a clean `template_errors`
+  response) — fixed by catching `ValueError`. Match that in any new
+  per-step try/except.
+- **The grid caps preview rows at `engine.PREVIEW_ROW_CAP` (5000)** but
+  `/export` and `/script` always run against the full DataFrame — a bigger
+  export than the table showed is expected, not a bug.
+- **Templates persist `{type, params}` only, never the generated code** —
+  code is regenerated from the live `STEP_HANDLERS` on every apply, so a
+  codegen fix in `steps.py` automatically improves old saved templates.
+- **This is the one tool copied as a whole folder in `../Dockerfile`**
+  (`COPY df-studio/ ./df_studio/`) instead of the usual two-line
+  `server.py` + `ui/` copy, because it has extra backend modules. Its
+  `server.py`/`engine.py` use a try/except dual import so the tool still
+  runs standalone from inside `df-studio/` for dev, not just mounted.

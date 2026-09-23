@@ -39,3 +39,28 @@ tools:
     title: "Packet Journey"
     description: "One real HTTP request, traced layer by layer — what gets added, what it's called, and what it actually looks like"
     icon: "📦"
+
+  - name: curl-builder
+    title: "cURL Builder"
+    description: "Build complex curl commands from a form — method, auth, headers, body, cookies, flags — copy-pasteable for bash, cmd.exe, or PowerShell"
+    icon: "⌨️"
+
+  - name: header-reference
+    title: "HTTP Header Reference"
+    description: "Browsable, categorized glossary of ~90 widely-used HTTP headers — what each one means, an example, and which category it belongs to"
+    icon: "📖"
+
+  - name: http-methods-status
+    title: "HTTP Methods & Status Codes"
+    description: "Every HTTP method and status code — plain-word meaning, multiple real examples, edge cases, and an architect's decision guide for which one to return"
+    icon: "🧭"
+
+  - name: cookie-lab
+    title: "Cookie Lab"
+    description: "A live document.cookie playground plus full theory — design, set, inspect, and delete real cookies while seeing every attribute, edge case, and browser rejection explained"
+    icon: "🍪"
+
+  - name: df-studio
+    title: "DataFrame Studio"
+    description: "Click-driven pandas — load CSV/JSON/XML/Parquet, transform with UI steps or custom Python, export as a file or a standalone script, save reusable templates"
+    icon: "🐼"

@@ -30,6 +30,11 @@ from subnet_calc.server import app as subnet_calc_app
 from dns_lookup.server import app as dns_lookup_app
 from vlan_designer.server import app as vlan_designer_app
 from packet_journey.server import app as packet_journey_app
+from curl_builder.server import app as curl_builder_app
+from header_reference.server import app as header_reference_app
+from http_methods_status.server import app as http_methods_status_app
+from cookie_lab.server import app as cookie_lab_app
+from df_studio.server import app as df_studio_app
 
 app = FastAPI(title="Toolbox", description="One-stop access to internal tools.")
 
@@ -133,3 +138,8 @@ app.mount("/tools/subnet-calc", subnet_calc_app)
 app.mount("/tools/dns-lookup", dns_lookup_app)
 app.mount("/tools/vlan-designer", vlan_designer_app)
 app.mount("/tools/packet-journey", packet_journey_app)
+app.mount("/tools/curl-builder", curl_builder_app)
+app.mount("/tools/header-reference", header_reference_app)
+app.mount("/tools/http-methods-status", http_methods_status_app)
+app.mount("/tools/cookie-lab", cookie_lab_app)
+app.mount("/tools/df-studio", df_studio_app)
