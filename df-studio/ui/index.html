@@ -90,6 +90,10 @@
   #loadOptionsPanel summary::-webkit-details-marker { display: none; }
   #loadOptionsPanel summary::before { content: "▸ "; color: var(--muted); }
   #loadOptionsPanel[open] summary::before { content: "▾ "; }
+  #loadFormatBadge {
+    background: var(--accent); color: #fff; border-radius: 4px;
+    padding: 1px 6px; font-size: 0.68rem; letter-spacing: 0;
+  }
 
   .load-options-grid {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
@@ -98,6 +102,10 @@
   .load-options-grid .field { margin-bottom: 0; }
   .load-options-grid label { font-size: 0.68rem; margin-bottom: 2px; }
   .load-options-grid select, .load-options-grid input[type="text"] { padding: 5px 7px; font-size: 0.78rem; }
+  .load-header-check {
+    display: flex; align-items: center; gap: 5px; text-transform: none;
+    font-weight: 400; font-size: 0.78rem; color: var(--text); padding-bottom: 6px;
+  }
   .load-options-row2 {
     display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 8px;
   }
@@ -162,6 +170,19 @@
   .insight-btns button { font-size: 0.76rem; padding: 6px 10px; }
 
   .export-btns { display: flex; gap: 8px; }
+
+  #exportDialog {
+    background: var(--surface); color: var(--text); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px; width: 340px; max-width: calc(100vw - 40px);
+  }
+  #exportDialog::backdrop { background: rgba(28, 32, 53, 0.45); }
+  #exportDialog h2 { font-size: 1rem; font-weight: 700; margin-bottom: 14px; }
+  .export-fields { display: flex; flex-direction: column; gap: 12px; }
+  .dialog-checkbox {
+    display: flex; align-items: center; gap: 6px; text-transform: none;
+    font-weight: 400; font-size: 0.83rem; color: var(--text);
+  }
+  .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 
   .banner {
     display: none; max-width: 1280px; width: 100%; margin: 0 auto 14px; padding: 10px 14px;
@@ -243,8 +264,9 @@
     </div>
 
     <details class="card" id="loadOptionsPanel">
-      <summary>Load options</summary>
-      <div class="load-options-grid">
+      <summary>Load options — <span id="loadFormatBadge">CSV</span></summary>
+
+      <div class="load-options-grid" id="loadFieldsCsv">
         <div class="field">
           <label for="loadSep">Separator</label>
           <select id="loadSep">
@@ -259,34 +281,93 @@
         </div>
         <div class="field">
           <label for="loadEncoding">Encoding</label>
-          <select id="loadEncoding">
+          <select id="loadEncoding" class="load-encoding-select">
             <option value="utf-8" selected>UTF-8</option>
             <option value="latin-1">Latin-1</option>
             <option value="utf-16">UTF-16</option>
             <option value="cp1252">Windows-1252</option>
           </select>
         </div>
+        <label class="load-header-check"><input type="checkbox" id="loadHeader" checked style="width:auto;" /> Header row</label>
+      </div>
+
+      <div class="load-options-grid" id="loadFieldsJson" style="display:none;">
         <div class="field">
-          <label for="loadNrows">Row limit</label>
-          <input type="text" id="loadNrows" placeholder="no limit" inputmode="numeric" />
+          <label for="loadOrient">Orient</label>
+          <select id="loadOrient">
+            <option value="">Auto-detect</option>
+            <option value="records">records — [{"col": val}, ...]</option>
+            <option value="columns">columns — {"col": {idx: val}}</option>
+            <option value="split">split — columns/data arrays</option>
+            <option value="index">index — {idx: {col: val}}</option>
+            <option value="values">values — [[...], ...]</option>
+            <option value="table">table — schema + data</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="loadLines">Structure</label>
+          <select id="loadLines">
+            <option value="">Auto-detect</option>
+            <option value="false">Single JSON document</option>
+            <option value="true">One object per line (JSONL/NDJSON)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="loadEncodingJson">Encoding</label>
+          <select id="loadEncodingJson" class="load-encoding-select">
+            <option value="utf-8" selected>UTF-8</option>
+            <option value="latin-1">Latin-1</option>
+            <option value="utf-16">UTF-16</option>
+            <option value="cp1252">Windows-1252</option>
+          </select>
         </div>
       </div>
+
+      <div class="load-options-grid" id="loadFieldsXml" style="display:none;">
+        <div class="field">
+          <label for="loadXpath">XPath (advanced, optional)</label>
+          <input type="text" id="loadXpath" placeholder="default: .//*" />
+        </div>
+        <div class="field">
+          <label for="loadEncodingXml">Encoding</label>
+          <select id="loadEncodingXml" class="load-encoding-select">
+            <option value="utf-8" selected>UTF-8</option>
+            <option value="latin-1">Latin-1</option>
+            <option value="utf-16">UTF-16</option>
+            <option value="cp1252">Windows-1252</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="load-options-grid" id="loadFieldsParquet" style="display:none;">
+        <div class="field" style="grid-column: 1 / -1;">
+          <label for="loadColumns">Columns to load (comma-separated, optional)</label>
+          <input type="text" id="loadColumns" placeholder="all columns — column pruning saves real memory on a big file" />
+        </div>
+      </div>
+
       <div class="load-options-row2">
-        <label><input type="checkbox" id="loadHeader" checked style="width:auto;" /> Header row</label>
+        <div class="field" style="margin:0;">
+          <label for="loadNrows" style="margin-bottom:2px;">Row limit</label>
+          <input type="text" id="loadNrows" placeholder="no limit" inputmode="numeric" style="width:100px;" />
+        </div>
         <div class="nrows-presets">
           <button type="button" class="secondary" data-nrows-preset="500">500</button>
           <button type="button" class="secondary" data-nrows-preset="5000">5k</button>
           <button type="button" class="secondary" data-nrows-preset="50000">50k</button>
           <button type="button" class="secondary" data-nrows-preset="">No limit</button>
         </div>
-        <p class="hint">CSV/TSV row limit is read directly (low memory). JSON/XML/Parquet read fully, then trim.</p>
+        <p class="hint" id="loadFormatHint">CSV/TSV row limit is read directly (low memory).</p>
       </div>
     </details>
 
+    <!-- One shared full-width result panel for both Query-box Check results
+         and Insights — same slot, same behavior, just different title/actions
+         depending on which one populated it last. -->
     <div id="queryCheckPanel" class="card check-panel" style="display:none;">
       <div class="check-panel-header">
         <div>
-          <h2>Check result</h2>
+          <h2 id="queryCheckTitle">Check result</h2>
           <p class="hint" id="queryCheckMeta" style="margin-bottom:0;"></p>
         </div>
         <div class="check-panel-actions">
@@ -310,7 +391,10 @@
           <h2>Query</h2>
           <p class="hint">Write a <code>transform(df)</code> function. <strong>Check</strong> runs it and shows what it would produce without touching the pipeline; <strong>Add to pipeline</strong> commits it. Pick a snippet below to start from working code instead of a blank box.</p>
 
-          <div class="insight-btns" id="snippetBtns"></div>
+          <div class="field">
+            <label for="snippetSelect">Insert a snippet</label>
+            <select id="snippetSelect"><option value="">Choose a function…</option></select>
+          </div>
 
           <div class="field">
             <textarea id="queryCode" rows="7" placeholder="def transform(df):&#10;    df[&quot;ratio&quot;] = df[&quot;a&quot;] / df[&quot;b&quot;]&#10;    return df"></textarea>
@@ -409,7 +493,7 @@
               <button class="secondary" id="valueCountsBtn" style="flex:0 0 auto;">Go</button>
             </div>
           </div>
-          <div class="result-wrap"><div id="insightResult"></div></div>
+          <p class="hint" style="margin-bottom:0;">Results open above, full width.</p>
         </div>
 
         <div class="card">
@@ -424,6 +508,68 @@
     </div>
   </div>
 
+  <dialog id="exportDialog">
+    <h2 id="exportDialogTitle">Export as CSV</h2>
+
+    <div class="export-fields" id="exportFieldsCsv">
+      <div class="field">
+        <label for="exportCsvSep">Separator</label>
+        <select id="exportCsvSep">
+          <option value="," selected>Comma (,)</option>
+          <option value="&#9;">Tab</option>
+          <option value=";">Semicolon (;)</option>
+          <option value="|">Pipe (|)</option>
+          <option value="__custom__">Custom…</option>
+        </select>
+        <input type="text" id="exportCsvSepCustom" placeholder="custom separator" style="display:none; margin-top:6px;" />
+      </div>
+      <label class="dialog-checkbox"><input type="checkbox" id="exportCsvIndex" /> Include row index as a column</label>
+    </div>
+
+    <div class="export-fields" id="exportFieldsJson" style="display:none;">
+      <div class="field">
+        <label for="exportJsonOrient">Orient</label>
+        <select id="exportJsonOrient">
+          <option value="records" selected>records — [{"col": val}, ...]</option>
+          <option value="columns">columns — {"col": {idx: val}}</option>
+          <option value="split">split — columns/data arrays</option>
+          <option value="index">index — {idx: {col: val}}</option>
+          <option value="values">values — [[...], ...]</option>
+          <option value="table">table — schema + data</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="exportJsonDateFormat">Date format</label>
+        <select id="exportJsonDateFormat">
+          <option value="iso" selected>ISO 8601</option>
+          <option value="epoch">Epoch (milliseconds)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="exportJsonIndent">Indent (pretty-print)</label>
+        <input type="text" id="exportJsonIndent" inputmode="numeric" placeholder="none — compact" />
+      </div>
+    </div>
+
+    <div class="export-fields" id="exportFieldsParquet" style="display:none;">
+      <div class="field">
+        <label for="exportParquetCompression">Compression</label>
+        <select id="exportParquetCompression">
+          <option value="snappy" selected>Snappy</option>
+          <option value="gzip">Gzip</option>
+          <option value="brotli">Brotli</option>
+          <option value="none">None</option>
+        </select>
+      </div>
+      <label class="dialog-checkbox"><input type="checkbox" id="exportParquetIndex" /> Include row index as a column</label>
+    </div>
+
+    <div class="dialog-actions">
+      <button type="button" class="secondary" id="exportCancelBtn">Cancel</button>
+      <button type="button" id="exportDownloadBtn">Download</button>
+    </div>
+  </dialog>
+
 <script>
 (function () {
   "use strict";
@@ -434,46 +580,290 @@
   let table = null;
   let currentColumns = [];
 
+  // Every snippet's code shows the function's real pandas keyword defaults
+  // explicitly (so editing one is "change a value," not "look up the
+  // signature") — angle-bracket placeholders like <column> mark the
+  // arguments that have no sensible default and must be filled in.
   const SNIPPETS = {
-    sort: {
-      label: "Sort",
-      code: 'def transform(df):\n    return df.sort_values(by=["column"], ascending=True)',
+    filter_gt: {
+      label: "Filter: column > value",
+      category: "Filter & select",
+      code: 'def transform(df):\n    return df[df["<column>"] > <value>]',
     },
-    filter: {
-      label: "Filter",
-      code: 'def transform(df):\n    return df[df["column"] > 0]',
+    filter_isin: {
+      label: "Filter: value in a list",
+      category: "Filter & select",
+      code: 'def transform(df):\n    return df[df["<column>"].isin([<value1>, <value2>])]',
+    },
+    filter_between: {
+      label: "Filter: between two values",
+      category: "Filter & select",
+      code: 'def transform(df):\n    return df[df["<column>"].between(<left>, <right>, inclusive="both")]',
+    },
+    filter_notna: {
+      label: "Filter: drop rows where column is empty",
+      category: "Filter & select",
+      code: 'def transform(df):\n    return df[df["<column>"].notna()]',
+    },
+    query_multi: {
+      label: "Filter: multiple conditions (query)",
+      category: "Filter & select",
+      code: 'def transform(df):\n    return df.query("<column> > 0 and <column2> == \'<value>\'")',
+    },
+    loc_select: {
+      label: "Select rows + columns (loc)",
+      category: "Filter & select",
+      code: 'def transform(df):\n    return df.loc[df["<column>"] > <value>, ["<column_a>", "<column_b>"]]',
+    },
+    iloc_slice: {
+      label: "Select by position (iloc)",
+      category: "Filter & select",
+      code: "def transform(df):\n    return df.iloc[0:10, 0:5]",
+    },
+
+    sort_values: {
+      label: "Sort by column(s)",
+      category: "Sort & index",
+      code: 'def transform(df):\n    return df.sort_values(by=["<column>"], ascending=True, na_position="last")',
+    },
+    sort_index: {
+      label: "Sort by index",
+      category: "Sort & index",
+      code: "def transform(df):\n    return df.sort_index(ascending=True)",
+    },
+    reset_index: {
+      label: "Reset index",
+      category: "Sort & index",
+      code: "def transform(df):\n    return df.reset_index(drop=True)",
+    },
+    set_index: {
+      label: "Set index",
+      category: "Sort & index",
+      code: 'def transform(df):\n    return df.set_index("<column>", drop=True)',
+    },
+    nlargest: {
+      label: "Top N rows by column",
+      category: "Sort & index",
+      code: 'def transform(df):\n    return df.nlargest(n=<number_of_rows>, columns="<column>")',
+    },
+    nsmallest: {
+      label: "Bottom N rows by column",
+      category: "Sort & index",
+      code: 'def transform(df):\n    return df.nsmallest(n=<number_of_rows>, columns="<column>")',
+    },
+    sample_rows: {
+      label: "Random sample of rows",
+      category: "Sort & index",
+      code: "def transform(df):\n    return df.sample(n=<number_of_rows>, random_state=42)",
+    },
+
+    rename: {
+      label: "Rename column(s)",
+      category: "Columns",
+      code: 'def transform(df):\n    return df.rename(columns={"<old_name>": "<new_name>"})',
+    },
+    drop_columns: {
+      label: "Drop column(s)",
+      category: "Columns",
+      code: 'def transform(df):\n    return df.drop(columns=["<column>"])',
     },
     add_column: {
-      label: "Add column",
-      code: 'def transform(df):\n    df["new_column"] = df["column_a"] + df["column_b"]\n    return df',
+      label: "Add column (arithmetic)",
+      category: "Columns",
+      code: 'def transform(df):\n    df["<new_column>"] = df["<column_a>"] + df["<column_b>"]\n    return df',
     },
-    rename: {
-      label: "Rename",
-      code: 'def transform(df):\n    return df.rename(columns={"old_name": "new_name"})',
+    assign: {
+      label: "Add column (assign)",
+      category: "Columns",
+      code: 'def transform(df):\n    return df.assign(<new_column>=lambda d: d["<column_a>"] + d["<column_b>"])',
     },
-    drop: {
-      label: "Drop columns",
-      code: 'def transform(df):\n    return df.drop(columns=["column"])',
+    astype: {
+      label: "Change column type",
+      category: "Columns",
+      code: 'def transform(df):\n    df["<column>"] = df["<column>"].astype("<dtype: int, float, str, category>")\n    return df',
     },
-    groupby: {
-      label: "Group by",
-      code: 'def transform(df):\n    return df.groupby("column", as_index=False).agg({"other_column": "sum"})',
-    },
-    dedupe: {
-      label: "Deduplicate",
-      code: 'def transform(df):\n    return df.drop_duplicates(subset=["column"])',
+
+    dropna: {
+      label: "Drop rows with missing values",
+      category: "Clean & missing",
+      code: 'def transform(df):\n    return df.dropna(axis=0, how="any", subset=None)',
     },
     fillna: {
-      label: "Fill missing",
-      code: 'def transform(df):\n    df["column"] = df["column"].fillna(0)\n    return df',
+      label: "Fill missing values",
+      category: "Clean & missing",
+      code: 'def transform(df):\n    df["<column>"] = df["<column>"].fillna(value=0, limit=None)\n    return df',
     },
-    to_datetime: {
-      label: "Parse date",
-      code: 'def transform(df):\n    df["date_column"] = pd.to_datetime(df["date_column"])\n    return df',
+    drop_duplicates: {
+      label: "Remove duplicate rows",
+      category: "Clean & missing",
+      code:
+        "def transform(df):\n" +
+        "    # subset=None checks every column for a duplicate row;\n" +
+        '    # pass column name(s) instead — e.g. subset=["<column>"] — to\n' +
+        "    # dedupe on specific columns only. subset takes COLUMN NAMES,\n" +
+        "    # not the values inside them.\n" +
+        "    return df.drop_duplicates(subset=None, keep=\"first\", ignore_index=False)",
+    },
+    replace: {
+      label: "Replace a value",
+      category: "Clean & missing",
+      code: 'def transform(df):\n    df["<column>"] = df["<column>"].replace(to_replace="<old_value>", value="<new_value>")\n    return df',
+    },
+    clip: {
+      label: "Clip values to a range",
+      category: "Clean & missing",
+      code: 'def transform(df):\n    df["<column>"] = df["<column>"].clip(lower=None, upper=None)\n    return df',
+    },
+    interpolate: {
+      label: "Interpolate missing values",
+      category: "Clean & missing",
+      code: 'def transform(df):\n    df["<column>"] = df["<column>"].interpolate(method="linear", limit_direction="forward")\n    return df',
+    },
+
+    apply_column: {
+      label: "Apply a function to a column",
+      category: "Apply & map",
+      code: 'def transform(df):\n    df["<new_column>"] = df["<column>"].apply(lambda x: x)\n    return df',
+    },
+    map_column: {
+      label: "Map values (lookup dict)",
+      category: "Apply & map",
+      code: 'def transform(df):\n    df["<column>"] = df["<column>"].map({"<old_value>": "<new_value>"})\n    return df',
+    },
+    where: {
+      label: "Conditional replace (where)",
+      category: "Apply & map",
+      code: 'def transform(df):\n    df["<column>"] = df["<column>"].where(cond=df["<column>"] > 0, other=0)\n    return df',
+    },
+
+    groupby_agg: {
+      label: "Group by + aggregate",
+      category: "Aggregate & group",
+      code: 'def transform(df):\n    return df.groupby(by="<column>", as_index=False).agg({"<other_column>": "sum"})',
+    },
+    groupby_multi: {
+      label: "Group by multiple columns (count)",
+      category: "Aggregate & group",
+      code: 'def transform(df):\n    return df.groupby(by=["<column_a>", "<column_b>"], as_index=False).size()',
+    },
+    pivot_table: {
+      label: "Pivot table",
+      category: "Aggregate & group",
+      code: 'def transform(df):\n    return df.pivot_table(index="<row_column>", columns="<col_column>", values="<value_column>", aggfunc="mean")',
+    },
+    crosstab: {
+      label: "Cross-tabulation",
+      category: "Aggregate & group",
+      code: 'def transform(df):\n    return pd.crosstab(df["<column_a>"], df["<column_b>"])',
+    },
+    corr: {
+      label: "Correlation matrix",
+      category: "Aggregate & group",
+      code: "def transform(df):\n    return df.corr(numeric_only=True)",
+    },
+    value_counts: {
+      label: "Value counts",
+      category: "Aggregate & group",
+      code: 'def transform(df):\n    return df["<column>"].value_counts(normalize=False, sort=True, ascending=False).reset_index()',
+    },
+
+    melt: {
+      label: "Wide to long (melt)",
+      category: "Reshape & combine",
+      code: 'def transform(df):\n    return df.melt(id_vars=["<id_column>"], value_vars=None, var_name=None, value_name="value")',
+    },
+    explode: {
+      label: "Expand list values into rows (explode)",
+      category: "Reshape & combine",
+      code: 'def transform(df):\n    return df.explode(column="<column>", ignore_index=False)',
+    },
+    merge: {
+      label: "Merge with another file",
+      category: "Reshape & combine",
+      code:
+        "def transform(df):\n" +
+        '    other = pd.read_csv("<path_to_other_file.csv>")\n' +
+        '    return df.merge(other, how="inner", on="<key_column>")',
+    },
+    concat: {
+      label: "Stack rows from another file",
+      category: "Reshape & combine",
+      code:
+        "def transform(df):\n" +
+        '    other = pd.read_csv("<path_to_other_file.csv>")\n' +
+        "    return pd.concat([df, other], axis=0, ignore_index=True)",
+    },
+
+    str_contains: {
+      label: "Filter: text contains substring",
+      category: "String",
+      code: 'def transform(df):\n    return df[df["<column>"].str.contains("<substring>", case=True, na=False)]',
+    },
+    str_replace: {
+      label: "Replace text in a column",
+      category: "String",
+      code: 'def transform(df):\n    df["<column>"] = df["<column>"].str.replace("<old>", "<new>", regex=False)\n    return df',
+    },
+    str_split: {
+      label: "Split text into a list",
+      category: "String",
+      code: 'def transform(df):\n    df["<column>"] = df["<column>"].str.split(pat=None, expand=False)\n    return df',
     },
     clean_string: {
-      label: "Clean text",
-      code: 'def transform(df):\n    df["column"] = df["column"].str.strip().str.lower()\n    return df',
+      label: "Clean text (trim + lowercase)",
+      category: "String",
+      code: 'def transform(df):\n    df["<column>"] = df["<column>"].str.strip().str.lower()\n    return df',
+    },
+    str_len: {
+      label: "Text length",
+      category: "String",
+      code: 'def transform(df):\n    df["<new_column>"] = df["<column>"].str.len()\n    return df',
+    },
+    str_slice: {
+      label: "Slice text (substring)",
+      category: "String",
+      code: 'def transform(df):\n    df["<column>"] = df["<column>"].str.slice(start=0, stop=5)\n    return df',
+    },
+
+    to_datetime: {
+      label: "Parse date/time",
+      category: "Date & time",
+      code: 'def transform(df):\n    df["<date_column>"] = pd.to_datetime(df["<date_column>"], errors="coerce")\n    return df',
+    },
+    dt_extract: {
+      label: "Extract year/month/day from date",
+      category: "Date & time",
+      code:
+        "def transform(df):\n" +
+        "    # also available: .dt.month, .dt.day, .dt.dayofweek, .dt.hour\n" +
+        '    df["<new_column>"] = df["<date_column>"].dt.year\n' +
+        "    return df",
+    },
+    date_diff: {
+      label: "Days between two dates",
+      category: "Date & time",
+      code: 'def transform(df):\n    df["<new_column>"] = (df["<end_date_column>"] - df["<start_date_column>"]).dt.days\n    return df',
+    },
+
+    cut: {
+      label: "Bin into fixed-width ranges (cut)",
+      category: "Numeric",
+      code: 'def transform(df):\n    df["<new_column>"] = pd.cut(df["<column>"], bins=<number_of_bins_or_list>)\n    return df',
+    },
+    qcut: {
+      label: "Bin into equal-sized groups (qcut)",
+      category: "Numeric",
+      code: 'def transform(df):\n    df["<new_column>"] = pd.qcut(df["<column>"], q=<number_of_quantiles>)\n    return df',
+    },
+    round_col: {
+      label: "Round a numeric column",
+      category: "Numeric",
+      code: 'def transform(df):\n    df["<column>"] = df["<column>"].round(decimals=2)\n    return df',
+    },
+    zscore: {
+      label: "Normalize (z-score)",
+      category: "Numeric",
+      code: 'def transform(df):\n    df["<new_column>"] = (df["<column>"] - df["<column>"].mean()) / df["<column>"].std()\n    return df',
     },
   };
 
@@ -501,6 +891,10 @@
       formData.append("encoding", options.encoding || "utf-8");
       formData.append("header", options.header ? "true" : "false");
       formData.append("nrows", options.nrows || "");
+      formData.append("orient", options.orient || "");
+      formData.append("lines", options.lines || "");
+      formData.append("xpath", options.xpath || "");
+      formData.append("columns", options.columns || "");
 
       const xhr = new XMLHttpRequest();
       xhr.open("POST", "load");
@@ -747,16 +1141,23 @@
     });
   }
 
-  function renderSnippetButtons() {
-    const wrap = document.getElementById("snippetBtns");
-    wrap.innerHTML = "";
+  function populateSnippetSelect() {
+    const select = document.getElementById("snippetSelect");
+    select.innerHTML = '<option value="">Choose a function…</option>';
+    const groups = {};
     Object.entries(SNIPPETS).forEach(([key, snippet]) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "secondary";
-      btn.textContent = snippet.label;
-      btn.dataset.snippet = key;
-      wrap.appendChild(btn);
+      (groups[snippet.category] ||= []).push([key, snippet]);
+    });
+    Object.entries(groups).forEach(([category, entries]) => {
+      const optgroup = document.createElement("optgroup");
+      optgroup.label = category;
+      entries.forEach(([key, snippet]) => {
+        const opt = document.createElement("option");
+        opt.value = key;
+        opt.textContent = snippet.label;
+        optgroup.appendChild(opt);
+      });
+      select.appendChild(optgroup);
     });
   }
 
@@ -775,7 +1176,7 @@
     renderPipeline(preview.steps);
     document.getElementById("scriptBox").style.display = "none";
     document.getElementById("scriptCopyActions").style.display = "none";
-    dismissQueryCheck();
+    dismissQueryCheck(); // shared panel — stale after any pipeline change either way
     setPreviewModeButtons(preview.preview_mode || "head");
     ["previewModeHeadBtn", "previewModeSampleBtn", "resampleBtn"].forEach((id) => {
       document.getElementById(id).disabled = false;
@@ -821,6 +1222,39 @@
   // ---------------------------------------------------------------------
   const LARGE_FILE_WARNING_BYTES = 150 * 1024 * 1024; // 150 MB
 
+  const LOAD_FORMAT_GROUPS = {
+    csv: { group: "loadFieldsCsv", badge: "CSV", hint: "Row limit is read directly during parsing (low memory)." },
+    tsv: { group: "loadFieldsCsv", badge: "TSV", hint: "Row limit is read directly during parsing (low memory)." },
+    txt: { group: "loadFieldsCsv", badge: "TXT", hint: "Row limit is read directly during parsing (low memory)." },
+    json: {
+      group: "loadFieldsJson", badge: "JSON",
+      hint: "Row limit reads the whole file first, then trims — doesn't save memory for JSON.",
+    },
+    xml: {
+      group: "loadFieldsXml", badge: "XML",
+      hint: "Row limit reads the whole file first, then trims — doesn't save memory for XML.",
+    },
+    parquet: {
+      group: "loadFieldsParquet", badge: "Parquet",
+      hint: 'Row limit reads the whole file, then trims. Use "Columns to load" above for real memory savings — Parquet supports reading only chosen columns from disk.',
+    },
+  };
+  let currentLoadExt = "csv";
+
+  function updateLoadFormatFields() {
+    const input = document.getElementById("fileInput");
+    const name = input.files[0] ? input.files[0].name : "";
+    currentLoadExt = name.includes(".") ? name.split(".").pop().toLowerCase() : "csv";
+    const info = LOAD_FORMAT_GROUPS[currentLoadExt] || LOAD_FORMAT_GROUPS.csv;
+    document.querySelectorAll("#loadOptionsPanel .load-options-grid").forEach((el) => {
+      el.style.display = el.id === info.group ? "grid" : "none";
+    });
+    document.getElementById("loadFormatBadge").textContent = info.badge;
+    document.getElementById("loadFormatHint").textContent = info.hint;
+  }
+
+  document.getElementById("fileInput").addEventListener("change", updateLoadFormatFields);
+
   document.getElementById("loadSep").addEventListener("change", (e) => {
     document.getElementById("loadSepCustom").style.display = e.target.value === "__custom__" ? "block" : "none";
   });
@@ -834,11 +1268,19 @@
   function collectLoadOptions() {
     const sepSelect = document.getElementById("loadSep").value;
     const sep = sepSelect === "__custom__" ? document.getElementById("loadSepCustom").value : sepSelect;
+    const encodingEl =
+      currentLoadExt === "json" ? document.getElementById("loadEncodingJson") :
+      currentLoadExt === "xml" ? document.getElementById("loadEncodingXml") :
+      document.getElementById("loadEncoding");
     return {
       sep,
-      encoding: document.getElementById("loadEncoding").value,
+      encoding: encodingEl.value,
       header: document.getElementById("loadHeader").checked,
       nrows: document.getElementById("loadNrows").value.trim(),
+      orient: document.getElementById("loadOrient").value,
+      lines: document.getElementById("loadLines").value,
+      xpath: document.getElementById("loadXpath").value.trim(),
+      columns: document.getElementById("loadColumns").value.trim(),
     };
   }
 
@@ -951,11 +1393,27 @@
     }
   });
 
+  const INSIGHT_LABELS = { describe: "Describe", info: "Info", nunique: "Nunique" };
+
+  // Insights use the SAME panel Check does (#queryCheckPanel) — one shared
+  // full-width slot, not a second panel — just with the "Add to pipeline"
+  // button hidden (nothing to commit for a read-only insight) and no meta
+  // line. showQueryCheckPanel() below (used by Check) does the reverse.
+  function showInsightPanel(title) {
+    document.getElementById("queryCheckTitle").textContent = title;
+    document.getElementById("queryCheckMeta").textContent = "";
+    document.getElementById("queryCheckAddBtn").style.display = "none";
+    const panel = document.getElementById("queryCheckPanel");
+    panel.style.display = "block";
+    panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
   document.querySelectorAll("[data-insight]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       try {
         const data = await getInsight(btn.dataset.insight);
-        renderResultTable(document.getElementById("insightResult"), data.columns || Object.keys(data.rows[0] || {}), data.rows);
+        showInsightPanel(INSIGHT_LABELS[btn.dataset.insight] || btn.dataset.insight);
+        renderResultTable(document.getElementById("queryCheckResult"), data.columns || Object.keys(data.rows[0] || {}), data.rows);
       } catch (err) {
         showError(err.message);
       }
@@ -967,16 +1425,54 @@
     if (!col) return;
     try {
       const data = await getInsight("value_counts", col);
-      renderResultTable(document.getElementById("insightResult"), ["value", "count"], data.rows);
+      showInsightPanel(`Value counts — ${col}`);
+      renderResultTable(document.getElementById("queryCheckResult"), ["value", "count"], data.rows);
     } catch (err) {
       showError(err.message);
     }
   });
 
+  let currentExportFormat = "csv";
+  const EXPORT_FIELD_GROUPS = { csv: "exportFieldsCsv", json: "exportFieldsJson", parquet: "exportFieldsParquet" };
+
   document.querySelectorAll("[data-format]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      window.location = "export?format=" + btn.dataset.format;
+      currentExportFormat = btn.dataset.format;
+      document.getElementById("exportDialogTitle").textContent = "Export as " + currentExportFormat.toUpperCase();
+      Object.values(EXPORT_FIELD_GROUPS).forEach((id) => {
+        document.getElementById(id).style.display = "none";
+      });
+      document.getElementById(EXPORT_FIELD_GROUPS[currentExportFormat]).style.display = "flex";
+      document.getElementById("exportDialog").showModal();
     });
+  });
+
+  document.getElementById("exportCsvSep").addEventListener("change", (e) => {
+    document.getElementById("exportCsvSepCustom").style.display = e.target.value === "__custom__" ? "block" : "none";
+  });
+
+  document.getElementById("exportCancelBtn").addEventListener("click", () => {
+    document.getElementById("exportDialog").close();
+  });
+
+  document.getElementById("exportDownloadBtn").addEventListener("click", () => {
+    const params = new URLSearchParams({ format: currentExportFormat });
+    if (currentExportFormat === "csv") {
+      const sepSelect = document.getElementById("exportCsvSep").value;
+      const sep = sepSelect === "__custom__" ? document.getElementById("exportCsvSepCustom").value : sepSelect;
+      params.set("sep", sep || ",");
+      params.set("index", document.getElementById("exportCsvIndex").checked);
+    } else if (currentExportFormat === "json") {
+      params.set("orient", document.getElementById("exportJsonOrient").value);
+      params.set("date_format", document.getElementById("exportJsonDateFormat").value);
+      const indent = document.getElementById("exportJsonIndent").value.trim();
+      if (indent) params.set("indent", indent);
+    } else if (currentExportFormat === "parquet") {
+      params.set("compression", document.getElementById("exportParquetCompression").value);
+      params.set("index", document.getElementById("exportParquetIndex").checked);
+    }
+    window.location = "export?" + params.toString();
+    document.getElementById("exportDialog").close();
   });
 
   let lastScript = "";
@@ -1086,11 +1582,12 @@
     }
   }
 
-  document.getElementById("snippetBtns").addEventListener("click", (e) => {
-    const btn = e.target.closest("[data-snippet]");
-    if (!btn) return;
-    document.getElementById("queryCode").value = SNIPPETS[btn.dataset.snippet].code;
+  document.getElementById("snippetSelect").addEventListener("change", (e) => {
+    const key = e.target.value;
+    if (!key) return;
+    document.getElementById("queryCode").value = SNIPPETS[key].code;
     dismissQueryCheck();
+    e.target.value = ""; // reset so picking the same snippet again still fires "change"
   });
 
   document.getElementById("checkQueryBtn").addEventListener("click", async () => {
@@ -1103,6 +1600,8 @@
       const preview = await checkStep("custom_code", { code });
       clearError();
       lastCheckedCode = code;
+      document.getElementById("queryCheckTitle").textContent = "Check result";
+      document.getElementById("queryCheckAddBtn").style.display = "inline-block";
       const meta = document.getElementById("queryCheckMeta");
       meta.textContent = `Preview only, not added to the pipeline — would produce ${preview.row_count.toLocaleString()} rows × ${preview.columns.length} columns.`;
       renderResultTable(
@@ -1143,9 +1642,10 @@
     }
   }
 
-  renderSnippetButtons();
+  populateSnippetSelect();
   refreshTemplates();
   restoreSession();
+  updateLoadFormatFields();
 })();
 </script>
 </body>

@@ -103,6 +103,15 @@ def custom_code(df: pd.DataFrame, params: dict[str, Any]) -> tuple[pd.DataFrame,
 
     try:
         result = transform_fn(df.copy())
+    except KeyError as exc:
+        # pandas' own KeyError just dumps the missing labels (e.g.
+        # "Index(['HR'], dtype='object')") with no hint of what that means —
+        # almost always a column name typo'd or confused with a cell value.
+        raise ValueError(
+            f"Column not found: {exc}. Check that every column name in your "
+            "code matches a real column — this often means a value (like a "
+            "department name) was used where a column name was expected."
+        ) from exc
     except Exception as exc:  # noqa: BLE001
         raise ValueError(f"Error running transform(): {exc}") from exc
     if not isinstance(result, pd.DataFrame):

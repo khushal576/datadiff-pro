@@ -121,10 +121,18 @@ async def set_preview_mode(body: PreviewModeRequest, request: Request):
 async def load(
     response: Response,
     file: UploadFile = File(...),
+    # CSV/TSV/TXT
     sep: str = Form(""),
     encoding: str = Form("utf-8"),
     header: bool = Form(True),
     nrows: int = Form(0),
+    # JSON
+    orient: str = Form(""),
+    lines: str = Form(""),  # "" = auto-detect, "true"/"false" = explicit
+    # XML
+    xpath: str = Form(""),
+    # Parquet — comma-separated column names, empty = all columns
+    columns: str = Form(""),
 ):
     try:
         content = await file.read()  # Starlette streams this from the network asynchronously already
@@ -136,6 +144,10 @@ async def load(
             encoding=encoding or "utf-8",
             header=header,
             nrows=nrows if nrows and nrows > 0 else None,
+            orient=orient or None,
+            lines={"true": True, "false": False}.get(lines),
+            xpath=xpath or None,
+            columns=[c.strip() for c in columns.split(",") if c.strip()] or None,
         )
         session_id = engine.create_session(file.filename or "upload", df)
         session = engine.get_session(session_id)
@@ -252,26 +264,48 @@ async def delete_template(body: TemplateNameRequest):
     return {"templates": templates_store.list_templates()}
 
 
-_EXPORTERS = {
-    "csv": ("text/csv", lambda df, buf: df.to_csv(buf, index=False)),
-    "json": ("application/json", lambda df, buf: df.to_json(buf, orient="records", date_format="iso")),
-    "parquet": ("application/octet-stream", lambda df, buf: df.to_parquet(buf, index=False)),
-}
+_EXPORT_MEDIA_TYPES = {"csv": "text/csv", "json": "application/json", "parquet": "application/octet-stream"}
+_VALID_JSON_ORIENTS = {"split", "records", "index", "columns", "values", "table"}
 
 
 @app.get("/export")
-async def export(request: Request, format: str = "csv"):
-    if format not in _EXPORTERS:
+async def export(
+    request: Request,
+    format: str = "csv",
+    # CSV
+    sep: str = ",",
+    index: bool = False,
+    # JSON
+    orient: str = "records",
+    date_format: str = "iso",
+    indent: int = 0,
+    # Parquet
+    compression: str = "snappy",
+):
+    if format not in _EXPORT_MEDIA_TYPES:
         return _error(ValueError(f"Unsupported export format '{format}'."))
+    if format == "json" and orient not in _VALID_JSON_ORIENTS:
+        return _error(ValueError(f"Unsupported JSON orient '{orient}'."))
     try:
         session = engine.get_session(_session_id(request))
         df = await asyncio.to_thread(engine.recompute, session)
     except engine.StepError as exc:
         return _error(exc)
 
-    media_type, writer = _EXPORTERS[format]
     buf = io.BytesIO()
-    await asyncio.to_thread(writer, df, buf)
+    try:
+        if format == "csv":
+            await asyncio.to_thread(df.to_csv, buf, index=index, sep=sep or ",")
+        elif format == "json":
+            await asyncio.to_thread(
+                df.to_json, buf, orient=orient, date_format=date_format or "iso", indent=(indent or None)
+            )
+        else:  # parquet
+            comp = None if compression in ("", "none") else compression
+            await asyncio.to_thread(df.to_parquet, buf, index=index, compression=comp)
+    except Exception as exc:  # noqa: BLE001 - e.g. a multi-character CSV separator, bad compression codec
+        return _error(exc)
+    media_type = _EXPORT_MEDIA_TYPES[format]
     buf.seek(0)
     stem = session.filename.rsplit(".", 1)[0] if "." in session.filename else session.filename
     filename = f"{stem}.{format}"

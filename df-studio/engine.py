@@ -66,10 +66,18 @@ def load_dataframe(
     filename: str,
     content: bytes,
     *,
+    # CSV/TSV/TXT
     sep: str | None = None,
     encoding: str = "utf-8",
     header: bool = True,
     nrows: int | None = None,
+    # JSON
+    orient: str | None = None,
+    lines: bool | None = None,  # None = auto-detect (try both), not "false"
+    # XML
+    xpath: str | None = None,
+    # Parquet
+    columns: list[str] | None = None,
 ) -> pd.DataFrame:
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
     buf = io.BytesIO(content)
@@ -85,17 +93,29 @@ def load_dataframe(
             # which does not avoid reading the whole file into memory first
             # (see engine.py's docstring / CLAUDE.md for why CSV/TSV is the
             # only format this tool can genuinely stream-limit).
-            try:
-                df = pd.read_json(buf, encoding=encoding)
-            except ValueError:
-                buf.seek(0)
-                df = pd.read_json(buf, lines=True, encoding=encoding)
+            json_kwargs: dict[str, Any] = {"encoding": encoding}
+            if orient:
+                json_kwargs["orient"] = orient
+            if lines is not None:
+                df = pd.read_json(buf, lines=lines, **json_kwargs)
+            else:
+                try:
+                    df = pd.read_json(buf, **json_kwargs)
+                except ValueError:
+                    buf.seek(0)
+                    df = pd.read_json(buf, lines=True, **json_kwargs)
             return df.head(nrows) if nrows else df
         if ext == "xml":
-            df = pd.read_xml(buf, encoding=encoding)
+            xml_kwargs: dict[str, Any] = {"encoding": encoding}
+            if xpath:
+                xml_kwargs["xpath"] = xpath
+            df = pd.read_xml(buf, **xml_kwargs)
             return df.head(nrows) if nrows else df
         if ext == "parquet":
-            df = pd.read_parquet(buf)  # binary format, no meaningful encoding/sep
+            # binary format — no meaningful encoding/sep, but pandas *can*
+            # skip reading unwanted columns off disk (real column pruning,
+            # unlike the row-limit's read-then-trim for this format).
+            df = pd.read_parquet(buf, columns=columns or None)
             return df.head(nrows) if nrows else df
     except UnicodeDecodeError as exc:
         raise StepError(f"Couldn't decode file as {encoding} — try a different encoding.") from exc

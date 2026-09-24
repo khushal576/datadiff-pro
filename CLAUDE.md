@@ -45,6 +45,8 @@ datadiff-pro/                (repo root)
 ├── environments/  notebook/
 ├── main.py                    THE entrypoint — home page + mounts every tool
 ├── registry.yaml               home-page card metadata (display only)
+├── theme-tokens.css             canonical color palette — COPY-SOURCE only,
+│                                  never served/linked, see its own header
 ├── Dockerfile                  builds the one image (copies every tool)
 ├── docker-compose.yml          one service, host port 8000
 ├── requirements.txt             shared dependency set for the whole image
@@ -81,7 +83,12 @@ tested checklist, not a guess.)
 2. Its frontend calls its own API with relative paths (see above) — this is
    the one hard requirement for a page to work correctly when mounted under
    a path prefix.
-3. **Give it a uniquely-named top-level Python package** — never reuse
+3. Copy the six `:root` color variables from `theme-tokens.css` into the
+   tool's own `<style>` block verbatim — this is the one thing every tool's
+   palette should agree on. Everything else (status colors, tool-specific
+   accents) is that tool's own call; see `theme-tokens.css`'s header for why
+   this stays a copy, not a shared/served stylesheet.
+4. **Give it a uniquely-named top-level Python package** — never reuse
    `core` or `api` (DataDiff Pro already owns those, grandfathered as-is).
    Namespace the tool's own code under its own folder name instead (see
    `encode-decode/` → copied into the image as `encode_decode/`, imported
@@ -89,25 +96,51 @@ tested checklist, not a guess.)
    actually breaks silently if skipped — two tools both exposing a top-level
    `core` package means whichever gets imported second in `main.py` wins,
    and the other tool's real code never runs.
-4. In `main.py`: `from <tool_package>.<module> import app as <name>_app`,
+5. In `main.py`: `from <tool_package>.<module> import app as <name>_app`,
    then `app.mount("/tools/<name>", <name>_app)`.
-5. One entry in `registry.yaml` so it gets a home-page card.
-6. Add its dependencies to the root `requirements.txt` (watch for version
+6. One entry in `registry.yaml` so it gets a home-page card, including
+   `category: tool` or `category: learn` (see `registry.yaml`'s own header
+   comment — decides whether the card is shown by default on the home page
+   or only after the "Show learning tools" toggle).
+7. Add its dependencies to the root `requirements.txt` (watch for version
    conflicts with existing tools' dependencies — since everything now
    shares one Python environment, this is the real cost of the "one
    container" tradeoff; a genuine conflict is the signal to reconsider, not
    something to route around silently). If a tool needs no Python packages
    beyond what's already there (e.g. a pure client-side tool like
    Encode/Decode), this step is a no-op — nothing to add.
-7. Update `KNOWLEDGE_MAP.md` with this tool's section.
-8. **Add a `CLAUDE.md` inside the tool's own folder** — short, scoped to
+8. Update `KNOWLEDGE_MAP.md` with this tool's section.
+9. **Add a `CLAUDE.md` inside the tool's own folder** — short, scoped to
    just that tool (what it does, where each piece of logic lives, its own
    gotchas), pointing back to this file and `KNOWLEDGE_MAP.md` for anything
    repo-wide. This is what lets a future session opened directly inside
    `<tool>/` get oriented without pulling in every other tool's context
    first. See `encode-decode/CLAUDE.md` or `subnet-calc/CLAUDE.md` for the
    shape to copy.
-9. Rebuild the one image: `docker-compose up --build -d`.
+10. Rebuild the one image: `docker-compose up --build -d`.
+
+## Standing rule: stateful tools and `--workers`
+
+The container runs uvicorn with **`--workers 1`**, pinned in `Dockerfile`.
+This is because DataFrame Studio keeps its session state (the uploaded
+DataFrame, the pipeline of steps) in a plain in-memory Python dict —
+`engine.SESSIONS` in `df-studio/engine.py`. With more than one worker,
+uvicorn runs separate OS processes that don't share memory, so a session
+created by one request can be invisible to the next request if it lands on
+a different worker — this happened for real once (see `df-studio/CLAUDE.md`)
+and looked like random, unexplained "session not found" errors.
+
+**Decided now, before it comes up again:** any future tool that needs
+multi-step or multi-request state (not just "read a form, compute an
+answer, done" — something closer to df-studio's upload-then-edit model)
+must NOT just add another in-memory dict and assume `--workers 1` covers
+it forever. Either it reuses/extends `engine.SESSIONS`'s pattern
+consciously, or — if `--workers` genuinely needs to go up for performance
+reasons someday — that tool needs a real shared session store (Redis,
+SQLite, a session-scoped temp file, anything actually shared across
+processes) first. Don't raise `--workers` without checking this against
+every stateful tool that exists at the time, not just the one you're
+adding.
 
 ## Operating notes (the owner is not a developer)
 

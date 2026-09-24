@@ -77,6 +77,30 @@ requested: a "Load options" panel (separator incl. TSV/custom, encoding,
 header row toggle, optional row limit) and a size-based warning
 suggesting the row limit on files over 150MB.
 
+**Better custom_code errors, a real snippet catalog, shared result panel,
+format-aware load/export options (seventh pass).** Five follow-ups from
+actually using it: (1) a raw pandas `KeyError` (e.g. `drop_duplicates(subset=
+["HR"])` when `"HR"` is a cell value, not a column) surfaced as an opaque
+`Index(['HR'], dtype='object')` — `custom_code` now catches `KeyError`
+specifically and explains the likely mistake; (2) the 10-button snippet
+quick-insert grew into 51 functions across 10 categories in `SNIPPETS`
+(`ui/index.html`), rendered as a `<select>` with `<optgroup>`s instead of a
+button grid — every snippet spells out the function's real pandas keyword
+defaults, with `<placeholder>` markers only where there's no sensible
+default; (3) Insights (describe/info/nunique/value_counts) used to render
+into a cramped 320px sidebar box — they now open in the exact same
+full-width panel Check results use (`#queryCheckPanel`, literally the same
+DOM element, not a lookalike second one — see the shared-panel gotcha
+below); (4) load options were CSV-only even though JSON/XML/Parquet have
+their own real pandas read options — `engine.load_dataframe()` now takes
+format-specific kwargs (`orient`/`lines` for JSON, `xpath` for XML,
+`columns` for Parquet) and the Load Options panel shows the right field
+group based on the selected file's extension; (5) export was three
+one-click buttons with hardcoded settings — clicking one now opens a
+native `<dialog>` (centered by the browser automatically, zero extra
+positioning code) with format-specific options (CSV separator/index, JSON
+orient/date_format/indent, Parquet compression/index) before downloading.
+
 ## How it's built
 
 - `server.py` — FastAPI app: serves `ui/index.html`, plus `/load`,
@@ -242,6 +266,32 @@ at its own internal-import call sites, not just at the entrypoint.
   fields a chip/tag picker) across five different form fields, not a
   one-line change like the two above. Build it when wide files are an
   actual, not hypothetical, use case.
+- **The Check-result and Insight panels are the literal same DOM element**
+  (`#queryCheckPanel`) and the literal same JS state (`#queryCheckTitle`,
+  `#queryCheckMeta`, `#queryCheckResult`) — not two visually-matching
+  panels. `showInsightPanel()` hides `#queryCheckAddBtn` (nothing to commit
+  for a read-only insight) and blanks the meta line; the Check handler
+  un-hides the Add button and resets the title back to "Check result" every
+  time it runs. If you add a third thing that wants a full-width result
+  panel, extend this same show/hide pattern rather than adding another
+  near-identical `<div>` — that's exactly the duplication that prompted
+  this consolidation in the first place.
+- **`engine.load_dataframe()`'s extra kwargs are format-specific and mostly
+  silently ignored by the wrong format** — passing `orient` to a CSV load
+  does nothing (CSV branch never reads it), passing `sep` to a JSON load
+  does nothing. This is deliberate (the UI only ever sends the kwargs for
+  the detected format) but means a bad param name here fails silently
+  instead of loudly — if you add a new kwarg, make sure `ui/index.html`'s
+  `LOAD_FORMAT_GROUPS`/`collectLoadOptions()` actually gate it to the right
+  format group, or it'll just be dead weight sent-and-ignored on every load.
+- **`/export`'s three formats now validate their options before writing**
+  (`orient` checked against `_VALID_JSON_ORIENTS`; anything else — a
+  multi-character CSV `sep`, an unknown Parquet `compression` codec —
+  surfaces as a clean 400 via the `try/except` around the `to_csv`/
+  `to_json`/`to_parquet` call, not an unhandled 500). If you add a new
+  export option, keep it inside that `try` — the endpoint had NO error
+  handling around the write step before this pass, which was already a
+  latent gap even for the old hardcoded no-options version.
 - Mounted at `/tools/df-studio/` by `main.py` in the repo root — this
   folder never needs to know that; it's a fully self-contained ASGI app
   either way (verify with `cd df-studio && uvicorn server:app --reload`).

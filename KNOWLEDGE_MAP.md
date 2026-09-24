@@ -18,10 +18,12 @@ misleads. If a file's job changes, update its row here in the same commit.
 |---------------------------------------------------------------|-------|
 | The home page layout / card styling                           | `main.py` (`_HOME_TEMPLATE`, `_render_card`) |
 | Which tools show up as cards, their title/description/icon    | `registry.yaml` |
+| Whether a tool defaults to shown or hidden (Tool vs Learn), the search box, the "Show learning tools" toggle | `registry.yaml` (`category:` field per tool) + `main.py`'s home page `<script>` block |
 | Actually wiring a tool's app into the site (routing)           | `main.py` (`app.mount(...)` calls, bottom of file) |
 | The Docker image / what gets copied into the container         | `Dockerfile` |
 | Ports, restart policy, env vars for the whole site              | `docker-compose.yml` |
-| Why the container runs `--workers 1` (not more)                 | `Dockerfile` (CMD comment) — pinned for DataFrame Studio's in-memory sessions, see `df-studio/CLAUDE.md` |
+| Why the container runs `--workers 1` (not more)                 | `Dockerfile` (CMD comment) + `CLAUDE.md`'s "Standing rule: stateful tools and --workers" — check every stateful tool, not just df-studio, before ever raising this |
+| The canonical color palette every new tool's `:root` should start from | `theme-tokens.css` — copy-source only, never served; see its own header for why |
 | Architecture decisions, conventions, "why is it built this way" | `CLAUDE.md` |
 | GitHub auth setup for this device                               | `GITHUB_AUTH.md` |
 

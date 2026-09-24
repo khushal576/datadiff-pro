@@ -1,0 +1,36 @@
+/* =============================================================================
+   theme-tokens.css — canonical color palette, COPY-SOURCE ONLY
+   =============================================================================
+   This file is never linked or served — nothing in the Toolbox loads it over
+   HTTP. It exists so a human or an AI session adding a new tool has one place
+   to copy these six lines from, instead of re-deriving them or copying from
+   whichever existing tool happens to be open. Paste them verbatim into the
+   new tool's own `:root { ... }` block in its `ui/index.html`.
+
+   Why not a real shared, served CSS file: a tool mounted under /tools/<name>/
+   must also work standalone (`cd <tool> && uvicorn server:app`), and every
+   tool's frontend is deliberately self-contained with no dependency on the
+   toolbox shell being present — see the repo root CLAUDE.md. A served shared
+   file would also mean one bad edit breaks every tool's styling at once,
+   silently, at runtime — the opposite of that isolation. Copying these six
+   values in at tool-creation time gets the consistency without that coupling.
+
+   Why only six variables, not the full palette: these are the only ones that
+   have stayed byte-identical across every tool so far (verified 2026-09-24
+   across all 7 existing tools' :root blocks). Semantic/status colors
+   (ok/err/warn/info and any tool-specific ones like header-reference's
+   --req-bg/--res-bg) have ALREADY drifted slightly tool-to-tool — different
+   opacities, sometimes different base hex — and that's fine; they're
+   deliberately NOT canonicalized here. Don't add them to this file just to
+   make it "more complete" — that would force a choice about whose current
+   value is "correct" and risk quietly changing tools nobody asked to change.
+   ============================================================================= */
+
+:root {
+  --bg: #f4f6fb;
+  --surface: #ffffff;
+  --border: #dde1ef;
+  --text: #1c2035;
+  --muted: #6b7180;
+  --accent: #4f5ef0;
+}
