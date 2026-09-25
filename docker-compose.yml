@@ -1,10 +1,7 @@
 # =============================================================================
 # Toolbox — docker-compose.yml
 # =============================================================================
-# Two services: the toolbox app (home page + every mounted tool, main.py),
-# and a small dedicated Postgres for exercising SQL Studio's live Run
-# feature (Connect/Run/Export) against something real without touching any
-# other project's database.
+# One service, one container: home page + every mounted tool (main.py).
 #
 # Usage:
 #   Start:   docker-compose up --build -d
@@ -38,31 +35,3 @@ services:
     # without rebuilding the image.  Uncomment during development:
     # volumes:
     #   - ./ui:/app/ui:ro
-
-  # Dedicated dev Postgres for SQL Studio's Connect/Run feature — a plain
-  # postgres:16-alpine, reachable from the toolbox container by this
-  # service name (Compose gives every service a DNS alias on the shared
-  # default network, so "sqlstudio-postgres" resolves without any extra
-  # network config here). No host port mapping — nothing outside this
-  # compose network needs to reach it directly; connect to it FROM SQL
-  # Studio's Connection panel using host "sqlstudio-postgres", port 5432,
-  # database/user "sqlstudio", the password below.
-  sqlstudio-postgres:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    environment:
-      - POSTGRES_USER=sqlstudio
-      - POSTGRES_PASSWORD=sqlstudio_dev_pw
-      - POSTGRES_DB=sqlstudio
-    volumes:
-      - sqlstudio_pgdata:/var/lib/postgresql/data
-
-volumes:
-  # `external: true` + this exact name attaches to the sqlstudio_pgdata
-  # volume already created (and populated) by hand before this service
-  # existed — NOT a fresh Compose-managed volume (which would otherwise be
-  # auto-prefixed with the project name and start empty, silently
-  # orphaning the existing data). Don't remove `external: true` without
-  # migrating the data first.
-  sqlstudio_pgdata:
-    external: true
