@@ -53,6 +53,18 @@
     border-top: 1px solid var(--border); user-select: none;
   }
 
+  /* ---- Canvas search — jump to a table by name, map-search-bar style,
+     top-left over the canvas (zoom controls own bottom-right) ---- */
+  .canvas-search {
+    position: absolute; left: 16px; top: 16px; z-index: 5; width: 240px;
+  }
+  .canvas-search input {
+    width: 100%; background: var(--surface); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px;
+    font-size: 0.82rem; box-shadow: 0 4px 14px rgba(28,32,53,0.12);
+  }
+  .canvas-search input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
   /* ---- Table detail panel — right side, hidden until a node is clicked ---- */
   .detail-panel {
     width: 300px; flex: none; border-left: 1px solid var(--border);
@@ -90,6 +102,9 @@
   .rel-item:hover { background: var(--bg); }
   .rel-col { font-weight: 600; word-break: break-word; }
   .rel-arrow { color: var(--muted); flex: none; }
+  .col-fk-badge {
+    cursor: help; color: var(--accent); font-size: 0.72rem; margin-left: 4px;
+  }
 
   .legend-item { display: flex; align-items: center; gap: 7px; font-size: 0.78rem; padding: 3px 0; }
   .legend-swatch { width: 11px; height: 11px; border-radius: 50%; flex: none; }
@@ -168,6 +183,15 @@
   .filter-conn-item:hover { background: var(--bg); }
   .filter-conn-table { font-size: 0.82rem; font-weight: 600; }
   .filter-conn-detail { font-size: 0.7rem; color: var(--muted); margin-top: 1px; }
+
+  /* ---- Insights card — hub ranking + orphan list ---- */
+  .insight-item {
+    cursor: pointer; border-radius: 6px; padding: 5px 7px; margin-bottom: 1px;
+    display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem;
+  }
+  .insight-item:hover { background: var(--bg); }
+  .insight-degree { color: var(--muted); font-size: 0.7rem; flex: none; margin-left: 8px; }
+  .insight-empty { font-size: 0.76rem; color: var(--muted); padding: 2px 0 8px; }
 </style>
 </head>
 <body>
@@ -253,6 +277,21 @@
       </div>
     </details>
 
+    <details class="card" id="detInsights" style="display: none;">
+      <summary><h2>Insights</h2><span class="chev">▶</span></summary>
+      <div class="body">
+        <p class="hint">
+          A quick read on the current graph — which tables couple the
+          most other tables together, and which have no foreign-key
+          connections at all.
+        </p>
+        <label>Most connected tables</label>
+        <div id="insightHubs"></div>
+        <label style="margin-top: 10px;">Orphan tables (no FK connections)</label>
+        <div id="insightOrphans"></div>
+      </div>
+    </details>
+
     <details class="card" id="detFilter" style="display: none;">
       <summary><h2>Filter</h2><span class="chev">▶</span></summary>
       <div class="body">
@@ -288,6 +327,11 @@
       Connect to a database to start exploring its structure.
     </div>
     <div id="graphCanvas" style="display: none;"></div>
+    <div class="canvas-search" id="canvasSearch" style="display: none;">
+      <input type="text" id="tableSearchInput" list="tableSearchList"
+        placeholder="Find a table… (schema.table)" autocomplete="off" />
+      <datalist id="tableSearchList"></datalist>
+    </div>
     <div class="zoom-controls" id="zoomControls" style="display: none;">
       <button type="button" id="btnZoomIn" title="Zoom in">+</button>
       <button type="button" id="btnZoomOut" title="Zoom out">−</button>
@@ -404,6 +448,9 @@ function showGraphPlaceholder(text) {
   $("zoomControls").style.display = "none";
   $("schemaLegend").style.display = "none";
   $("detFilter").style.display = "none";
+  $("detInsights").style.display = "none";
+  $("canvasSearch").style.display = "none";
+  $("tableSearchInput").value = "";
   closeDetailPanel();
   hideNodeTooltip();
 }
@@ -536,6 +583,7 @@ function renderGraph(data) {
   $("mainPlaceholder").style.display = "none";
   $("graphCanvas").style.display = "block";
   $("zoomControls").style.display = "flex";
+  $("canvasSearch").style.display = "block";
   closeDetailPanel();
   hideNodeTooltip();
   if (cy) cy.destroy();
@@ -545,6 +593,9 @@ function renderGraph(data) {
   $("detFilter").style.display = "block";
   populateFilterTableSelect(data.tables);
   resetFilterUI();
+  $("detInsights").style.display = "block";
+  populateTableSearch(data.tables);
+  renderInsights(data);
 
   const rowEstimates = data.tables.map((t) => Math.max(t.row_estimate, 0));
   const maxRows = Math.max(1, ...rowEstimates);
@@ -728,6 +779,56 @@ function buildAdjacency(foreignKeys) {
   return adj;
 }
 
+// ---------------------------------------------------------------------
+// Insights — hub ranking + orphan list, both derived from the same
+// adjacency map the Filter feature already builds. "Degree" here is the
+// number of DISTINCT other tables a table connects to, not the raw
+// count of FK rows — a table with two FK columns pointing at the same
+// other table (see orders -> user_addresses via both billing_ and
+// shipping_address_id) is one real coupling relationship, not two, for
+// the purpose of "how many other tables does moving this touch."
+// ---------------------------------------------------------------------
+const TOP_HUBS_COUNT = 8;
+
+function computeTableDegrees(data) {
+  const adj = buildAdjacency(data.foreign_keys);
+  return data.tables.map((t) => {
+    const id = `${t.schema_name}.${t.table_name}`;
+    const neighbors = adj.get(id) || [];
+    const degree = new Set(neighbors.map((n) => n.otherId)).size;
+    return { id, label: t.table_name, schema: t.schema_name, degree };
+  });
+}
+
+function renderInsights(data) {
+  const stats = computeTableDegrees(data);
+  const hubs = [...stats].filter((s) => s.degree > 0).sort((a, b) => b.degree - a.degree).slice(0, TOP_HUBS_COUNT);
+  const orphans = stats.filter((s) => s.degree === 0).sort((a, b) => a.id.localeCompare(b.id));
+
+  const renderList = (container, items, emptyText) => {
+    if (!items.length) {
+      container.innerHTML = `<p class="insight-empty">${escHtml(emptyText)}</p>`;
+      return;
+    }
+    container.innerHTML = "";
+    for (const item of items) {
+      const row = document.createElement("div");
+      row.className = "insight-item";
+      row.innerHTML =
+        `<span>${escHtml(item.id)}</span>` +
+        (item.degree > 0 ? `<span class="insight-degree">${item.degree} table${item.degree === 1 ? "" : "s"}</span>` : "");
+      row.addEventListener("click", () => {
+        $("tableSearchInput").value = item.id;
+        jumpToTable(item.id);
+      });
+      container.appendChild(row);
+    }
+  };
+
+  renderList($("insightHubs"), hubs, "No connected tables yet.");
+  renderList($("insightOrphans"), orphans, "None — every table has at least one FK connection.");
+}
+
 // Returns { visibleIds: Set, byDepth: [[{otherId, fk}], ...] } — byDepth[0]
 // is the 1-hop neighbors, byDepth[1] the 2-hop neighbors, etc.
 function computeNeighborhood(startId, maxDepth, foreignKeys) {
@@ -889,6 +990,62 @@ $("btnZoomFit").addEventListener("click", () => {
 });
 
 // ---------------------------------------------------------------------
+// Canvas search — find a table by name and jump straight to it, instead
+// of scrolling a <select> or hunting across a canvas that could have
+// hundreds of tables on it. A native <input list="..."> + <datalist> is
+// deliberately used over a custom dropdown — free keyboard nav and
+// filtering from the browser, no extra library, same "no build step"
+// bar every other piece of this UI holds to.
+// ---------------------------------------------------------------------
+let tableSearchIds = new Set();
+
+function populateTableSearch(tables) {
+  const list = $("tableSearchList");
+  list.innerHTML = "";
+  tableSearchIds = new Set();
+  const sorted = [...tables].sort((a, b) =>
+    `${a.schema_name}.${a.table_name}`.localeCompare(`${b.schema_name}.${b.table_name}`));
+  for (const t of sorted) {
+    const id = `${t.schema_name}.${t.table_name}`;
+    tableSearchIds.add(id);
+    const opt = document.createElement("option");
+    opt.value = id;
+    list.appendChild(opt);
+  }
+}
+
+// Centers the graph on one table, opens its column/relationship detail,
+// and — per the owner's ask — pre-fills the Filter card's own table
+// picker too, so "find a table" and "trace its dependencies" chain
+// together instead of being two disconnected actions.
+function jumpToTable(tableId) {
+  if (!cy) return;
+  const node = cy.getElementById(tableId);
+  if (!node.length) return;
+  // If the current view is filtered and this table got hidden by it,
+  // clear the filter first — otherwise the jump would silently do
+  // nothing (fit/center on a hidden element has no visible effect).
+  if (node.hidden()) clearFilter();
+  cy.animate({ fit: { eles: node, padding: 150 } }, { duration: 300 });
+  openTableDetail(node.data());
+  const filterSelect = $("filterTableSelect");
+  if (tableSearchIds.has(tableId)) filterSelect.value = tableId;
+}
+
+function trySearchJump() {
+  const value = $("tableSearchInput").value.trim();
+  if (value && tableSearchIds.has(value)) jumpToTable(value);
+}
+
+// "input" covers picking a suggestion from the datalist dropdown
+// (fires immediately, no blur/Enter needed in Chrome/Firefox); the
+// "Enter" keydown covers a table name typed out by hand in full.
+$("tableSearchInput").addEventListener("input", trySearchJump);
+$("tableSearchInput").addEventListener("keydown", (evt) => {
+  if (evt.key === "Enter") trySearchJump();
+});
+
+// ---------------------------------------------------------------------
 // Table detail panel — click a node, see its real columns. Fetched only
 // for the clicked table (GET /table/{schema}/{table}), never bundled
 // into the bulk /graph response — see introspection_postgres.py's own
@@ -903,15 +1060,21 @@ $("btnZoomFit").addEventListener("click", () => {
 // `lastGraphData.foreign_keys` (already fetched for the graph, no new
 // network call) rather than a new endpoint — same lazy-but-reuse
 // principle as everything else here.
-function buildRelationshipsHtml(nodeData) {
-  if (!lastGraphData) return "";
+// Single source of truth for "which FKs does this table take part in" —
+// used both to build the Relationships section below and to mark FK
+// columns directly in the columns table (see openTableDetail()), so the
+// two stay in sync by construction instead of by two separate filters
+// that could drift apart.
+function getTableForeignKeys(nodeData) {
+  if (!lastGraphData) return { outgoing: [], incoming: [] };
   const tableId = `${nodeData.schema}.${nodeData.label}`;
-  const outgoing = lastGraphData.foreign_keys.filter(
-    (fk) => `${fk.from_schema}.${fk.from_table}` === tableId
-  );
-  const incoming = lastGraphData.foreign_keys.filter(
-    (fk) => `${fk.to_schema}.${fk.to_table}` === tableId
-  );
+  return {
+    outgoing: lastGraphData.foreign_keys.filter((fk) => `${fk.from_schema}.${fk.from_table}` === tableId),
+    incoming: lastGraphData.foreign_keys.filter((fk) => `${fk.to_schema}.${fk.to_table}` === tableId),
+  };
+}
+
+function buildRelationshipsHtml(outgoing, incoming) {
   if (!outgoing.length && !incoming.length) return "";
 
   const rel = (fk, otherId, left, right) => `
@@ -957,7 +1120,16 @@ async function openTableDetail(nodeData) {
   // doesn't observe layout changes on its own; it needs to be told.
   if (cy) cy.resize();
 
-  const relationshipsHtml = buildRelationshipsHtml(nodeData);
+  const { outgoing, incoming } = getTableForeignKeys(nodeData);
+  const relationshipsHtml = buildRelationshipsHtml(outgoing, incoming);
+  // Which of this table's OWN columns take part in a FK, so the columns
+  // table itself can flag them — the owner asked for this directly:
+  // scrolling down to Relationships just to see "is this a FK column"
+  // was one extra step too many. `fkOutCols` = this table's own foreign
+  // key columns (it references out); `fkInCols` = columns that are the
+  // TARGET of another table's foreign key (usually the primary key).
+  const fkOutCols = new Set(outgoing.map((fk) => fk.from_column));
+  const fkInCols = new Set(incoming.map((fk) => fk.to_column));
 
   try {
     const res = await fetch(`table/${encodeURIComponent(nodeData.schema)}/${encodeURIComponent(nodeData.label)}`);
@@ -970,12 +1142,25 @@ async function openTableDetail(nodeData) {
       $("detailBody").innerHTML = '<p class="detail-loading">No columns found.</p>' + relationshipsHtml;
       return;
     }
-    const rows = data.columns.map((c) => `
-      <tr>
-        <td>${escHtml(c.column_name)}${c.is_nullable ? "" : " *"}</td>
-        <td class="col-type">${escHtml(c.data_type)}</td>
-      </tr>
-    `).join("");
+    const rows = data.columns.map((c) => {
+      const isOut = fkOutCols.has(c.column_name);
+      const isIn = fkInCols.has(c.column_name);
+      let badge = "";
+      if (isOut || isIn) {
+        const tip = isOut && isIn
+          ? "References another table and is referenced by one — see Relationships below"
+          : isOut
+          ? "References another table — see Relationships below"
+          : "Referenced by another table — see Relationships below";
+        badge = `<span class="col-fk-badge" title="${escHtml(tip)}">🔗</span>`;
+      }
+      return `
+        <tr>
+          <td>${escHtml(c.column_name)}${badge}${c.is_nullable ? "" : " *"}</td>
+          <td class="col-type">${escHtml(c.data_type)}</td>
+        </tr>
+      `;
+    }).join("");
     $("detailBody").innerHTML = `
       <table class="columns-table">
         <thead><tr><th>Column</th><th>Type</th></tr></thead>

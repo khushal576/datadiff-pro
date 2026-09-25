@@ -879,6 +879,9 @@ section before assuming any of those exist.
 | The column detail panel, zoom controls                                  | `schema-map/ui/index.html` — `openTableDetail()`/`closeDetailPanel()` (note the `cy.resize()` call — see `schema-map/CLAUDE.md`), `btnZoomIn`/`btnZoomOut`/`btnZoomFit` handlers |
 | The detail panel's per-column FK relationship list                      | `schema-map/ui/index.html` — `buildRelationshipsHtml()`, built from cached `lastGraphData.foreign_keys`, no new endpoint |
 | The table-connection Filter (hop depth, blast-radius list, hide/show)   | `schema-map/ui/index.html` — `computeNeighborhood()`/`buildAdjacency()` (undirected BFS over `foreign_keys`), `applyFilter()`/`clearFilter()` (`cy.hide()`/`.show()`, not a fade), `renderFilterResults()` |
+| Table search / jump-to-table                                            | `schema-map/ui/index.html` — `populateTableSearch()`, `jumpToTable()` (`#canvasSearch`, native `<input list>`/`<datalist>`) |
+| Hub ranking, orphan-table list                                          | `schema-map/ui/index.html` — `computeTableDegrees()` (reuses `buildAdjacency()`), `renderInsights()` (`#detInsights`) |
+| FK-column badges in the columns table, the Relationships section        | `schema-map/ui/index.html` — `getTableForeignKeys()` (shared by both), `buildRelationshipsHtml()` |
 
 ### Known non-obvious behavior
 
@@ -928,6 +931,12 @@ section before assuming any of those exist.
   "Referenced by" (incoming). Built client-side from the already-cached
   graph data, not a new backend call. Node labels also moved above each
   node (`text-valign: "top"`), not below.
+- **"Degree" in the Insights card counts distinct connected tables, not
+  raw FK rows** — two FK columns on the same table pointing at the same
+  other table count as one coupling relationship, not two. See
+  `schema-map/CLAUDE.md` for the verified real numbers (`orders`/`users`
+  top the hub list at degree 6, `employees`/`analytics.daily_stats` are
+  the orphans).
 - **The Filter feature's traversal is undirected and hides, not fades**
   — the owner explicitly confirmed both: "both directions" (what a
   table references AND what references it both count toward its

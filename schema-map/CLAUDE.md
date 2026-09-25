@@ -144,6 +144,46 @@ Built so far (Steps 1–3 of the plan's sequence):
   no clutter reason to keep labels off just because the *original*
   full-graph view had too many tables to show them all. See `applyFilter()`/
   `clearFilter()` and the new `currentShowLabels` module-level variable.
+- **Fourth pass — four "quick win" improvements, scoped by the owner
+  from a list of my own suggestions before any code was written**:
+  1. **Table search** (`#canvasSearch`, top-left over the graph canvas,
+     map-search-bar styling) — a native `<input list>`/`<datalist>`
+     type-ahead over every table in the current graph, deliberately not
+     a custom dropdown widget (free keyboard nav/filtering from the
+     browser, zero new dependency). Picking a result or pressing Enter
+     calls `jumpToTable()`: centers/fits the graph on that node
+     (`cy.animate({fit:...})`), opens its detail panel, and — the
+     owner's own ask — pre-fills the Filter card's table picker too, so
+     finding a table and tracing its dependencies chain together. If
+     the target table is currently hidden by an active filter,
+     `jumpToTable()` clears the filter first (fitting to a hidden
+     element does nothing visible, so this isn't optional).
+  2. **Insights card** (`#detInsights`, sidebar, between Schema and
+     Filter) — "Most connected tables" (top `TOP_HUBS_COUNT` = 8 by
+     degree) and "Orphan tables" (zero FK connections at all), both
+     from `computeTableDegrees()`. "Degree" is the count of *distinct*
+     neighboring tables, not raw FK-row count — a table with two FK
+     columns pointing at the same other table (`orders` →
+     `user_addresses` via both `billing_` and `shipping_address_id`) is
+     one coupling relationship for this purpose, not two. Verified live:
+     `public.orders`/`public.users` top the hub list at degree 6 each,
+     and the orphan list correctly finds exactly the two zero-FK
+     fixtures the original plan called out (`employees`,
+     `analytics.daily_stats`). Every row is clickable → `jumpToTable()`.
+  3. **FK columns marked directly in the columns table** — a small 🔗
+     badge next to any column that's part of a FK, either this table's
+     own outgoing reference or the target of another table's incoming
+     one (tooltip distinguishes which). Reading the Relationships
+     section below used to be the only way to know a column was a FK
+     at all; now it's visible without scrolling.
+  4. **Refactor enabling #3**: `buildRelationshipsHtml(nodeData)` was
+     split into `getTableForeignKeys(nodeData)` (returns
+     `{outgoing, incoming}`) + `buildRelationshipsHtml(outgoing,
+     incoming)`, so the Relationships section and the column badges
+     share one filter over `lastGraphData.foreign_keys` instead of two
+     that could silently drift apart. If you ever add a third
+     FK-derived view, call `getTableForeignKeys()` again rather than
+     re-filtering `lastGraphData.foreign_keys` by hand.
 
 **Not yet built**: Step 4 (schema → connected-components → group
 expansion, so nothing renders before you explicitly ask for it), Step 5
