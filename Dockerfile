@@ -79,11 +79,18 @@ COPY df-studio/ ./df_studio/
 # stay fully client-side — only Run/Connect/Export touch this backend.
 COPY sql-studio/ ./sql_studio/
 
+# Schema Map (tool #13) — whole-folder copy, same reason as df-studio/
+# sql-studio above (extra backend module: db_engine.py, with more to
+# follow as its build steps land). A read-only, progressive-disclosure
+# table/foreign-key explorer for large Postgres schemas — its own
+# connection pool, deliberately not shared with SQL Studio's.
+COPY schema-map/ ./schema_map/
+
 COPY main.py .
 COPY registry.yaml .
 
 # Create empty __init__.py files so Python treats these as packages.
-RUN touch core/__init__.py api/__init__.py encode_decode/__init__.py subnet_calc/__init__.py dns_lookup/__init__.py vlan_designer/__init__.py packet_journey/__init__.py curl_builder/__init__.py header_reference/__init__.py http_methods_status/__init__.py cookie_lab/__init__.py df_studio/__init__.py sql_studio/__init__.py
+RUN touch core/__init__.py api/__init__.py encode_decode/__init__.py subnet_calc/__init__.py dns_lookup/__init__.py vlan_designer/__init__.py packet_journey/__init__.py curl_builder/__init__.py header_reference/__init__.py http_methods_status/__init__.py cookie_lab/__init__.py df_studio/__init__.py sql_studio/__init__.py schema_map/__init__.py
 
 # --- Runtime config ----------------------------------------------------------
 # Tell Python not to write .pyc files and not to buffer stdout/stderr.

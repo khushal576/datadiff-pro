@@ -1,0 +1,1058 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Schema Map</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f4f6fb; --surface: #ffffff; --border: #dde1ef;
+    --text: #1c2035; --muted: #6b7180; --accent: #4f5ef0;
+    --ok-bg: rgba(21,128,61,0.08); --ok-text: #15803d; --ok-border: rgba(21,128,61,0.3);
+    --err-bg: rgba(220,38,38,0.08); --err-text: #b91c1c; --err-border: rgba(220,38,38,0.3);
+  }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text);
+    height: 100vh; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  header { padding: 16px 20px 12px; border-bottom: 1px solid var(--border); background: var(--surface); }
+  header h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: -0.5px; }
+  header h1 span { color: var(--accent); }
+
+  .layout { flex: 1; display: flex; min-height: 0; }
+
+  .sidebar {
+    width: 320px; flex: none; border-right: 1px solid var(--border);
+    background: var(--surface); overflow-y: auto; padding: 16px;
+  }
+  .main { flex: 1; min-width: 0; position: relative; background: var(--surface); }
+  .main-placeholder {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: var(--muted); font-size: 0.9rem; text-align: center; padding: 40px;
+  }
+  #graphCanvas { position: absolute; inset: 0; }
+
+  /* ---- Zoom controls — floating over the graph canvas ---- */
+  .zoom-controls {
+    position: absolute; right: 16px; bottom: 16px; z-index: 5;
+    display: flex; flex-direction: column; align-items: stretch;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: 0 4px 14px rgba(28,32,53,0.12); overflow: hidden;
+  }
+  .zoom-controls button {
+    cursor: pointer; border: none; background: var(--surface); color: var(--text);
+    width: 34px; height: 34px; font-size: 1rem; font-weight: 700; line-height: 1;
+  }
+  .zoom-controls button:hover { background: var(--bg); color: var(--accent); }
+  .zoom-controls button + button { border-top: 1px solid var(--border); }
+  .zoom-level {
+    text-align: center; font-size: 0.68rem; color: var(--muted); padding: 4px 0;
+    border-top: 1px solid var(--border); user-select: none;
+  }
+
+  /* ---- Table detail panel — right side, hidden until a node is clicked ---- */
+  .detail-panel {
+    width: 300px; flex: none; border-left: 1px solid var(--border);
+    background: var(--surface); overflow-y: auto; padding: 16px;
+    display: none;
+  }
+  .detail-panel.show { display: block; }
+  .detail-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 4px; }
+  .detail-header h2 { font-size: 1rem; font-weight: 700; word-break: break-word; }
+  .detail-close {
+    cursor: pointer; border: none; background: none; color: var(--muted);
+    font-size: 1rem; line-height: 1; padding: 2px 4px; flex: none;
+  }
+  .detail-close:hover { color: var(--text); }
+  .detail-meta { font-size: 0.76rem; color: var(--muted); margin-bottom: 14px; }
+  table.columns-table { border-collapse: collapse; width: 100%; font-size: 0.78rem; }
+  table.columns-table th, table.columns-table td {
+    border-bottom: 1px solid var(--border); padding: 6px 4px; text-align: left; vertical-align: top;
+  }
+  table.columns-table th { color: var(--muted); font-weight: 600; font-size: 0.68rem; text-transform: uppercase; }
+  table.columns-table .col-type { color: var(--muted); font-size: 0.74rem; }
+  .detail-loading { color: var(--muted); font-size: 0.8rem; }
+
+  .detail-section-label {
+    font-size: 0.74rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.5px; color: var(--muted); margin: 16px 0 6px;
+  }
+  .rel-group-label {
+    font-size: 0.7rem; font-weight: 600; color: var(--accent); margin: 10px 0 3px;
+  }
+  .rel-item {
+    cursor: pointer; border-radius: 6px; padding: 5px 6px; margin-bottom: 1px;
+    display: flex; align-items: center; gap: 6px; font-size: 0.76rem; flex-wrap: wrap;
+  }
+  .rel-item:hover { background: var(--bg); }
+  .rel-col { font-weight: 600; word-break: break-word; }
+  .rel-arrow { color: var(--muted); flex: none; }
+
+  .legend-item { display: flex; align-items: center; gap: 7px; font-size: 0.78rem; padding: 3px 0; }
+  .legend-swatch { width: 11px; height: 11px; border-radius: 50%; flex: none; }
+
+  /* ---- Node hover tooltip — table name + volume ---- */
+  .node-tooltip {
+    position: fixed; z-index: 50; pointer-events: none;
+    background: var(--text); color: #fff; border-radius: 7px;
+    padding: 7px 11px; font-size: 0.76rem; line-height: 1.5;
+    box-shadow: 0 6px 18px rgba(28,32,53,0.28);
+    max-width: 240px;
+  }
+  .node-tooltip strong { display: block; font-size: 0.84rem; margin-bottom: 2px; }
+  .node-tooltip .tooltip-meta { color: rgba(255,255,255,0.75); }
+
+  .schema-field { margin-bottom: 10px; }
+  .schema-field select {
+    width: 100%; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 7px; padding: 7px 10px; font-size: 0.82rem;
+  }
+
+  .card { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 14px; }
+  .card > summary { list-style: none; cursor: pointer; padding: 14px; display: flex; justify-content: space-between; align-items: center; }
+  .card > summary::-webkit-details-marker { display: none; }
+  .card > summary .chev { color: var(--muted); font-size: 0.75rem; transition: transform 0.15s; }
+  .card[open] > summary .chev { transform: rotate(90deg); }
+  .card > .body { padding: 0 14px 14px; }
+  .card h2 { font-size: 0.92rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+
+  label {
+    font-size: 0.74rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.5px; color: var(--muted); display: block; margin-bottom: 5px;
+  }
+  .conn-row { display: flex; gap: 8px; }
+  .conn-field { margin-bottom: 10px; flex: 1; }
+  .conn-field input {
+    width: 100%; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 7px; padding: 7px 10px; font-size: 0.82rem;
+  }
+  .conn-field input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 10px; align-items: center; }
+  button.action {
+    cursor: pointer; border: none; border-radius: 7px;
+    background: var(--accent); color: #fff; font-weight: 600;
+    font-size: 0.82rem; padding: 8px 16px;
+  }
+  button.action:hover { opacity: 0.88; }
+  button.action.secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+  button.action.secondary:hover { border-color: var(--accent); color: var(--accent); }
+  button.action.small { padding: 5px 11px; font-size: 0.76rem; }
+
+  .status-badge {
+    border-radius: 20px; padding: 1px 9px; font-size: 0.68rem; font-weight: 700;
+    border: 1px solid var(--border);
+  }
+  .status-badge.connected { background: var(--ok-bg); color: var(--ok-text); border-color: var(--ok-border); }
+  .status-badge.disconnected { background: var(--bg); color: var(--muted); border-color: var(--border); }
+
+  .err-box {
+    font-size: 0.78rem; background: var(--err-bg); color: var(--err-text); border: 1px solid var(--err-border);
+    border-radius: 7px; padding: 9px 12px; margin-top: 8px; display: none; line-height: 1.5;
+  }
+  .err-box.show { display: block; }
+
+  .hint { font-size: 0.76rem; color: var(--muted); line-height: 1.5; margin-bottom: 10px; }
+
+  /* ---- Filter card — blast-radius / connection explorer ---- */
+  .filter-depth-label {
+    font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--accent); margin: 12px 0 4px;
+  }
+  .filter-conn-item {
+    cursor: pointer; border-radius: 6px; padding: 6px 7px; margin-bottom: 2px;
+  }
+  .filter-conn-item:hover { background: var(--bg); }
+  .filter-conn-table { font-size: 0.82rem; font-weight: 600; }
+  .filter-conn-detail { font-size: 0.7rem; color: var(--muted); margin-top: 1px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Schema <span>Map</span></h1>
+</header>
+
+<div class="layout">
+  <div class="sidebar">
+    <details class="card" id="detConnection">
+      <summary><h2>Connection <span class="status-badge disconnected" id="connectionStatusBadge">● Disconnected</span></h2><span class="chev">▶</span></summary>
+      <div class="body">
+        <div id="connectionForm">
+          <p class="hint">
+            Connect to a Postgres database to explore its tables and
+            foreign-key structure. Host/port/database/username are
+            remembered between visits — the password never is.
+          </p>
+          <div class="conn-row">
+            <div class="conn-field" style="flex: 2;">
+              <label>Host</label>
+              <input type="text" id="connHost" placeholder="localhost" />
+            </div>
+            <div class="conn-field" style="flex: 1;">
+              <label>Port</label>
+              <input type="number" id="connPort" value="5432" />
+            </div>
+          </div>
+          <div class="conn-field">
+            <label>Database</label>
+            <input type="text" id="connDatabase" />
+          </div>
+          <div class="conn-field">
+            <label>Username</label>
+            <input type="text" id="connUsername" />
+          </div>
+          <div class="conn-field">
+            <label>Password</label>
+            <input type="password" id="connPassword" />
+          </div>
+          <div class="btn-row" style="margin-top: 0;">
+            <button class="action" id="btnConnect">Connect</button>
+          </div>
+          <div class="err-box" id="connectErr"></div>
+        </div>
+        <div id="connectionStatusView" style="display: none;">
+          <p class="hint" id="connectionStatusText"></p>
+          <div class="btn-row" style="margin-top: 0;">
+            <button class="action secondary small" id="btnDisconnect">Disconnect</button>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <details class="card" id="detSchemaPicker" style="display: none;">
+      <summary><h2>Schema</h2><span class="chev">▶</span></summary>
+      <div class="body">
+        <p class="hint">Pick one schema, or "All schemas".</p>
+        <div class="schema-field">
+          <label>Schema</label>
+          <select id="schemaSelect"></select>
+        </div>
+        <div class="btn-row" style="margin-top: 0;">
+          <button class="action secondary small" id="btnLoadGraph">Load graph</button>
+        </div>
+        <div class="err-box" id="graphErr"></div>
+
+        <label style="margin-top: 4px;">Node size</label>
+        <div class="btn-row" style="margin-top: 0;">
+          <label class="hint" style="display: inline-flex; align-items: center; gap: 4px; margin: 0;">
+            <input type="radio" name="sizeMode" id="sizeModeVolume" value="volume" checked /> By row count
+          </label>
+          <label class="hint" style="display: inline-flex; align-items: center; gap: 4px; margin: 0;">
+            <input type="radio" name="sizeMode" id="sizeModeUniform" value="uniform" /> Uniform
+          </label>
+        </div>
+
+        <div id="schemaLegend" style="display: none;">
+          <label style="margin-top: 4px;">Schema colors</label>
+          <div id="schemaLegendList"></div>
+        </div>
+      </div>
+    </details>
+
+    <details class="card" id="detFilter" style="display: none;">
+      <summary><h2>Filter</h2><span class="chev">▶</span></summary>
+      <div class="body">
+        <p class="hint">
+          Pick a table to see everything connected to it, directly or
+          through one more hop — the graph narrows down to just that
+          neighborhood.
+        </p>
+        <div class="schema-field">
+          <label>Table</label>
+          <select id="filterTableSelect"></select>
+        </div>
+        <label style="margin-top: 4px;">Depth</label>
+        <div class="btn-row" style="margin-top: 0;">
+          <label class="hint" style="display: inline-flex; align-items: center; gap: 4px; margin: 0;">
+            <input type="radio" name="filterDepth" id="filterDepth1" value="1" /> 1 hop
+          </label>
+          <label class="hint" style="display: inline-flex; align-items: center; gap: 4px; margin: 0;">
+            <input type="radio" name="filterDepth" id="filterDepth2" value="2" checked /> 2 hops
+          </label>
+        </div>
+        <div class="btn-row">
+          <button class="action small" id="btnApplyFilter">Apply filter</button>
+          <button class="action secondary small" id="btnClearFilter" style="display: none;">Show all</button>
+        </div>
+        <div id="filterResults"></div>
+      </div>
+    </details>
+  </div>
+
+  <div class="main">
+    <div class="main-placeholder" id="mainPlaceholder">
+      Connect to a database to start exploring its structure.
+    </div>
+    <div id="graphCanvas" style="display: none;"></div>
+    <div class="zoom-controls" id="zoomControls" style="display: none;">
+      <button type="button" id="btnZoomIn" title="Zoom in">+</button>
+      <button type="button" id="btnZoomOut" title="Zoom out">−</button>
+      <button type="button" id="btnZoomFit" title="Fit to screen">⊡</button>
+      <div class="zoom-level" id="zoomLevel">100%</div>
+    </div>
+    <div class="node-tooltip" id="nodeTooltip" style="display: none;"></div>
+  </div>
+
+  <div class="detail-panel" id="detailPanel">
+    <div class="detail-header">
+      <h2 id="detailTitle">Table</h2>
+      <button type="button" class="detail-close" id="btnCloseDetail" title="Close">✕</button>
+    </div>
+    <div class="detail-meta" id="detailMeta"></div>
+    <div id="detailBody"></div>
+  </div>
+</div>
+
+<!-- Classic (non-module) script, same "load off cdnjs" precedent as
+     DataFrame Studio's Tabulator.js — cytoscape.js is a UMD build, not
+     an ES module, so it's loaded this way (not via the esm.sh imports
+     SQL Studio uses for CodeMirror) and exposes a global `cytoscape`
+     function. Runs and sets that global before the deferred module
+     script below executes (classic scripts run in document order during
+     parsing; module scripts are deferred until after parsing finishes),
+     so the module script can reference `cytoscape` directly with no
+     race condition. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.34.3/cytoscape.min.js"></script>
+<script type="module">
+const $ = (id) => document.getElementById(id);
+
+const CONNECTION_KEY = "schema_map_connection";
+let isConnected = false;
+
+function loadConnectionFields() {
+  try {
+    const raw = localStorage.getItem(CONNECTION_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) { /* ignore */ }
+  return null;
+}
+function saveConnectionFields() {
+  try {
+    localStorage.setItem(CONNECTION_KEY, JSON.stringify({
+      host: $("connHost").value,
+      port: $("connPort").value,
+      database: $("connDatabase").value,
+      username: $("connUsername").value,
+    }));
+  } catch (e) { /* ignore */ }
+}
+(function prefillConnectionFields() {
+  const saved = loadConnectionFields();
+  if (!saved) return;
+  $("connHost").value = saved.host || "";
+  $("connPort").value = saved.port || 5432;
+  $("connDatabase").value = saved.database || "";
+  $("connUsername").value = saved.username || "";
+})();
+
+function showConnectError(msg) {
+  const box = $("connectErr");
+  if (!msg) { box.classList.remove("show"); box.textContent = ""; return; }
+  box.textContent = msg;
+  box.classList.add("show");
+}
+
+// Collapsed by default (no `open` attribute in the HTML), not shown
+// expanded on page load — same deliberate pattern as SQL Studio's
+// Connection panel (see sql-studio/CLAUDE.md for why a silent status
+// check on load must never force it open, only an explicit Disconnect
+// click should). The instant a connection succeeds, it collapses to a
+// compact status line so it doesn't permanently occupy sidebar space.
+function applyConnectionStatus(status, forceOpen) {
+  isConnected = !!status.connected;
+  const badge = $("connectionStatusBadge");
+  const details = $("detConnection");
+  if (isConnected) {
+    badge.textContent = "● Connected";
+    badge.className = "status-badge connected";
+    $("connectionStatusText").textContent =
+      `Connected — ${status.username}@${status.host}:${status.port}/${status.database}`;
+    $("connectionForm").style.display = "none";
+    $("connectionStatusView").style.display = "block";
+    details.open = false;
+  } else {
+    badge.textContent = "● Disconnected";
+    badge.className = "status-badge disconnected";
+    $("connectionForm").style.display = "block";
+    $("connectionStatusView").style.display = "none";
+    if (forceOpen) details.open = true;
+  }
+  $("detSchemaPicker").style.display = isConnected ? "block" : "none";
+  if (isConnected) {
+    loadSchemaList();
+  } else {
+    showGraphPlaceholder("Connect to a database to start exploring its structure.");
+  }
+}
+
+// ---------------------------------------------------------------------
+// Schema picker + graph rendering (Step 3: basic rendering — proving the
+// pipeline end-to-end, not yet solving the "hundreds of tables at once"
+// problem; that's progressive disclosure, a later step).
+// ---------------------------------------------------------------------
+let cy = null; // the current Cytoscape instance, destroyed/recreated on each graph load
+
+function showGraphPlaceholder(text) {
+  if (cy) { cy.destroy(); cy = null; }
+  $("graphCanvas").style.display = "none";
+  $("mainPlaceholder").style.display = "flex";
+  $("mainPlaceholder").textContent = text;
+  $("zoomControls").style.display = "none";
+  $("schemaLegend").style.display = "none";
+  $("detFilter").style.display = "none";
+  closeDetailPanel();
+  hideNodeTooltip();
+}
+
+function showGraphErr(msg) {
+  const box = $("graphErr");
+  if (!msg) { box.classList.remove("show"); box.textContent = ""; return; }
+  box.textContent = msg;
+  box.classList.add("show");
+}
+
+async function loadSchemaList() {
+  try {
+    const res = await fetch("schemas");
+    const data = await res.json();
+    if (!res.ok) { showGraphErr(data.error || "Couldn't load schema list."); return; }
+    const select = $("schemaSelect");
+    select.innerHTML = '<option value="">All schemas</option>';
+    for (const s of data.schemas) {
+      const opt = document.createElement("option");
+      opt.value = s.schema_name;
+      opt.textContent = `${s.schema_name} (${s.table_count} table${s.table_count === 1 ? "" : "s"})`;
+      select.appendChild(opt);
+    }
+    showGraphErr(null);
+  } catch (e) {
+    showGraphErr("Network error: " + e.message);
+  }
+}
+
+async function loadGraph() {
+  if (!isConnected) return;
+  const schema = $("schemaSelect").value; // "" means all schemas
+  showGraphErr(null);
+  const btn = $("btnLoadGraph");
+  btn.disabled = true;
+  btn.textContent = "Loading…";
+  try {
+    const url = schema ? `graph?schema=${encodeURIComponent(schema)}` : "graph";
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!res.ok) {
+      showGraphErr(data.error || "Couldn't load the graph.");
+      return;
+    }
+    lastGraphData = data; // cached so the size-mode toggle can re-render without a fresh fetch
+    renderGraph(data);
+  } catch (e) {
+    showGraphErr("Network error: " + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Load graph";
+  }
+}
+
+// Labels stay a constant on-screen size regardless of zoom — like a map
+// application's place names, not like the graph's own geometry (which
+// SHOULD scale with zoom). Cytoscape.js scales `font-size` together with
+// everything else on zoom by default (it's defined in the same "model"
+// coordinate space as node width/height), so keeping the RENDERED size
+// constant means fighting that default: on every 'zoom' event, set a
+// bypass font-size of BASE_FONT_SIZE / cy.zoom() — the model size that,
+// after cytoscape's own zoom multiplication, renders out to exactly
+// BASE_FONT_SIZE on screen no matter how far in or out you are. A real
+// reported issue, not a preemptive nicety: text growing every time you
+// zoomed in was disorienting. Only matters when labels are shown in the
+// first place — see the LABEL_VISIBLE_THRESHOLD gate below.
+const BASE_FONT_SIZE = 10; // px, the constant on-screen size labels are held to
+
+function keepLabelSizeConstant() {
+  if (!cy) return;
+  // No artificial floor here — cy's own minZoom/maxZoom (set at graph
+  // creation) already keep BASE_FONT_SIZE / cy.zoom() in a sane range.
+  // An earlier version clamped this to a minimum of 2px "defensively,"
+  // which silently broke the constant-on-screen-size guarantee at high
+  // zoom (2px floor × a large zoom multiplier renders BIGGER than
+  // BASE_FONT_SIZE on screen, the opposite of the point of this
+  // function) — caught by actually computing the on-screen result
+  // across a range of zoom levels, not assumed safe.
+  cy.nodes().style("font-size", (BASE_FONT_SIZE / cy.zoom()) + "px");
+}
+
+// A fixed categorical palette, not randomly generated — random colors
+// risk two schemas landing on near-identical hues. Assignment is
+// deterministic (sorted schema names, in palette order) so the same
+// schema gets the same color across reloads within one graph, not a
+// new random color each render. Cycles (modulo) past 10 schemas at
+// once, rather than erroring — a schema-heavy database is exactly this
+// tool's use case, so running out of colors can't be a hard failure.
+const SCHEMA_COLOR_PALETTE = [
+  "#4f5ef0", "#e0457b", "#17a673", "#f2994a", "#9b59d0",
+  "#2f9bd6", "#d4a72c", "#e74c3c", "#16a085", "#7f8c8d",
+];
+
+function buildSchemaColorMap(tables) {
+  const names = [...new Set(tables.map((t) => t.schema_name))].sort();
+  const map = {};
+  names.forEach((name, i) => { map[name] = SCHEMA_COLOR_PALETTE[i % SCHEMA_COLOR_PALETTE.length]; });
+  return map;
+}
+
+function renderSchemaLegend(schemaColors) {
+  const names = Object.keys(schemaColors);
+  const legend = $("schemaLegend");
+  if (names.length < 2) { legend.style.display = "none"; return; } // one schema = one color, not worth a legend
+  legend.style.display = "block";
+  const list = $("schemaLegendList");
+  list.innerHTML = "";
+  for (const name of names.sort()) {
+    const item = document.createElement("div");
+    item.className = "legend-item";
+    item.innerHTML = `<span class="legend-swatch" style="background:${schemaColors[name]}"></span>${name}`;
+    list.appendChild(item);
+  }
+}
+
+function currentSizeMode() {
+  return $("sizeModeUniform").checked ? "uniform" : "volume";
+}
+
+let lastGraphData = null;
+let currentShowLabels = true; // set in renderGraph(); clearFilter() resets to this, not to "always on"
+
+function renderGraph(data) {
+  if (!data.tables.length) {
+    showGraphPlaceholder("No tables found in the selected scope.");
+    $("zoomControls").style.display = "none";
+    return;
+  }
+  $("mainPlaceholder").style.display = "none";
+  $("graphCanvas").style.display = "block";
+  $("zoomControls").style.display = "flex";
+  closeDetailPanel();
+  hideNodeTooltip();
+  if (cy) cy.destroy();
+
+  const schemaColors = buildSchemaColorMap(data.tables);
+  renderSchemaLegend(schemaColors);
+  $("detFilter").style.display = "block";
+  populateFilterTableSelect(data.tables);
+  resetFilterUI();
+
+  const rowEstimates = data.tables.map((t) => Math.max(t.row_estimate, 0));
+  const maxRows = Math.max(1, ...rowEstimates);
+  const UNIFORM_SIZE = 46;
+  // Node diameter scales with row count (sqrt, not linear — linear would
+  // make one huge table's node dwarf everything else into invisible
+  // specks), clamped so an empty table doesn't disappear entirely.
+  // "Uniform" mode skips the scaling to focus purely on the FK
+  // structure instead of volume, when that's what you want to see.
+  const sizeFor = (rowEstimate) => {
+    if (currentSizeMode() === "uniform") return UNIFORM_SIZE;
+    const frac = Math.max(rowEstimate, 0) / maxRows;
+    return 28 + Math.round(Math.sqrt(frac) * 60);
+  };
+
+  const nodes = data.tables.map((t) => ({
+    data: {
+      id: `${t.schema_name}.${t.table_name}`,
+      label: t.table_name,
+      schema: t.schema_name,
+      rowEstimate: t.row_estimate,
+      totalSize: t.total_size,
+      size: sizeFor(t.row_estimate),
+      color: schemaColors[t.schema_name],
+    },
+  }));
+  // fk.to_schema (not fk.from_schema) for the target id — a foreign key
+  // can reference a table in a different schema than the one holding
+  // it; introspection_postgres.py's FK query was fixed to actually
+  // report which schema the target is really in (see its own comment)
+  // rather than this code assuming it matches the source's schema.
+  const edges = data.foreign_keys.map((fk, i) => ({
+    data: {
+      id: `fk${i}`,
+      source: `${fk.from_schema}.${fk.from_table}`,
+      target: `${fk.to_schema}.${fk.to_table}`,
+      fromColumn: fk.from_column,
+      toColumn: fk.to_column,
+    },
+  }));
+
+  // Past this many tables, don't draw persistent labels at all — rely
+  // entirely on the hover tooltip to identify a node. This is the
+  // honest fix for "500 tables looks messy": no amount of font-size
+  // tuning keeps 500 labels simultaneously legible in one view; the
+  // actual fix is not showing that many at once (progressive
+  // disclosure — not built yet, this is a stopgap for the current
+  // load-everything-at-once behavior, not a replacement for it).
+  const LABEL_VISIBLE_THRESHOLD = 60;
+  const showLabels = data.tables.length <= LABEL_VISIBLE_THRESHOLD;
+  currentShowLabels = showLabels;
+
+  cy = cytoscape({
+    container: $("graphCanvas"),
+    elements: { nodes, edges },
+    style: [
+      {
+        selector: "node",
+        style: {
+          "background-color": "data(color)",
+          label: showLabels ? "data(label)" : "",
+          "font-size": BASE_FONT_SIZE + "px",
+          color: "#1c2035",
+          "text-valign": "top",
+          "text-margin-y": -6,
+          width: "data(size)",
+          height: "data(size)",
+          // A label sitting on top of an edge line (or another label,
+          // when nodes are close together) becomes unreadable without
+          // something behind it — a real reported problem, not
+          // hypothetical. A near-opaque background box fixes the
+          // edge-through-text case directly.
+          "text-background-color": "#ffffff",
+          "text-background-opacity": 0.85,
+          "text-background-shape": "roundrectangle",
+          "text-background-padding": "2px",
+        },
+      },
+      {
+        selector: "edge",
+        style: {
+          width: 1.5,
+          "line-color": "#9aa3c2",
+          "target-arrow-color": "#9aa3c2",
+          "target-arrow-shape": "triangle",
+          "curve-style": "bezier",
+        },
+      },
+    ],
+    layout: { name: "cose", animate: false, padding: 40 },
+    // Bounded so keepLabelSizeConstant()'s BASE_FONT_SIZE / zoom division
+    // stays in a sane range — cytoscape's own default zoom range is
+    // effectively unbounded (1e-50 to 1e50), and without a cap here a
+    // user scrolling far enough could reach a zoom level where the
+    // model-space font size needed to hold the on-screen size constant
+    // would round to an unusable value.
+    minZoom: 0.05,
+    maxZoom: 8,
+  });
+
+  cy.on("tap", "node", (evt) => openTableDetail(evt.target.data()));
+  cy.on("mouseover", "node", (evt) => showNodeTooltip(evt.target.data(), evt.originalEvent));
+  cy.on("mousemove", "node", (evt) => positionNodeTooltip(evt.originalEvent));
+  cy.on("mouseout", "node", hideNodeTooltip);
+  // Always bound, even when showLabels is false — setting font-size on a
+  // node with an empty label is a harmless no-op, and this keeps the
+  // constant-size guarantee working for the Filter feature too, which
+  // can force labels back on for a small filtered subset regardless of
+  // what the full unfiltered graph decided (see applyFilter()).
+  cy.on("zoom", keepLabelSizeConstant);
+  keepLabelSizeConstant();
+  // A drag or pan can carry the cursor out from under a node without a
+  // "mouseout" ever firing on it (the node itself didn't move away from
+  // under the pointer, the pointer moved away from the node) — hiding on
+  // any pan/drag start is simpler and more reliable than trying to track
+  // exactly when the cursor left node bounds during a gesture.
+  cy.on("pan drag", hideNodeTooltip);
+  cy.on("zoom", updateZoomLevel);
+  updateZoomLevel();
+}
+
+// ---------------------------------------------------------------------
+// Filter — "what's connected to this table, within N hops" (a migration
+// blast-radius view: before moving a table, see everything transitively
+// tied to it so nothing gets moved without its real dependencies). Built
+// against fk.to_schema/fk.from_schema (see the cross-schema FK fix above
+// renderGraph's edges) since a wrong target schema here would silently
+// point the traversal at the wrong table.
+//
+// Traversal is undirected on purpose — the owner confirmed "both
+// directions": a table that's referenced BY orders is just as relevant
+// to orders' blast radius as a table orders itself references. A node's
+// hop distance is its SHORTEST path from the selected table (plain BFS,
+// first-visit wins), matching how "N degrees away" is normally meant —
+// a table reachable via both a 1-hop and a longer path is a 1-hop
+// neighbor, not double-counted at a deeper depth too.
+//
+// This is a genuine hide, not a fade/highlight — cy.elements().hide()
+// for everything, then .show() only the selected table, its neighbors
+// within the chosen depth, and edges where BOTH endpoints are visible
+// (an induced subgraph, so no edge dangles toward a hidden node). A
+// fresh cose layout scoped to `:visible` re-spaces just that subset —
+// without it, the filtered nodes stay wherever the full-graph layout
+// happened to place them, which usually reads as scattered and sparse.
+// ---------------------------------------------------------------------
+function populateFilterTableSelect(tables) {
+  const select = $("filterTableSelect");
+  const previous = select.value;
+  const sorted = [...tables].sort((a, b) =>
+    `${a.schema_name}.${a.table_name}`.localeCompare(`${b.schema_name}.${b.table_name}`));
+  select.innerHTML = "";
+  for (const t of sorted) {
+    const id = `${t.schema_name}.${t.table_name}`;
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = id;
+    select.appendChild(opt);
+  }
+  if (previous && sorted.some((t) => `${t.schema_name}.${t.table_name}` === previous)) {
+    select.value = previous;
+  }
+}
+
+function resetFilterUI() {
+  $("btnClearFilter").style.display = "none";
+  $("filterResults").innerHTML = "";
+}
+
+function buildAdjacency(foreignKeys) {
+  const adj = new Map();
+  const addEdge = (a, b, fk) => {
+    if (!adj.has(a)) adj.set(a, []);
+    adj.get(a).push({ otherId: b, fk });
+  };
+  for (const fk of foreignKeys) {
+    const fromId = `${fk.from_schema}.${fk.from_table}`;
+    const toId = `${fk.to_schema}.${fk.to_table}`;
+    addEdge(fromId, toId, fk);
+    addEdge(toId, fromId, fk);
+  }
+  return adj;
+}
+
+// Returns { visibleIds: Set, byDepth: [[{otherId, fk}], ...] } — byDepth[0]
+// is the 1-hop neighbors, byDepth[1] the 2-hop neighbors, etc.
+function computeNeighborhood(startId, maxDepth, foreignKeys) {
+  const adj = buildAdjacency(foreignKeys);
+  const visited = new Set([startId]);
+  const byDepth = [];
+  let frontier = [startId];
+  for (let depth = 1; depth <= maxDepth && frontier.length; depth++) {
+    const thisDepth = [];
+    const nextFrontier = [];
+    for (const nodeId of frontier) {
+      for (const { otherId, fk } of adj.get(nodeId) || []) {
+        if (visited.has(otherId)) continue;
+        visited.add(otherId);
+        thisDepth.push({ otherId, fk });
+        nextFrontier.push(otherId);
+      }
+    }
+    byDepth.push(thisDepth);
+    frontier = nextFrontier;
+  }
+  return { visibleIds: visited, byDepth };
+}
+
+function currentFilterDepth() {
+  return $("filterDepth1").checked ? 1 : 2;
+}
+
+function applyFilter() {
+  if (!cy || !lastGraphData) return;
+  const startId = $("filterTableSelect").value;
+  if (!startId) return;
+  const depth = currentFilterDepth();
+  const { visibleIds, byDepth } = computeNeighborhood(startId, depth, lastGraphData.foreign_keys);
+
+  cy.elements().hide();
+  const visibleNodes = cy.nodes().filter((n) => visibleIds.has(n.id()));
+  visibleNodes.show();
+  cy.edges()
+    .filter((e) => visibleIds.has(e.source().id()) && visibleIds.has(e.target().id()))
+    .show();
+  // A filtered neighborhood is always small (a handful of hops from one
+  // table, never the "hundreds of tables" case) — always show labels on
+  // it, even if the full unfiltered graph was over LABEL_VISIBLE_THRESHOLD
+  // and had them switched off. keepLabelSizeConstant() still governs the
+  // font-size itself; this only controls whether text renders at all.
+  visibleNodes.style("label", "data(label)");
+  cy.elements(":visible").layout({ name: "cose", animate: false, padding: 40 }).run();
+  cy.fit(cy.elements(":visible"), 40);
+
+  $("btnClearFilter").style.display = "inline-block";
+  renderFilterResults(byDepth);
+}
+
+function clearFilter() {
+  if (!cy || !lastGraphData) return;
+  cy.elements().show();
+  // Undo applyFilter()'s forced-on labels — back to whatever the full
+  // graph's own LABEL_VISIBLE_THRESHOLD decided, not "always on."
+  cy.nodes().style("label", currentShowLabels ? "data(label)" : "");
+  cy.layout({ name: "cose", animate: false, padding: 40 }).run();
+  cy.fit(undefined, 40);
+  resetFilterUI();
+}
+
+function renderFilterResults(byDepth) {
+  const container = $("filterResults");
+  container.innerHTML = "";
+  if (byDepth.every((d) => d.length === 0)) {
+    container.innerHTML = '<p class="hint" style="margin-top:10px;">No connected tables found.</p>';
+    return;
+  }
+  byDepth.forEach((connections, i) => {
+    if (!connections.length) return;
+    const label = document.createElement("div");
+    label.className = "filter-depth-label";
+    label.textContent = (i + 1) + (i === 0 ? " hop away" : " hops away");
+    container.appendChild(label);
+    for (const { otherId, fk } of connections) {
+      const item = document.createElement("div");
+      item.className = "filter-conn-item";
+      item.innerHTML =
+        `<div class="filter-conn-table">${escHtml(otherId)}</div>` +
+        `<div class="filter-conn-detail">via ${escHtml(fk.from_schema)}.${escHtml(fk.from_table)}.${escHtml(fk.from_column)}` +
+        ` → ${escHtml(fk.to_schema)}.${escHtml(fk.to_table)}.${escHtml(fk.to_column)}</div>`;
+      item.addEventListener("click", () => {
+        const node = cy && cy.getElementById(otherId);
+        if (node && node.length) openTableDetail(node.data());
+      });
+      container.appendChild(item);
+    }
+  });
+}
+
+$("btnApplyFilter").addEventListener("click", applyFilter);
+$("btnClearFilter").addEventListener("click", clearFilter);
+
+// ---------------------------------------------------------------------
+// Hover tooltip — table name + volume, without permanently cluttering
+// the canvas the way always-on detail text would. Separate from the
+// small persistent node labels (which stay, for an at-a-glance view);
+// this is the richer on-demand version.
+// ---------------------------------------------------------------------
+function showNodeTooltip(nodeData, mouseEvent) {
+  const tooltip = $("nodeTooltip");
+  const volumeText = nodeData.rowEstimate < 0
+    ? "not analyzed yet"
+    : `${nodeData.rowEstimate.toLocaleString()} rows (est.)`;
+  tooltip.innerHTML =
+    `<strong>${escHtml(nodeData.label)}</strong>` +
+    `<div class="tooltip-meta">${escHtml(nodeData.schema)}</div>` +
+    `<div>${escHtml(volumeText)} · ${escHtml(nodeData.totalSize)}</div>`;
+  tooltip.style.display = "block";
+  positionNodeTooltip(mouseEvent);
+}
+
+function positionNodeTooltip(mouseEvent) {
+  if (!mouseEvent) return;
+  const tooltip = $("nodeTooltip");
+  // position: fixed on the tooltip means clientX/clientY (viewport-
+  // relative, same coordinate space) can be used directly — no scroll
+  // offset math needed. Offset a few px so the tooltip doesn't sit
+  // exactly under the cursor, which would make the pointer itself
+  // obscure the very node it's labeling.
+  tooltip.style.left = (mouseEvent.clientX + 14) + "px";
+  tooltip.style.top = (mouseEvent.clientY + 14) + "px";
+}
+
+function hideNodeTooltip() {
+  $("nodeTooltip").style.display = "none";
+}
+
+$("btnLoadGraph").addEventListener("click", loadGraph);
+$("sizeModeVolume").addEventListener("change", () => { if (lastGraphData) renderGraph(lastGraphData); });
+$("sizeModeUniform").addEventListener("change", () => { if (lastGraphData) renderGraph(lastGraphData); });
+
+// ---------------------------------------------------------------------
+// Zoom controls — cytoscape already supports scroll-to-zoom/drag-to-pan
+// out of the box, but neither is discoverable without a visible
+// affordance, and scroll-to-zoom alone gives no precise "reset to fit
+// everything" action.
+// ---------------------------------------------------------------------
+function updateZoomLevel() {
+  if (!cy) return;
+  $("zoomLevel").textContent = Math.round(cy.zoom() * 100) + "%";
+}
+
+$("btnZoomIn").addEventListener("click", () => {
+  if (!cy) return;
+  cy.zoom({ level: cy.zoom() * 1.25, renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 } });
+});
+$("btnZoomOut").addEventListener("click", () => {
+  if (!cy) return;
+  cy.zoom({ level: cy.zoom() / 1.25, renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 } });
+});
+$("btnZoomFit").addEventListener("click", () => {
+  if (!cy) return;
+  cy.fit(undefined, 40);
+});
+
+// ---------------------------------------------------------------------
+// Table detail panel — click a node, see its real columns. Fetched only
+// for the clicked table (GET /table/{schema}/{table}), never bundled
+// into the bulk /graph response — see introspection_postgres.py's own
+// docstring for why that split matters once a schema has hundreds of
+// tables.
+// ---------------------------------------------------------------------
+// Below the columns table: every FK this table takes part in, either
+// side, as a clickable "this column → other table.column" (or the
+// reverse for an incoming reference) link — the owner asked for this
+// directly after seeing the columns-only panel: which column connects
+// to which, not just "these two tables are related." Built from
+// `lastGraphData.foreign_keys` (already fetched for the graph, no new
+// network call) rather than a new endpoint — same lazy-but-reuse
+// principle as everything else here.
+function buildRelationshipsHtml(nodeData) {
+  if (!lastGraphData) return "";
+  const tableId = `${nodeData.schema}.${nodeData.label}`;
+  const outgoing = lastGraphData.foreign_keys.filter(
+    (fk) => `${fk.from_schema}.${fk.from_table}` === tableId
+  );
+  const incoming = lastGraphData.foreign_keys.filter(
+    (fk) => `${fk.to_schema}.${fk.to_table}` === tableId
+  );
+  if (!outgoing.length && !incoming.length) return "";
+
+  const rel = (fk, otherId, left, right) => `
+    <div class="rel-item" data-target="${escHtml(otherId)}">
+      <span class="rel-col">${escHtml(left)}</span>
+      <span class="rel-arrow">→</span>
+      <span class="rel-col">${escHtml(right)}</span>
+    </div>`;
+
+  let html = '<div class="detail-section-label">Relationships</div>';
+  if (outgoing.length) {
+    html += '<div class="rel-group-label">References</div>' + outgoing.map((fk) =>
+      rel(fk, `${fk.to_schema}.${fk.to_table}`, fk.from_column, `${fk.to_schema}.${fk.to_table}.${fk.to_column}`)
+    ).join("");
+  }
+  if (incoming.length) {
+    html += '<div class="rel-group-label">Referenced by</div>' + incoming.map((fk) =>
+      rel(fk, `${fk.from_schema}.${fk.from_table}`, `${fk.from_schema}.${fk.from_table}.${fk.from_column}`, fk.to_column)
+    ).join("");
+  }
+  return html;
+}
+
+// One delegated listener on the panel body, not one per `.rel-item` —
+// the body's innerHTML is replaced wholesale on every openTableDetail()
+// call, so per-item listeners would need re-attaching every time anyway.
+$("detailBody").addEventListener("click", (evt) => {
+  const item = evt.target.closest(".rel-item");
+  if (!item || !cy) return;
+  const node = cy.getElementById(item.dataset.target);
+  if (node.length) openTableDetail(node.data());
+});
+
+async function openTableDetail(nodeData) {
+  const panel = $("detailPanel");
+  panel.classList.add("show");
+  $("detailTitle").textContent = nodeData.label;
+  $("detailMeta").textContent =
+    `${nodeData.schema} · ${nodeData.rowEstimate < 0 ? "not analyzed" : nodeData.rowEstimate + " rows (est.)"} · ${nodeData.totalSize}`;
+  $("detailBody").innerHTML = '<p class="detail-loading">Loading columns…</p>';
+  // The graph canvas is a flex sibling of this panel — showing/hiding
+  // the panel changes the canvas's available width, and cytoscape
+  // doesn't observe layout changes on its own; it needs to be told.
+  if (cy) cy.resize();
+
+  const relationshipsHtml = buildRelationshipsHtml(nodeData);
+
+  try {
+    const res = await fetch(`table/${encodeURIComponent(nodeData.schema)}/${encodeURIComponent(nodeData.label)}`);
+    const data = await res.json();
+    if (!res.ok) {
+      $("detailBody").innerHTML = '<p class="detail-loading">' + escHtml(data.error || "Couldn't load columns.") + "</p>";
+      return;
+    }
+    if (!data.columns.length) {
+      $("detailBody").innerHTML = '<p class="detail-loading">No columns found.</p>' + relationshipsHtml;
+      return;
+    }
+    const rows = data.columns.map((c) => `
+      <tr>
+        <td>${escHtml(c.column_name)}${c.is_nullable ? "" : " *"}</td>
+        <td class="col-type">${escHtml(c.data_type)}</td>
+      </tr>
+    `).join("");
+    $("detailBody").innerHTML = `
+      <table class="columns-table">
+        <thead><tr><th>Column</th><th>Type</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p class="hint" style="margin-top:10px;">* = NOT NULL</p>
+      ${relationshipsHtml}
+    `;
+  } catch (e) {
+    $("detailBody").innerHTML = '<p class="detail-loading">Network error: ' + escHtml(e.message) + "</p>";
+  }
+}
+
+function closeDetailPanel() {
+  $("detailPanel").classList.remove("show");
+  if (cy) cy.resize();
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+$("btnCloseDetail").addEventListener("click", closeDetailPanel);
+
+$("btnConnect").addEventListener("click", async () => {
+  const body = {
+    host: $("connHost").value.trim(),
+    port: parseInt($("connPort").value, 10) || 5432,
+    database: $("connDatabase").value.trim(),
+    username: $("connUsername").value.trim(),
+    password: $("connPassword").value,
+  };
+  if (!body.host || !body.database || !body.username) {
+    showConnectError("Host, database, and username are required.");
+    return;
+  }
+  const btn = $("btnConnect");
+  btn.disabled = true;
+  btn.textContent = "Connecting…";
+  try {
+    const res = await fetch("connect", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      showConnectError(data.error || "Couldn't connect.");
+      return;
+    }
+    showConnectError(null);
+    $("connPassword").value = "";
+    saveConnectionFields();
+    applyConnectionStatus(data);
+  } catch (e) {
+    showConnectError("Network error: " + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Connect";
+  }
+});
+
+$("btnDisconnect").addEventListener("click", async () => {
+  try {
+    await fetch("disconnect", { method: "POST" });
+  } catch (e) { /* best-effort */ }
+  applyConnectionStatus({ connected: false }, true);
+});
+
+(async function loadInitialStatus() {
+  try {
+    const res = await fetch("status");
+    applyConnectionStatus(await res.json());
+  } catch (e) {
+    applyConnectionStatus({ connected: false });
+  }
+})();
+</script>
+</body>
+</html>

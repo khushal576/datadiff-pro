@@ -842,3 +842,110 @@ two-copies-kept-in-sync tokenizer).
   containing `\n`) and rendering that case as preformatted text instead
   of a table — see `sql-studio/CLAUDE.md` for `.results-definition` and
   why it uses `pre-wrap` rather than plain `pre`.
+
+## Tool: Schema Map — mounted at `/tools/schema-map/`
+
+A **read-only**, progressive-disclosure explorer for large Postgres
+schemas — connect, and see tables + foreign-key relationships as an
+interactive Cytoscape.js graph, without ever rendering more than what's
+currently expanded (a naive "graph every table at once" is unreadable
+past a few dozen tables regardless of layout algorithm — this tool
+exists specifically for schemas with hundreds to ~1000 tables). Built
+for two motivations: seeing which tables cluster together before a
+monolith → microservice split, and seeing everything transitively
+connected to a table before migrating it. Editability (manual groups,
+manual non-FK links) is deliberately out of scope for the current build
+— see `schema-map/CLAUDE.md` for the full reasoning trail (Neo4j and
+Kùzu were both seriously considered and rejected in favor of `networkx`,
+given the actual confirmed scale).
+
+**Build status**: Steps 1–3 of a 6-step plan are done (connection,
+data-fetching, basic graph rendering), plus Step 6 (lazy per-table
+column loading on click) pulled forward, plus a visual polish pass
+(zoom controls, per-schema node coloring, a row-count/uniform node-size
+toggle), plus a Filter feature (pick a table, see everything within 1–2
+hops, with the rest of the graph genuinely hidden, not faded) — progressive
+disclosure via connected components (Step 4) and interactive hub-collapse
+(Step 5) are not yet built. See `schema-map/CLAUDE.md`'s "Build status"
+section before assuming any of those exist.
+
+| If you need to change...                                              | Go to |
+|-------------------------------------------------------------------------|-------|
+| The connection pool (connect/disconnect/status, idle reaper)            | `schema-map/db_engine.py` — same idiom as `sql-studio/db_engine.py` but a genuinely separate `STATE`, smaller pool (`max_size=2`) |
+| Which catalog queries run, adding a new introspection query             | `schema-map/introspection_postgres.py` — `get_schemas()`, `get_tables()`, `get_foreign_keys()`, `get_graph()`, `get_table_columns()`; every query is a direct port of an already-verified `sql-studio/ui/index.html` `SHOW_COMMANDS` query, extended to also select each FK's real target schema (`to_schema`) — see "Known non-obvious behavior" below |
+| The `/schemas`, `/graph`, `/table/{schema}/{table}` backend routes      | `schema-map/server.py` |
+| The schema picker, Connection panel UI                                  | `schema-map/ui/index.html` — `loadSchemaList()`, `applyConnectionStatus()` (Connection panel markup/behavior deliberately mirrors SQL Studio's) |
+| How the graph is drawn (node sizing, edge styling, colors, layout)      | `schema-map/ui/index.html` — `renderGraph()`, `sizeFor()`, `buildSchemaColorMap()` — see `schema-map/CLAUDE.md` for why node sizing uses `sqrt` not linear scaling, and why schema colors are deterministic, not random |
+| The column detail panel, zoom controls                                  | `schema-map/ui/index.html` — `openTableDetail()`/`closeDetailPanel()` (note the `cy.resize()` call — see `schema-map/CLAUDE.md`), `btnZoomIn`/`btnZoomOut`/`btnZoomFit` handlers |
+| The detail panel's per-column FK relationship list                      | `schema-map/ui/index.html` — `buildRelationshipsHtml()`, built from cached `lastGraphData.foreign_keys`, no new endpoint |
+| The table-connection Filter (hop depth, blast-radius list, hide/show)   | `schema-map/ui/index.html` — `computeNeighborhood()`/`buildAdjacency()` (undirected BFS over `foreign_keys`), `applyFilter()`/`clearFilter()` (`cy.hide()`/`.show()`, not a fade), `renderFilterResults()` |
+
+### Known non-obvious behavior
+
+- **No column data is fetched for any table until it's individually
+  clicked** — true since Step 2's queries were first written
+  (`introspection_postgres.get_tables()` deliberately stops at
+  `{schema_name, table_name, row_estimate, total_size}`), and clicking a
+  node now actually surfaces those columns via a separate per-table
+  fetch (`GET /table/{schema}/{table}`, `openTableDetail()` in
+  `ui/index.html`). Don't "simplify" a future change by folding columns
+  into the bulk `/graph` query — see `schema-map/CLAUDE.md`.
+- **`row_estimate` is `pg_class.reltuples` (a fast estimate), not
+  `COUNT(*)`** — same metric SQL Studio's "Show Table Sizes" uses, and
+  for the same reason (hundreds of full-table-scan counts just to draw
+  a graph would be slow). A never-`ANALYZE`d table reports `-1`, clamped
+  to `0` before node sizing.
+- **`cytoscape.js` loads as a classic `<script>` tag, not inside the
+  `type="module"` script** — it's a UMD build (global `cytoscape`
+  function), not an ES module like SQL Studio's esm.sh CodeMirror
+  imports. See `schema-map/CLAUDE.md` for why the load-order isn't a
+  race condition despite that split.
+- **Node IDs are `schema.table`, not just `table`** — same cross-schema
+  name-collision case already verified for SQL Studio's schema-fetch
+  feature (`public.orders` vs. `analytics.orders`) applies here too;
+  namespacing by schema in the node id avoids two different tables
+  colliding into one graph node.
+- **A foreign key's target can be in a different schema than its source
+  — `introspection_postgres.py` must select the target's real schema
+  (`to_schema`), never assume it matches `from_schema`.** A real bug
+  found and fixed while building the Filter feature (which builds node
+  ids from this data and would silently traverse to the wrong node
+  otherwise) — verified against a genuine cross-schema FK added to the
+  dev database. See `schema-map/CLAUDE.md` for the full story.
+- **A single-schema `/graph` fetch must include cross-schema FKs from
+  BOTH directions** — `_FOREIGN_KEYS_SQL_ONE_SCHEMA` matches the
+  selected schema on either the FROM or TO side (`OR`, not just FROM).
+  An earlier version only matched FROM, silently dropping any FK where
+  a table OUTSIDE the selected schema references INTO it — found when
+  the Filter feature showed a table's outgoing dependencies but not its
+  incoming ones while a single schema was selected. See
+  `schema-map/CLAUDE.md` for the full story and why this one's easy to
+  reintroduce by accident.
+- **The table detail panel shows FK relationships now, not just
+  columns** — below the columns table, a "Relationships" section lists
+  every FK this table takes part in as a clickable `column → other
+  table.column` link, split into "References" (outgoing) and
+  "Referenced by" (incoming). Built client-side from the already-cached
+  graph data, not a new backend call. Node labels also moved above each
+  node (`text-valign: "top"`), not below.
+- **The Filter feature's traversal is undirected and hides, not fades**
+  — the owner explicitly confirmed both: "both directions" (what a
+  table references AND what references it both count toward its
+  neighborhood) and a true hide ("show only nodes which comes in filter
+  other does not show"), not the more common highlight/dim pattern. A
+  node's reported hop distance is its shortest path from the selected
+  table (plain BFS, first-visit wins) — don't reintroduce a
+  directed-only or fade-based version without re-confirming that's
+  actually what's wanted now.
+- **Table labels are held to a constant on-screen size regardless of
+  zoom** (`keepLabelSizeConstant()`) — cytoscape scales font size with
+  the rest of the graph's geometry by default, which reads as
+  disorienting text growth while zooming in. Past 60 tables in the
+  current view, no persistent labels are drawn at all (hover tooltip
+  only) — a stopgap for "the whole loaded scope renders at once," not a
+  substitute for real progressive disclosure (Step 4, not built yet).
+  See `schema-map/CLAUDE.md` for a real bug found while building this
+  (a clamp floor that silently broke the constant-size guarantee at
+  high zoom) and why `min-zoomed-font-size` was removed rather than
+  kept alongside the fix — the two approaches directly contradict each
+  other.

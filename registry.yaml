@@ -89,3 +89,9 @@ tools:
     description: "Paste, edit, and pretty-print Postgres SQL — 125+ templates, live Run against a real database, and psql-style show commands (show tables, show table X definition, ...)"
     icon: "🗄️"
     category: tool
+
+  - name: schema-map
+    title: "Schema Map"
+    description: "Connect to a Postgres database and see its tables and foreign-key structure as an explorable graph — built for large, poorly-documented legacy schemas"
+    icon: "🗺️"
+    category: tool
