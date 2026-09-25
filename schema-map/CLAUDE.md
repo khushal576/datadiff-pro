@@ -240,6 +240,41 @@ Built so far (Steps 1–3 of the plan's sequence):
     `cy`/`lastGraphData` aren't reachable from `page.evaluate` unless a
     test deliberately captures them) — worth remembering before writing
     another browser-driven test for this tool.
+- **Sixth pass — Color by Cluster**: the visual payoff of Clusters —
+  the owner asked to see cluster membership directly on the Explore
+  graph, "same as the image but now colour will be cluster colour." A
+  new "Color by: Schema / Cluster" radio (next to the existing Node
+  size toggle, `#colorModeSchema`/`#colorModeCluster`) recolors nodes by
+  which cluster(s) they belong to instead of which schema they're in.
+  Since a table can be in several clusters at once, a single solid
+  color isn't always honest — the owner explicitly asked whether a
+  50/50 split (their words: "half red half green") was possible for a
+  table in 2 clusters, confirming the design before it was built. The
+  answer is Cytoscape.js's own built-in pie-chart node background
+  (`pie-size`, `pie-N-background-color`/`-size` for N=1..`MAX_PIE_SLICES`
+  = 8) — no custom canvas drawing. `computeNodeColoring()` returns a
+  solid `color` for schema mode, an unclustered table (`UNCLUSTERED_COLOR`,
+  a neutral gray), or a table in exactly one cluster; for 2+ clusters it
+  returns `pie` wedge data instead, each cluster getting an equal share
+  (`100 / count`%). `applyNodeColoring()` is the one function that
+  actually pushes this onto the live `cy` instance via `.data()`
+  updates — deliberately NOT a full `renderGraph()` rebuild, since color
+  never affects layout, so switching Color-by mode keeps your current
+  pan/zoom and any active Filter view instead of resetting them (unlike
+  the Node-size toggle, which genuinely does need cose to re-run).
+  Called in three places: right after `renderGraph()` builds `cy`, on
+  the radio's own `change` event, and when switching back to Explore
+  from Clusters mode (membership may have just changed there). Verified
+  live: a table added to two clusters renders as an exact 50.000%/50.000%
+  split of each cluster's color, an unclustered table shows the neutral
+  gray, and switching back to Schema mode correctly zeroes out the pie
+  fields (`pie1Size`/`pie2Size` → `"0%"`) rather than leaving stale
+  wedges from a previous coloring. The cluster color legend
+  (`renderClusterColorLegend()`, `#clusterColorLegend`) and the schema
+  legend are mutually exclusive — never shown at once, matching the
+  mutually-exclusive radio itself. The hover tooltip also shows which
+  cluster(s) a table is in, when that data is present
+  (`nodeData.clusterNames` in `showNodeTooltip()`).
 
 **Not yet built**: Step 4 (schema → connected-components → group
 expansion, so nothing renders before you explicitly ask for it), Step 5

@@ -353,9 +353,23 @@
           </label>
         </div>
 
+        <label style="margin-top: 4px;">Color by</label>
+        <div class="btn-row" style="margin-top: 0;">
+          <label class="hint" style="display: inline-flex; align-items: center; gap: 4px; margin: 0;">
+            <input type="radio" name="colorMode" id="colorModeSchema" value="schema" checked /> Schema
+          </label>
+          <label class="hint" style="display: inline-flex; align-items: center; gap: 4px; margin: 0;">
+            <input type="radio" name="colorMode" id="colorModeCluster" value="cluster" /> Cluster
+          </label>
+        </div>
+
         <div id="schemaLegend" style="display: none;">
           <label style="margin-top: 4px;">Schema colors</label>
           <div id="schemaLegendList"></div>
+        </div>
+        <div id="clusterColorLegend" style="display: none;">
+          <label style="margin-top: 4px;">Cluster colors</label>
+          <div id="clusterColorLegendList"></div>
         </div>
       </div>
     </details>
@@ -712,6 +726,102 @@ function renderSchemaLegend(schemaColors) {
   }
 }
 
+// ---------------------------------------------------------------------
+// Color by Cluster — the visual payoff of the Clusters feature: color
+// each Explore-graph node by which cluster(s) it belongs to instead of
+// which schema it's in. A table can be in several clusters at once
+// (see schema-map/CLAUDE.md's "Fifth pass"), so a single solid color
+// isn't always enough — a table in 2+ clusters renders as a PIE split
+// evenly between each cluster's color, using Cytoscape.js's own built-in
+// pie-chart node background (pie-N-background-color/-size), not a
+// custom canvas drawing. Reuses SCHEMA_COLOR_PALETTE for cluster colors
+// too — safe because schema and cluster coloring are mutually exclusive
+// (one radio toggle), never shown at the same time.
+// ---------------------------------------------------------------------
+const MAX_PIE_SLICES = 8; // a table in more clusters than this is a real edge case, not the shape this was built for
+const UNCLUSTERED_COLOR = "#d7dae8"; // neutral — "not grouped into anything yet," not an error state
+
+function buildClusterColorMap(clusters) {
+  const map = {};
+  clusters.forEach((c, i) => { map[c.id] = SCHEMA_COLOR_PALETTE[i % SCHEMA_COLOR_PALETTE.length]; });
+  return map;
+}
+
+function currentColorMode() {
+  return $("colorModeCluster").checked ? "cluster" : "schema";
+}
+
+// Returns { color, pie: {pie1Color, pie1Size, ...}, clusterNames } for
+// one table. `pie` is {} (no wedges) whenever a single solid `color` is
+// enough — schema mode, an unclustered table, or a table in exactly one
+// cluster — so the node style's pie-N-size fields fall back to their
+// unset/0% default and the plain background-color shows through whole.
+function computeNodeColoring(tableId, schemaName, schemaColors, colorMode, clusters, clusterColorMap) {
+  if (colorMode !== "cluster") {
+    return { color: schemaColors[schemaName], pie: {}, clusterNames: [] };
+  }
+  const memberClusters = clusters.filter((c) => c.tableIds.includes(tableId));
+  if (!memberClusters.length) {
+    return { color: UNCLUSTERED_COLOR, pie: {}, clusterNames: [] };
+  }
+  if (memberClusters.length === 1) {
+    return { color: clusterColorMap[memberClusters[0].id], pie: {}, clusterNames: [memberClusters[0].name] };
+  }
+  const slice = memberClusters.slice(0, MAX_PIE_SLICES);
+  const pct = (100 / slice.length).toFixed(3) + "%";
+  const pie = {};
+  slice.forEach((c, i) => {
+    pie[`pie${i + 1}Color`] = clusterColorMap[c.id];
+    pie[`pie${i + 1}Size`] = pct;
+  });
+  return { color: clusterColorMap[slice[0].id], pie, clusterNames: memberClusters.map((c) => c.name) };
+}
+
+function renderClusterColorLegend(clusters, clusterColorMap) {
+  const legend = $("clusterColorLegend");
+  if (!clusters.length) { legend.style.display = "none"; return; }
+  legend.style.display = "block";
+  const list = $("clusterColorLegendList");
+  list.innerHTML = "";
+  for (const c of clusters) {
+    const item = document.createElement("div");
+    item.className = "legend-item";
+    item.innerHTML = `<span class="legend-swatch" style="background:${clusterColorMap[c.id]}"></span>${escHtml(c.name)}`;
+    list.appendChild(item);
+  }
+}
+
+// Re-colors an ALREADY-BUILT graph in place — no element rebuild, no
+// layout re-run, since coloring never affects graph structure/position.
+// Called right after renderGraph() constructs `cy` (to apply whichever
+// Color-by mode is current), on the radio toggle's change event (cheap
+// instant recolor instead of sizeMode's full rebuild, which IS needed
+// there since node size affects layout), and when switching back from
+// Clusters mode to Explore (cluster membership may have just changed).
+function applyNodeColoring() {
+  if (!cy || !lastGraphData) return;
+  const colorMode = currentColorMode();
+  const schemaColors = buildSchemaColorMap(lastGraphData.tables);
+  const clusters = colorMode === "cluster" ? loadClusters() : [];
+  const clusterColorMap = buildClusterColorMap(clusters);
+  if (colorMode === "cluster") {
+    $("schemaLegend").style.display = "none";
+    renderClusterColorLegend(clusters, clusterColorMap);
+  } else {
+    $("clusterColorLegend").style.display = "none";
+    renderSchemaLegend(schemaColors);
+  }
+  cy.nodes().forEach((node) => {
+    const coloring = computeNodeColoring(node.id(), node.data("schema"), schemaColors, colorMode, clusters, clusterColorMap);
+    const update = { color: coloring.color, clusterNames: coloring.clusterNames };
+    for (let i = 1; i <= MAX_PIE_SLICES; i++) {
+      update[`pie${i}Color`] = coloring.pie[`pie${i}Color`] || null;
+      update[`pie${i}Size`] = coloring.pie[`pie${i}Size`] || "0%"; // explicit reset — a node that WAS multi-cluster must lose its old wedges
+    }
+    node.data(update);
+  });
+}
+
 function currentSizeMode() {
   return $("sizeModeUniform").checked ? "uniform" : "volume";
 }
@@ -733,8 +843,11 @@ function renderGraph(data) {
   hideNodeTooltip();
   if (cy) cy.destroy();
 
+  // schemaColors is still needed as the node-data fallback color even
+  // in Cluster mode (see computeNodeColoring()) — the actual legend
+  // (schema vs. cluster) is decided by applyNodeColoring() below, once
+  // cy exists, based on the current Color-by radio.
   const schemaColors = buildSchemaColorMap(data.tables);
-  renderSchemaLegend(schemaColors);
   $("detFilter").style.display = "block";
   populateFilterTableSelect(data.tables);
   resetFilterUI();
@@ -766,6 +879,7 @@ function renderGraph(data) {
       totalSize: t.total_size,
       size: sizeFor(t.row_estimate),
       color: schemaColors[t.schema_name],
+      clusterNames: [],
     },
   }));
   // fk.to_schema (not fk.from_schema) for the target id — a foreign key
@@ -794,32 +908,43 @@ function renderGraph(data) {
   const showLabels = data.tables.length <= LABEL_VISIBLE_THRESHOLD;
   currentShowLabels = showLabels;
 
+  // Node fill: a plain data(color) for schema mode / unclustered /
+  // single-cluster tables, PLUS up to MAX_PIE_SLICES pie wedges for a
+  // table in several clusters at once (pie-N-size stays unset/0% for
+  // any table that doesn't need that many wedges, so the plain color
+  // shows through whole — see computeNodeColoring()). Built as its own
+  // object so the pie-N properties can be generated in a loop instead
+  // of hand-written MAX_PIE_SLICES times.
+  const nodeStyle = {
+    "background-color": "data(color)",
+    "pie-size": "100%",
+    label: showLabels ? "data(label)" : "",
+    "font-size": BASE_FONT_SIZE + "px",
+    color: "#1c2035",
+    "text-valign": "top",
+    "text-margin-y": -6,
+    width: "data(size)",
+    height: "data(size)",
+    // A label sitting on top of an edge line (or another label,
+    // when nodes are close together) becomes unreadable without
+    // something behind it — a real reported problem, not
+    // hypothetical. A near-opaque background box fixes the
+    // edge-through-text case directly.
+    "text-background-color": "#ffffff",
+    "text-background-opacity": 0.85,
+    "text-background-shape": "roundrectangle",
+    "text-background-padding": "2px",
+  };
+  for (let i = 1; i <= MAX_PIE_SLICES; i++) {
+    nodeStyle[`pie-${i}-background-color`] = `data(pie${i}Color)`;
+    nodeStyle[`pie-${i}-background-size`] = `data(pie${i}Size)`;
+  }
+
   cy = cytoscape({
     container: $("graphCanvas"),
     elements: { nodes, edges },
     style: [
-      {
-        selector: "node",
-        style: {
-          "background-color": "data(color)",
-          label: showLabels ? "data(label)" : "",
-          "font-size": BASE_FONT_SIZE + "px",
-          color: "#1c2035",
-          "text-valign": "top",
-          "text-margin-y": -6,
-          width: "data(size)",
-          height: "data(size)",
-          // A label sitting on top of an edge line (or another label,
-          // when nodes are close together) becomes unreadable without
-          // something behind it — a real reported problem, not
-          // hypothetical. A near-opaque background box fixes the
-          // edge-through-text case directly.
-          "text-background-color": "#ffffff",
-          "text-background-opacity": 0.85,
-          "text-background-shape": "roundrectangle",
-          "text-background-padding": "2px",
-        },
-      },
+      { selector: "node", style: nodeStyle },
       {
         selector: "edge",
         style: {
@@ -841,6 +966,8 @@ function renderGraph(data) {
     minZoom: 0.05,
     maxZoom: 8,
   });
+
+  applyNodeColoring(); // sets the real color/pie data + legend, honoring the current Color-by mode
 
   cy.on("tap", "node", (evt) => openTableDetail(evt.target.data()));
   cy.on("mouseover", "node", (evt) => showNodeTooltip(evt.target.data(), evt.originalEvent));
@@ -1083,10 +1210,17 @@ function showNodeTooltip(nodeData, mouseEvent) {
   const volumeText = nodeData.rowEstimate < 0
     ? "not analyzed yet"
     : `${nodeData.rowEstimate.toLocaleString()} rows (est.)`;
+  // clusterNames is only ever non-empty in "Color by: Cluster" mode
+  // (see computeNodeColoring()) — in "Schema" mode it's always [], so
+  // this line simply doesn't render, no separate mode check needed here.
+  const clusterLine = nodeData.clusterNames && nodeData.clusterNames.length
+    ? `<div class="tooltip-meta">In: ${escHtml(nodeData.clusterNames.join(", "))}</div>`
+    : "";
   tooltip.innerHTML =
     `<strong>${escHtml(nodeData.label)}</strong>` +
     `<div class="tooltip-meta">${escHtml(nodeData.schema)}</div>` +
-    `<div>${escHtml(volumeText)} · ${escHtml(nodeData.totalSize)}</div>`;
+    `<div>${escHtml(volumeText)} · ${escHtml(nodeData.totalSize)}</div>` +
+    clusterLine;
   tooltip.style.display = "block";
   positionNodeTooltip(mouseEvent);
 }
@@ -1110,6 +1244,11 @@ function hideNodeTooltip() {
 $("btnLoadGraph").addEventListener("click", loadGraph);
 $("sizeModeVolume").addEventListener("change", () => { if (lastGraphData) renderGraph(lastGraphData); });
 $("sizeModeUniform").addEventListener("change", () => { if (lastGraphData) renderGraph(lastGraphData); });
+// Color, unlike size, never affects layout — a full renderGraph()
+// rebuild (destroy cy, re-run cose) would needlessly lose the current
+// pan/zoom and any active Filter view, so this just recolors in place.
+$("colorModeSchema").addEventListener("change", applyNodeColoring);
+$("colorModeCluster").addEventListener("change", applyNodeColoring);
 
 // ---------------------------------------------------------------------
 // Zoom controls — cytoscape already supports scroll-to-zoom/drag-to-pan
@@ -1434,6 +1573,11 @@ function switchMode(mode) {
   closeDetailPanel();
   if (exploring) {
     if (cy) cy.resize();
+    // Cluster membership may have just changed while in Clusters mode —
+    // if "Color by: Cluster" is active, the Explore graph's colors need
+    // to reflect that (applyNodeColoring() is a no-op cost either way
+    // in "Schema" mode, it just re-confirms the existing colors).
+    applyNodeColoring();
   } else {
     refreshClusterUI();
   }

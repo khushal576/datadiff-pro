@@ -883,6 +883,7 @@ section before assuming any of those exist.
 | Hub ranking, orphan-table list                                          | `schema-map/ui/index.html` — `computeTableDegrees()` (reuses `buildAdjacency()`), `renderInsights()` (`#detInsights`) |
 | FK-column badges in the columns table, the Relationships section        | `schema-map/ui/index.html` — `getTableForeignKeys()` (shared by both), `buildRelationshipsHtml()` |
 | Clusters (create/rename/delete, table picker, cluster canvas, seed)     | `schema-map/ui/index.html` — data layer: `loadClusters()`/`saveClusters()`/`createCluster()`/etc.; UI: `switchMode()`, `renderClusterList()`, `renderClusterWorkspace()`, `renderClusterPicker()`, `renderClusterCanvas()` (separate `clusterCy` instance) |
+| Explore graph "Color by Cluster" (multi-cluster pie split)              | `schema-map/ui/index.html` — `computeNodeColoring()`, `applyNodeColoring()`, `renderClusterColorLegend()` |
 
 ### Known non-obvious behavior
 
@@ -950,6 +951,13 @@ section before assuming any of those exist.
   gotchas found while verifying this feature (collapsed `<details>`
   elements aren't clickable via automation; module-scope JS vars aren't
   reachable from `page.evaluate` without deliberately capturing them).
+- **"Color by Cluster" splits a multi-cluster table's node into an exact
+  pie chart, one equal wedge per cluster** (Cytoscape's built-in
+  `pie-N-background-color`/`-size`, verified as an exact 50/50 split for
+  a 2-cluster table) — not a single arbitrary color. Toggling Color-by
+  mode recolors in place (`applyNodeColoring()`) without rebuilding the
+  graph or losing pan/zoom/filter state, unlike the Node-size toggle.
+  See `schema-map/CLAUDE.md`'s "Sixth pass" for the full design.
 - **The Filter feature's traversal is undirected and hides, not fades**
   — the owner explicitly confirmed both: "both directions" (what a
   table references AND what references it both count toward its
