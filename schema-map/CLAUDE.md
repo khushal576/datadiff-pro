@@ -185,11 +185,67 @@ Built so far (Steps 1–3 of the plan's sequence):
      FK-derived view, call `getTableForeignKeys()` again rather than
      re-filtering `lastGraphData.foreign_keys` by hand.
 
+- **Fifth pass — Clusters**: the one item from the original plan's
+  "explicitly deferred" list that the owner explicitly asked to bring
+  back in, scoped through its own dedicated design discussion before any
+  code (not folded into a quick-win). User-defined, freely-editable
+  table groupings for planning a monolith → microservice split —
+  deliberately independent of the FK graph itself (a table can belong to
+  any number of clusters, or none; membership is pure human judgment,
+  not inferred). Key design decisions, each made explicitly rather than
+  assumed:
+  - **Persistence: browser `localStorage`, not a server-side store** —
+    scoped to `schema_map_clusters:<host>:<port>:<database>`
+    (`clustersStorageKey()`/`currentConnectionKey` in `ui/index.html`,
+    set in `applyConnectionStatus()`), so switching databases never
+    mixes one schema's clusters into another's. Chosen over a backend
+    file/DB store *knowingly* — it won't survive a browser data clear or
+    work across machines, which was accepted as a real tradeoff, not an
+    accident. If that ever stops being acceptable, treat it as a fresh
+    decision, not a silent upgrade to a server-side store.
+  - **Entry point: an in-page "Explore/Clusters" mode toggle**
+    (`#modeToggle` in the header, `switchMode()`), not a real new browser
+    tab — the two modes share the same connection and `lastGraphData`,
+    and switching back to Explore costs only a `cy.resize()` because the
+    Explore graph (`cy`) is never destroyed when hidden, just its
+    container's `display` is toggled. Gated on a graph actually being
+    *loaded* (`renderGraph()`/`showGraphPlaceholder()`), not merely
+    "connected" — Clusters mode reads `lastGraphData` directly and has
+    no fetch of its own.
+  - **A table can be in multiple clusters** — `tableIds: []` arrays, no
+    exclusivity, no partitioning.
+  - **A separate, deliberately plain Cytoscape instance for the cluster
+    canvas** (`clusterCy`, distinct from the Explore graph's `cy`) —
+    labeled boxes (`width/height: "label"`, auto-sized to text), no
+    size-by-volume, no schema coloring, since none of that matters for a
+    clustering decision. Shows only the active cluster's member tables
+    plus the real FK lines where BOTH endpoints are members (an induced
+    subgraph, same principle as the Filter feature's hide/show). Single
+    click on a node removes it from the cluster — no confirmation, since
+    it's a one-click-reversible action (the table just flips back to
+    "+ Add" in the picker).
+  - **Seed-from-hub**: reuses `computeNeighborhood()` (the exact BFS the
+    Filter feature already has) to pre-populate a new cluster from a
+    chosen table's 1–2 hop neighborhood, which you then prune/extend by
+    hand — directly built on the owner's own observation that
+    well-connected tables are natural cluster starting points (same
+    insight the Insights hub ranking already surfaces).
+  - Verified end-to-end with a headless-Chrome (puppeteer-core against
+    the system's `google-chrome`) script, not just `curl`/Node
+    simulation — this is the first schema-map feature that's genuinely
+    only testable by driving real DOM interaction (mode switching,
+    `<details>` collapse state, localStorage). Two real test-script bugs
+    were caught and fixed along the way (clicking inside a collapsed
+    `<details>` silently does nothing; module-scope JS variables like
+    `cy`/`lastGraphData` aren't reachable from `page.evaluate` unless a
+    test deliberately captures them) — worth remembering before writing
+    another browser-driven test for this tool.
+
 **Not yet built**: Step 4 (schema → connected-components → group
 expansion, so nothing renders before you explicitly ask for it), Step 5
-(hub-collapse toggle). None of the "explicitly deferred" items from the
-plan either (manual groups/links, other DB engines, community detection
-beyond plain connected components).
+(hub-collapse toggle). Manual *non-FK* links between tables (the cluster
+canvas only ever draws real FK edges) — other DB engines, community
+detection beyond plain connected components.
 
 ## How it's built
 

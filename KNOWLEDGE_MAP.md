@@ -882,6 +882,7 @@ section before assuming any of those exist.
 | Table search / jump-to-table                                            | `schema-map/ui/index.html` — `populateTableSearch()`, `jumpToTable()` (`#canvasSearch`, native `<input list>`/`<datalist>`) |
 | Hub ranking, orphan-table list                                          | `schema-map/ui/index.html` — `computeTableDegrees()` (reuses `buildAdjacency()`), `renderInsights()` (`#detInsights`) |
 | FK-column badges in the columns table, the Relationships section        | `schema-map/ui/index.html` — `getTableForeignKeys()` (shared by both), `buildRelationshipsHtml()` |
+| Clusters (create/rename/delete, table picker, cluster canvas, seed)     | `schema-map/ui/index.html` — data layer: `loadClusters()`/`saveClusters()`/`createCluster()`/etc.; UI: `switchMode()`, `renderClusterList()`, `renderClusterWorkspace()`, `renderClusterPicker()`, `renderClusterCanvas()` (separate `clusterCy` instance) |
 
 ### Known non-obvious behavior
 
@@ -937,6 +938,18 @@ section before assuming any of those exist.
   `schema-map/CLAUDE.md` for the verified real numbers (`orders`/`users`
   top the hub list at degree 6, `employees`/`analytics.daily_stats` are
   the orphans).
+- **Clusters are stored in browser `localStorage`, scoped per connected
+  database (`schema_map_clusters:<host>:<port>:<database>`), not on the
+  server** — a deliberate tradeoff (won't survive a browser data clear
+  or work across machines), not an oversight. A table can belong to
+  multiple clusters at once; membership is pure manual judgment,
+  independent of the FK graph. The cluster canvas is a SEPARATE
+  Cytoscape instance (`clusterCy`) from the Explore graph's `cy` — never
+  confuse the two. See `schema-map/CLAUDE.md`'s "Fifth pass" for the
+  full design rationale and the two real headless-browser-testing
+  gotchas found while verifying this feature (collapsed `<details>`
+  elements aren't clickable via automation; module-scope JS vars aren't
+  reachable from `page.evaluate` without deliberately capturing them).
 - **The Filter feature's traversal is undirected and hides, not fades**
   — the owner explicitly confirmed both: "both directions" (what a
   table references AND what references it both count toward its

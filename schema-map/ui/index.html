@@ -21,6 +21,20 @@
   header { padding: 16px 20px 12px; border-bottom: 1px solid var(--border); background: var(--surface); }
   header h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: -0.5px; }
   header h1 span { color: var(--accent); }
+  .header-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+
+  /* ---- Explore/Clusters mode toggle — swaps sidebar+main content in
+     place; the Explore graph stays alive underneath, just hidden. ---- */
+  .mode-toggle {
+    display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; flex: none;
+  }
+  .mode-btn {
+    cursor: pointer; border: none; background: var(--surface); color: var(--muted);
+    font-size: 0.8rem; font-weight: 600; padding: 7px 16px;
+  }
+  .mode-btn + .mode-btn { border-left: 1px solid var(--border); }
+  .mode-btn.active { background: var(--accent); color: #fff; }
+  .mode-btn:not(.active):hover { color: var(--text); background: var(--bg); }
 
   .layout { flex: 1; display: flex; min-height: 0; }
 
@@ -192,16 +206,85 @@
   .insight-item:hover { background: var(--bg); }
   .insight-degree { color: var(--muted); font-size: 0.7rem; flex: none; margin-left: 8px; }
   .insight-empty { font-size: 0.76rem; color: var(--muted); padding: 2px 0 8px; }
+
+  /* ---- Cluster list — sidebar, Clusters mode ---- */
+  .cluster-item {
+    border-radius: 7px; padding: 7px 8px; margin-bottom: 4px; cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .cluster-item:hover { background: var(--bg); }
+  .cluster-item.active { background: var(--bg); border-color: var(--accent); }
+  .cluster-item-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  .cluster-item-name { font-size: 0.84rem; font-weight: 600; word-break: break-word; }
+  .cluster-item-count { font-size: 0.7rem; color: var(--muted); flex: none; }
+  .cluster-item-actions { display: flex; gap: 10px; margin-top: 4px; }
+  .cluster-item-actions button {
+    cursor: pointer; border: none; background: none; color: var(--muted);
+    font-size: 0.7rem; font-weight: 600; padding: 0;
+  }
+  .cluster-item-actions button:hover { color: var(--accent); }
+  .cluster-item-actions button.danger:hover { color: var(--err-text); }
+
+  /* ---- Cluster workspace — main area, Clusters mode ---- */
+  #clustersMain { position: absolute; inset: 0; padding: 20px; display: none; flex-direction: column; }
+  #clusterWorkspace { display: none; flex-direction: column; height: 100%; min-height: 0; gap: 14px; }
+  .cluster-ws-header { flex: none; }
+  .cluster-name-input {
+    width: 100%; font-size: 1.15rem; font-weight: 700; color: var(--text);
+    border: none; border-bottom: 2px solid transparent; background: none;
+    padding: 4px 2px; margin-bottom: 10px; font-family: inherit;
+  }
+  .cluster-name-input:hover { border-bottom-color: var(--border); }
+  .cluster-name-input:focus { border-bottom-color: var(--accent); outline: none; }
+  .cluster-seed-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .cluster-seed-row select {
+    background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 7px; padding: 6px 8px; font-size: 0.78rem;
+  }
+  .cluster-seed-row select#clusterSeedSelect { max-width: 260px; }
+  .cluster-ws-body { flex: 1; display: flex; gap: 16px; min-height: 0; }
+  .cluster-picker {
+    width: 260px; flex: none; display: flex; flex-direction: column; min-height: 0;
+    border: 1px solid var(--border); border-radius: 10px; padding: 10px;
+  }
+  .cluster-picker input {
+    width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 7px; padding: 7px 9px; font-size: 0.8rem; margin-bottom: 8px; flex: none;
+  }
+  #clusterPickerList { flex: 1; overflow-y: auto; min-height: 0; }
+  .picker-item {
+    display: flex; justify-content: space-between; align-items: center; gap: 6px;
+    padding: 5px 6px; border-radius: 6px; font-size: 0.78rem;
+  }
+  .picker-item:hover { background: var(--bg); }
+  .picker-item-name { word-break: break-word; }
+  .picker-item-degree { font-size: 0.68rem; color: var(--muted); }
+  .picker-item button {
+    cursor: pointer; border: 1px solid var(--border); border-radius: 6px; background: var(--surface);
+    color: var(--text); font-size: 0.68rem; font-weight: 600; padding: 3px 8px; flex: none;
+  }
+  .picker-item button:hover { border-color: var(--accent); color: var(--accent); }
+  .picker-item button.added { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .picker-item button.added:hover { color: #fff; }
+  .cluster-canvas-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+  #clusterCanvas { flex: 1; border: 1px solid var(--border); border-radius: 10px; min-height: 0; }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>Schema <span>Map</span></h1>
+  <div class="header-row">
+    <h1>Schema <span>Map</span></h1>
+    <div class="mode-toggle" id="modeToggle" style="display: none;">
+      <button type="button" class="mode-btn active" id="modeBtnExplore">Explore</button>
+      <button type="button" class="mode-btn" id="modeBtnClusters">Clusters</button>
+    </div>
+  </div>
 </header>
 
 <div class="layout">
   <div class="sidebar">
+   <div id="exploreSidebar">
     <details class="card" id="detConnection">
       <summary><h2>Connection <span class="status-badge disconnected" id="connectionStatusBadge">● Disconnected</span></h2><span class="chev">▶</span></summary>
       <div class="body">
@@ -320,9 +403,27 @@
         <div id="filterResults"></div>
       </div>
     </details>
+   </div>
+
+   <div id="clustersSidebar" style="display: none;">
+     <div class="card" style="margin-bottom: 14px;">
+       <div class="body" style="padding-top: 14px;">
+         <p class="hint">
+           Group tables into named clusters by hand — for planning a
+           monolith → microservice split. Independent of the FK graph: a
+           table can be in as many clusters as you want, or none.
+         </p>
+         <div class="btn-row">
+           <button class="action small" id="btnNewCluster">+ New cluster</button>
+         </div>
+         <div id="clusterList"></div>
+       </div>
+     </div>
+   </div>
   </div>
 
   <div class="main">
+   <div id="exploreMain">
     <div class="main-placeholder" id="mainPlaceholder">
       Connect to a database to start exploring its structure.
     </div>
@@ -339,6 +440,37 @@
       <div class="zoom-level" id="zoomLevel">100%</div>
     </div>
     <div class="node-tooltip" id="nodeTooltip" style="display: none;"></div>
+   </div>
+
+   <div id="clustersMain" style="display: none;">
+     <div class="main-placeholder" id="clustersPlaceholder">
+       Create a cluster to start grouping tables.
+     </div>
+     <div id="clusterWorkspace" style="display: none;">
+       <div class="cluster-ws-header">
+         <input type="text" id="clusterNameInput" class="cluster-name-input" placeholder="Cluster name" />
+         <div class="cluster-seed-row">
+           <span class="hint" style="margin: 0;">Seed from a hub:</span>
+           <select id="clusterSeedSelect"></select>
+           <select id="clusterSeedDepth">
+             <option value="1">1 hop</option>
+             <option value="2" selected>2 hops</option>
+           </select>
+           <button class="action secondary small" id="btnSeedCluster">Seed</button>
+         </div>
+       </div>
+       <div class="cluster-ws-body">
+         <div class="cluster-picker">
+           <input type="text" id="clusterPickerSearch" placeholder="Filter tables…" autocomplete="off" />
+           <div id="clusterPickerList"></div>
+         </div>
+         <div class="cluster-canvas-wrap">
+           <p class="hint" style="margin: 0 0 6px;">Click a table below to remove it from this cluster.</p>
+           <div id="clusterCanvas"></div>
+         </div>
+       </div>
+     </div>
+   </div>
   </div>
 
   <div class="detail-panel" id="detailPanel">
@@ -366,6 +498,7 @@ const $ = (id) => document.getElementById(id);
 
 const CONNECTION_KEY = "schema_map_connection";
 let isConnected = false;
+let currentConnectionKey = null; // "host:port:database", set in applyConnectionStatus(); scopes cluster storage
 
 function loadConnectionFields() {
   try {
@@ -418,12 +551,19 @@ function applyConnectionStatus(status, forceOpen) {
     $("connectionForm").style.display = "none";
     $("connectionStatusView").style.display = "block";
     details.open = false;
+    // Clusters are scoped to the connected database, not the browser
+    // globally — so switching databases never mixes one schema's
+    // clusters into another's list. Username deliberately excluded:
+    // clusters are a property of the schema, not of who's looking.
+    currentConnectionKey = `${status.host}:${status.port}:${status.database}`;
   } else {
     badge.textContent = "● Disconnected";
     badge.className = "status-badge disconnected";
     $("connectionForm").style.display = "block";
     $("connectionStatusView").style.display = "none";
     if (forceOpen) details.open = true;
+    currentConnectionKey = null;
+    switchMode("explore"); // Clusters mode needs a live connection key
   }
   $("detSchemaPicker").style.display = isConnected ? "block" : "none";
   if (isConnected) {
@@ -451,6 +591,11 @@ function showGraphPlaceholder(text) {
   $("detInsights").style.display = "none";
   $("canvasSearch").style.display = "none";
   $("tableSearchInput").value = "";
+  // Clusters mode reads lastGraphData directly — gate it on a graph
+  // actually being loaded, not just "connected" (connecting alone
+  // leaves lastGraphData null until "Load graph" is clicked).
+  $("modeToggle").style.display = "none";
+  switchMode("explore");
   closeDetailPanel();
   hideNodeTooltip();
 }
@@ -596,6 +741,7 @@ function renderGraph(data) {
   $("detInsights").style.display = "block";
   populateTableSearch(data.tables);
   renderInsights(data);
+  $("modeToggle").style.display = "flex";
 
   const rowEstimates = data.tables.map((t) => Math.max(t.row_estimate, 0));
   const maxRows = Math.max(1, ...rowEstimates);
@@ -1184,6 +1330,363 @@ function escHtml(s) {
 }
 
 $("btnCloseDetail").addEventListener("click", closeDetailPanel);
+
+// ---------------------------------------------------------------------
+// Clusters — user-defined, freely-editable table groupings for planning
+// a monolith -> microservice split. Deliberately separate from anything
+// FK-derived (the Insights hub list only *suggests* candidates): a
+// table can belong to any number of clusters, or none, purely by the
+// owner's own judgment.
+//
+// Persisted in localStorage, scoped to the CONNECTED database
+// (currentConnectionKey = "host:port:database") rather than the
+// browser globally, so switching databases never mixes one schema's
+// clusters into another's. This was a deliberate scope decision, not a
+// default: a server-side store would survive a browser data clear and
+// work across machines, but takes on the real persistence layer v1's
+// read-only scope was built specifically to avoid — browser storage was
+// chosen knowing that tradeoff, not by accident. Revisit explicitly if
+// it ever stops being acceptable, don't silently upgrade it.
+// ---------------------------------------------------------------------
+function clustersStorageKey() {
+  return currentConnectionKey ? `schema_map_clusters:${currentConnectionKey}` : null;
+}
+
+function loadClusters() {
+  const key = clustersStorageKey();
+  if (!key) return [];
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveClusters(clusters) {
+  const key = clustersStorageKey();
+  if (!key) return;
+  try {
+    localStorage.setItem(key, JSON.stringify(clusters));
+  } catch (e) { /* storage disabled/full — silently no-op, nothing to recover into */ }
+}
+
+function createCluster(name) {
+  const clusters = loadClusters();
+  const cluster = {
+    id: "cluster-" + Math.random().toString(36).slice(2, 10),
+    name: name || "Untitled cluster",
+    tableIds: [],
+  };
+  clusters.push(cluster);
+  saveClusters(clusters);
+  return cluster;
+}
+
+function renameCluster(clusterId, newName) {
+  const clusters = loadClusters();
+  const cluster = clusters.find((c) => c.id === clusterId);
+  if (!cluster || !newName) return;
+  cluster.name = newName;
+  saveClusters(clusters);
+}
+
+function deleteCluster(clusterId) {
+  saveClusters(loadClusters().filter((c) => c.id !== clusterId));
+}
+
+function addTableToCluster(clusterId, tableId) {
+  const clusters = loadClusters();
+  const cluster = clusters.find((c) => c.id === clusterId);
+  if (!cluster || cluster.tableIds.includes(tableId)) return;
+  cluster.tableIds.push(tableId);
+  saveClusters(clusters);
+}
+
+function removeTableFromCluster(clusterId, tableId) {
+  const clusters = loadClusters();
+  const cluster = clusters.find((c) => c.id === clusterId);
+  if (!cluster) return;
+  cluster.tableIds = cluster.tableIds.filter((id) => id !== tableId);
+  saveClusters(clusters);
+}
+
+// ---------------------------------------------------------------------
+// Explore/Clusters mode switch — swaps sidebar+main content in place.
+// The Explore graph (`cy`) is never destroyed when hidden, just its
+// container's display is toggled — so switching back costs nothing
+// beyond a `cy.resize()` (same reason openTableDetail()/closeDetailPanel()
+// already need that call: Cytoscape doesn't observe layout/CSS changes
+// on its own).
+// ---------------------------------------------------------------------
+let currentMode = "explore";
+let activeClusterId = null;
+
+function switchMode(mode) {
+  currentMode = mode;
+  const exploring = mode === "explore";
+  $("exploreSidebar").style.display = exploring ? "block" : "none";
+  $("clustersSidebar").style.display = exploring ? "none" : "block";
+  $("exploreMain").style.display = exploring ? "block" : "none";
+  $("clustersMain").style.display = exploring ? "none" : "block";
+  $("modeBtnExplore").classList.toggle("active", exploring);
+  $("modeBtnClusters").classList.toggle("active", !exploring);
+  closeDetailPanel();
+  if (exploring) {
+    if (cy) cy.resize();
+  } else {
+    refreshClusterUI();
+  }
+}
+
+$("modeBtnExplore").addEventListener("click", () => switchMode("explore"));
+$("modeBtnClusters").addEventListener("click", () => switchMode("clusters"));
+
+function renderClusterList() {
+  const clusters = loadClusters();
+  const container = $("clusterList");
+  if (!clusters.length) {
+    container.innerHTML = '<p class="hint" style="margin-top:10px;">No clusters yet — create one to start grouping tables.</p>';
+    activeClusterId = null;
+    return;
+  }
+  if (!clusters.some((c) => c.id === activeClusterId)) {
+    activeClusterId = clusters[0].id;
+  }
+  container.innerHTML = "";
+  for (const cluster of clusters) {
+    const item = document.createElement("div");
+    item.className = "cluster-item" + (cluster.id === activeClusterId ? " active" : "");
+    item.innerHTML = `
+      <div class="cluster-item-row">
+        <span class="cluster-item-name">${escHtml(cluster.name)}</span>
+        <span class="cluster-item-count">${cluster.tableIds.length} table${cluster.tableIds.length === 1 ? "" : "s"}</span>
+      </div>
+      <div class="cluster-item-actions">
+        <button type="button" data-action="rename">Rename</button>
+        <button type="button" data-action="delete" class="danger">Delete</button>
+      </div>
+    `;
+    item.querySelector(".cluster-item-row").addEventListener("click", () => {
+      activeClusterId = cluster.id;
+      refreshClusterUI();
+    });
+    item.querySelector('[data-action="rename"]').addEventListener("click", (evt) => {
+      evt.stopPropagation();
+      const name = prompt("Rename cluster:", cluster.name);
+      if (name && name.trim()) renameCluster(cluster.id, name.trim());
+      refreshClusterUI();
+    });
+    item.querySelector('[data-action="delete"]').addEventListener("click", (evt) => {
+      evt.stopPropagation();
+      if (confirm(`Delete cluster "${cluster.name}"? This can't be undone.`)) {
+        deleteCluster(cluster.id);
+        refreshClusterUI();
+      }
+    });
+    container.appendChild(item);
+  }
+}
+
+$("btnNewCluster").addEventListener("click", () => {
+  const name = prompt("New cluster name:", "Untitled cluster");
+  if (name === null) return; // cancelled
+  const cluster = createCluster(name.trim() || "Untitled cluster");
+  activeClusterId = cluster.id;
+  refreshClusterUI();
+});
+
+// ---------------------------------------------------------------------
+// Cluster workspace — the right-hand side of Clusters mode: a table
+// picker (search + degree-sorted, reusing computeTableDegrees()) and a
+// plain node-link canvas showing only the active cluster's current
+// members, using a SEPARATE Cytoscape instance (`clusterCy`) from the
+// Explore graph's `cy` — the two are never confused, never destroy each
+// other, and use deliberately different styling (plain labeled boxes,
+// no size-by-volume/schema-color, since none of that matters for a
+// clustering decision — see the design discussion this was built from).
+// ---------------------------------------------------------------------
+let clusterCy = null;
+
+function getActiveCluster() {
+  return loadClusters().find((c) => c.id === activeClusterId) || null;
+}
+
+function refreshClusterUI() {
+  renderClusterList();
+  renderClusterWorkspace();
+}
+
+function renderClusterWorkspace() {
+  const cluster = getActiveCluster();
+  if (!cluster || !lastGraphData) {
+    $("clustersPlaceholder").style.display = "flex";
+    $("clusterWorkspace").style.display = "none";
+    if (clusterCy) { clusterCy.destroy(); clusterCy = null; }
+    return;
+  }
+  $("clustersPlaceholder").style.display = "none";
+  $("clusterWorkspace").style.display = "flex";
+  // Only touch the name input's value if it's not the thing the user is
+  // actively typing into — otherwise every add/remove (which calls this
+  // via refreshClusterUI()) would fight an in-progress rename.
+  if (document.activeElement !== $("clusterNameInput")) {
+    $("clusterNameInput").value = cluster.name;
+  }
+  populateSeedSelect();
+  renderClusterPicker(cluster);
+  renderClusterCanvas(cluster);
+}
+
+function populateSeedSelect() {
+  const select = $("clusterSeedSelect");
+  const previous = select.value;
+  const stats = computeTableDegrees(lastGraphData).sort((a, b) => b.degree - a.degree);
+  select.innerHTML = "";
+  for (const s of stats) {
+    const opt = document.createElement("option");
+    opt.value = s.id;
+    opt.textContent = `${s.id} (${s.degree})`;
+    select.appendChild(opt);
+  }
+  if (previous && stats.some((s) => s.id === previous)) select.value = previous;
+}
+
+function renderClusterPicker(cluster) {
+  const filterText = $("clusterPickerSearch").value.trim().toLowerCase();
+  const stats = computeTableDegrees(lastGraphData).sort((a, b) => b.degree - a.degree);
+  const memberSet = new Set(cluster.tableIds);
+  const filtered = filterText ? stats.filter((s) => s.id.toLowerCase().includes(filterText)) : stats;
+  const container = $("clusterPickerList");
+  if (!filtered.length) {
+    container.innerHTML = '<p class="hint">No matching tables.</p>';
+    return;
+  }
+  container.innerHTML = "";
+  for (const s of filtered) {
+    const isMember = memberSet.has(s.id);
+    const row = document.createElement("div");
+    row.className = "picker-item";
+    row.innerHTML = `
+      <span class="picker-item-name">${escHtml(s.id)} <span class="picker-item-degree">· ${s.degree}</span></span>
+      <button type="button" class="${isMember ? "added" : ""}">${isMember ? "✕ Remove" : "+ Add"}</button>
+    `;
+    row.querySelector("button").addEventListener("click", () => {
+      if (isMember) removeTableFromCluster(cluster.id, s.id);
+      else addTableToCluster(cluster.id, s.id);
+      refreshClusterUI();
+    });
+    container.appendChild(row);
+  }
+}
+
+// A plain node-link view, deliberately unlike the Explore graph's
+// styling — table names as labeled boxes (width/height: "label" auto-
+// sizes the box to its text + padding), real FK lines only between
+// tables that are BOTH in this cluster (an induced subgraph, same idea
+// as the Filter feature's hide/show, just scoped to cluster membership
+// instead of hop distance). Clicking a node removes it from the
+// cluster immediately — the only interaction this canvas has, so no
+// confirmation dialog: it's a one-click-reversible action (the table
+// stays in the picker list, just flips back to "+ Add").
+function renderClusterCanvas(cluster) {
+  if (clusterCy) { clusterCy.destroy(); clusterCy = null; }
+  const container = $("clusterCanvas");
+  if (!cluster.tableIds.length) {
+    container.innerHTML = '<p class="hint" style="padding: 16px;">Add tables from the list on the left to start building this cluster.</p>';
+    return;
+  }
+  container.innerHTML = "";
+  const memberSet = new Set(cluster.tableIds);
+  const tableById = new Map(lastGraphData.tables.map((t) => [`${t.schema_name}.${t.table_name}`, t]));
+  // Guard against a table that was added to this cluster in a previous
+  // session but no longer exists in the currently-loaded graph (schema
+  // changed, or a different schema is selected in Explore right now) —
+  // skip it rather than crashing on a missing lookup.
+  const nodes = cluster.tableIds
+    .filter((id) => tableById.has(id))
+    .map((id) => ({ data: { id, label: tableById.get(id).table_name } }));
+  const edges = lastGraphData.foreign_keys
+    .filter((fk) => memberSet.has(`${fk.from_schema}.${fk.from_table}`) && memberSet.has(`${fk.to_schema}.${fk.to_table}`))
+    .map((fk, i) => ({
+      data: {
+        id: `cfk${i}`,
+        source: `${fk.from_schema}.${fk.from_table}`,
+        target: `${fk.to_schema}.${fk.to_table}`,
+      },
+    }));
+
+  clusterCy = cytoscape({
+    container,
+    elements: { nodes, edges },
+    style: [
+      {
+        selector: "node",
+        style: {
+          "background-color": "#eef0fb",
+          "border-width": 2,
+          "border-color": "#4f5ef0",
+          shape: "roundrectangle",
+          label: "data(label)",
+          "text-valign": "center",
+          "text-halign": "center",
+          "font-size": "11px",
+          color: "#1c2035",
+          width: "label",
+          height: "label",
+          padding: "10px",
+        },
+      },
+      {
+        selector: "edge",
+        style: {
+          width: 1.5,
+          "line-color": "#9aa3c2",
+          "target-arrow-color": "#9aa3c2",
+          "target-arrow-shape": "triangle",
+          "curve-style": "bezier",
+        },
+      },
+    ],
+    layout: { name: "cose", animate: false, padding: 30 },
+    minZoom: 0.1,
+    maxZoom: 4,
+  });
+
+  clusterCy.on("tap", "node", (evt) => {
+    removeTableFromCluster(cluster.id, evt.target.id());
+    refreshClusterUI();
+  });
+}
+
+function commitClusterRename() {
+  const cluster = getActiveCluster();
+  if (!cluster) return;
+  const newName = $("clusterNameInput").value.trim();
+  if (newName && newName !== cluster.name) {
+    renameCluster(cluster.id, newName);
+    renderClusterList(); // sidebar name needs updating too — workspace itself doesn't need a full re-render
+  }
+}
+$("clusterNameInput").addEventListener("blur", commitClusterRename);
+$("clusterNameInput").addEventListener("keydown", (evt) => {
+  if (evt.key === "Enter") { commitClusterRename(); $("clusterNameInput").blur(); }
+});
+
+$("clusterPickerSearch").addEventListener("input", () => {
+  const cluster = getActiveCluster();
+  if (cluster) renderClusterPicker(cluster);
+});
+
+$("btnSeedCluster").addEventListener("click", () => {
+  const cluster = getActiveCluster();
+  const startId = $("clusterSeedSelect").value;
+  if (!cluster || !lastGraphData || !startId) return;
+  const depth = parseInt($("clusterSeedDepth").value, 10);
+  const { visibleIds } = computeNeighborhood(startId, depth, lastGraphData.foreign_keys);
+  for (const id of visibleIds) addTableToCluster(cluster.id, id);
+  refreshClusterUI();
+});
 
 $("btnConnect").addEventListener("click", async () => {
   const body = {
