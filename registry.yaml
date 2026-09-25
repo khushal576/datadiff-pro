@@ -83,3 +83,9 @@ tools:
     description: "Click-driven pandas — load CSV/JSON/XML/Parquet, transform with UI steps or custom Python, export as a file or a standalone script, save reusable templates"
     icon: "🐼"
     category: tool
+
+  - name: sql-studio
+    title: "SQL Studio"
+    description: "Paste, edit, and pretty-print Postgres SQL — 125+ templates, live Run against a real database, and psql-style show commands (show tables, show table X definition, ...)"
+    icon: "🗄️"
+    category: tool

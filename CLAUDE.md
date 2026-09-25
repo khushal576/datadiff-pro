@@ -130,6 +130,18 @@ created by one request can be invisible to the next request if it lands on
 a different worker — this happened for real once (see `df-studio/CLAUDE.md`)
 and looked like random, unexplained "session not found" errors.
 
+SQL Studio's live database connection (`sql-studio/db_engine.py`,
+`STATE`) is a second, independent instance of the same constraint — a
+single module-level global holding the active Postgres connection pool,
+not a per-cookie dict (see `sql-studio/CLAUDE.md` for why it deliberately
+does NOT copy df-studio's per-cookie shape). The failure mode here is
+worse than a lost DataFrame: with >1 worker, "Connect" landing on one
+worker would be invisible to "Run" landing on another, and an orphaned
+pool means real, live connections held open against a real external
+database (visible in that database's own `pg_stat_activity`, consuming
+its connection-limit budget) until something notices and kills it — not
+just an inert lost value in memory.
+
 **Decided now, before it comes up again:** any future tool that needs
 multi-step or multi-request state (not just "read a form, compute an
 answer, done" — something closer to df-studio's upload-then-edit model)

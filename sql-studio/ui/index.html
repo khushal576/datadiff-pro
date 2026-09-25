@@ -1,0 +1,2509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SQL Studio</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f4f6fb; --surface: #ffffff; --border: #dde1ef;
+    --text: #1c2035; --muted: #6b7180; --accent: #4f5ef0;
+    --ok-bg: rgba(21,128,61,0.08); --ok-text: #15803d; --ok-border: rgba(21,128,61,0.3);
+    --err-bg: rgba(220,38,38,0.08); --err-text: #b91c1c; --err-border: rgba(220,38,38,0.3);
+  }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; padding: 24px 20px 60px;
+  }
+  header { max-width: 1280px; margin: 0 auto 20px; }
+  header h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.5px; }
+  header h1 span { color: var(--accent); }
+
+  .layout { max-width: 1280px; margin: 0 auto; display: grid; grid-template-columns: 2fr 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+
+  .col-right { position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow-y: auto; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 18px; margin-bottom: 16px;
+  }
+  .card h2 { font-size: 1rem; font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+  .card .hint { font-size: 0.78rem; color: var(--muted); margin-bottom: 12px; line-height: 1.5; }
+  .card summary h2 { display: inline-flex; }
+
+  details.card { padding: 0; }
+  details.card > summary { list-style: none; cursor: pointer; padding: 18px; display: flex; justify-content: space-between; align-items: center; }
+  details.card > summary::-webkit-details-marker { display: none; }
+  details.card > summary .chev { color: var(--muted); font-size: 0.75rem; transition: transform 0.15s; }
+  details.card[open] > summary .chev { transform: rotate(90deg); }
+  details.card > .body { padding: 0 18px 18px; }
+  details.card > summary .count-badge {
+    background: var(--bg); color: var(--muted); border: 1px solid var(--border);
+    border-radius: 20px; padding: 1px 8px; font-size: 0.7rem; font-weight: 700; margin-left: 8px;
+  }
+
+  label {
+    font-size: 0.78rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.5px; color: var(--muted); display: block; margin-bottom: 6px;
+  }
+  textarea {
+    width: 100%; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px;
+    font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
+    font-size: 0.82rem; resize: vertical; min-height: 140px; line-height: 1.5;
+  }
+  textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; align-items: center; }
+  button.action {
+    cursor: pointer; border: none; border-radius: 7px;
+    background: var(--accent); color: #fff; font-weight: 600;
+    font-size: 0.82rem; padding: 8px 16px;
+  }
+  button.action:hover { opacity: 0.88; }
+  button.action.secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+  button.action.secondary:hover { border-color: var(--accent); color: var(--accent); }
+  button.action.small { padding: 5px 11px; font-size: 0.76rem; }
+
+  .stats { font-size: 0.76rem; color: var(--muted); margin-left: auto; }
+
+  .editor-wrap { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .cm-editor { height: 100%; position: relative; }
+  .cm-editor .cm-scroller { font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace; font-size: 0.85rem; line-height: 1.55; }
+  .cm-editor.cm-focused { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .cm-editor .cm-content { min-height: 420px; }
+  .cm-editor .cm-scroller { max-height: 65vh; }
+
+  /* Ctrl+F's built-in find/replace panel (from @codemirror/search) — by
+     default it's a full-width bar pinned to the bottom of the editor.
+     Overridden here to float top-right instead, VS Code-style, so it
+     doesn't shove the code down or hide at the bottom out of view. */
+  #editor .cm-panel.cm-search {
+    position: absolute !important; top: 8px !important; right: 8px !important; left: auto !important;
+    width: auto; max-width: 300px; z-index: 20;
+    background: var(--surface); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: 0 10px 28px rgba(28,32,53,0.18);
+    padding: 8px 26px 8px 10px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 5px;
+  }
+  #editor .cm-search br { flex-basis: 100%; height: 0; }
+  #editor .cm-search .cm-textfield {
+    background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 5px; padding: 4px 7px; font-size: 0.78rem; width: 140px;
+  }
+  #editor .cm-search .cm-button {
+    cursor: pointer; border: 1px solid var(--border); background: var(--surface);
+    color: var(--text); border-radius: 5px; padding: 3px 8px; font-size: 0.72rem;
+  }
+  #editor .cm-search .cm-button:hover { border-color: var(--accent); color: var(--accent); }
+  #editor .cm-search label {
+    display: inline-flex; align-items: center; gap: 3px; text-transform: none;
+    font-weight: 400; font-size: 0.68rem; color: var(--muted); margin: 0;
+  }
+  #editor .cm-search label input { width: auto; accent-color: var(--accent); cursor: pointer; }
+  #editor .cm-search button[name="close"] {
+    position: absolute; top: 5px; right: 7px; border: none; background: none;
+    cursor: pointer; color: var(--muted); font-size: 1rem; line-height: 1; padding: 0 2px;
+  }
+  #editor .cm-search button[name="close"]:hover { color: var(--text); }
+
+  .err-box { font-size: 0.78rem; background: var(--err-bg); color: var(--err-text); border: 1px solid var(--err-border);
+    border-radius: 7px; padding: 9px 12px; margin-top: 10px; display: none; line-height: 1.6; white-space: pre-wrap; }
+  .err-box.show { display: block; }
+
+  .link-btn { background: none; border: none; color: var(--accent); font-size: 0.76rem; font-weight: 600;
+    cursor: pointer; padding: 0; text-decoration: underline; }
+
+  .copied-flash { color: var(--ok-text); font-size: 0.76rem; font-weight: 600; opacity: 0; transition: opacity 0.2s; }
+  .copied-flash.show { opacity: 1; }
+
+  /* ---- Templates sidebar panel ---- */
+  input[type="search"] {
+    width: 100%; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 7px; padding: 7px 10px;
+    font-size: 0.82rem; margin-bottom: 10px;
+  }
+  input[type="search"]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .template-list { display: flex; flex-direction: column; gap: 6px; }
+  .template-item { border: 1px solid var(--border); border-radius: 7px; padding: 7px 10px; cursor: pointer; }
+  .template-item:hover { border-color: var(--accent); background: var(--bg); }
+  .template-name { font-weight: 700; font-size: 0.8rem; }
+  .template-cat { font-size: 0.64rem; color: var(--accent); text-transform: uppercase; letter-spacing: 0.4px; font-weight: 700; margin-bottom: 2px; }
+  .template-preview {
+    font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace; font-size: 0.7rem;
+    color: var(--muted); white-space: pre-wrap; margin-top: 4px; line-height: 1.4;
+    max-height: 2.8em; overflow: hidden;
+  }
+  .template-empty { color: var(--muted); font-size: 0.78rem; padding: 10px 2px; line-height: 1.5; }
+
+  /* ---- Buffer tabs ---- */
+  .buffer-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; align-items: center; }
+  .buffer-tab {
+    cursor: pointer; border: 1px solid var(--border); background: var(--bg); color: var(--muted);
+    border-radius: 7px 7px 0 0; padding: 6px 8px 6px 12px; font-size: 0.78rem; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 6px; border-bottom: 2px solid transparent;
+  }
+  .buffer-tab:hover { color: var(--text); }
+  .buffer-tab.active { background: var(--surface); color: var(--text); border-bottom-color: var(--accent); }
+  .buffer-tab-close {
+    display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px;
+    border-radius: 4px; font-size: 0.7rem; color: var(--muted);
+  }
+  .buffer-tab-close:hover { background: var(--border); color: var(--text); }
+  .buffer-tab-add {
+    cursor: pointer; border: 1px dashed var(--border); background: none; color: var(--muted);
+    border-radius: 7px; width: 26px; height: 26px; font-size: 0.9rem; font-weight: 700; line-height: 1;
+  }
+  .buffer-tab-add:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ---- Auto-format checkbox ---- */
+  .check-inline { display: inline-flex; align-items: center; gap: 5px; font-size: 0.76rem; color: var(--muted); cursor: pointer; user-select: none; }
+  .check-inline input { accent-color: var(--accent); cursor: pointer; }
+
+  /* ---- Run button ---- */
+  button.action.run { background: var(--ok-text); }
+  button.action.run:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
+
+  /* ---- Connection panel ---- */
+  .conn-row { display: flex; gap: 8px; }
+  .conn-field { margin-bottom: 10px; flex: 1; }
+  .conn-field input[type="text"], .conn-field input[type="number"], .conn-field input[type="password"] {
+    width: 100%; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 7px; padding: 7px 10px; font-size: 0.82rem;
+  }
+  .conn-field input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .status-badge.connected { background: var(--ok-bg); color: var(--ok-text); border-color: var(--ok-border); }
+  .status-badge.disconnected { background: var(--bg); color: var(--muted); border-color: var(--border); }
+
+  /* ---- Schema-filter dropdown (in the main toolbar, next to Fetch Schema) ---- */
+  .schema-filter-wrap { position: relative; display: inline-block; }
+  .schema-filter-panel {
+    display: none; position: absolute; top: 100%; left: 0; margin-top: 4px; z-index: 25;
+    background: var(--surface); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; box-shadow: 0 10px 28px rgba(28,32,53,0.18);
+    padding: 8px; min-width: 200px; max-width: 280px;
+  }
+  .schema-filter-panel.show { display: block; }
+  .schema-filter-item {
+    display: flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 400;
+    text-transform: none; letter-spacing: normal; color: var(--text);
+    padding: 5px 6px; border-radius: 5px; cursor: pointer;
+  }
+  .schema-filter-item:hover { background: var(--bg); }
+  .schema-filter-item input { accent-color: var(--accent); cursor: pointer; }
+  .schema-filter-all { border-bottom: 1px solid var(--border); margin-bottom: 4px; padding-bottom: 8px; font-weight: 600; }
+  .schema-filter-list { max-height: 220px; overflow-y: auto; }
+  .schema-filter-list .schema-filter-item.disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+  .schema-filter-empty { font-size: 0.78rem; color: var(--muted); padding: 6px; }
+
+  /* ---- Results / confirm dialogs ---- */
+  dialog#resultsDialog, dialog#confirmDialog {
+    border: 1px solid var(--border); border-radius: 10px; padding: 0;
+    background: var(--surface); color: var(--text);
+  }
+  dialog::backdrop { background: rgba(15,17,30,0.45); }
+  /* width/height apply regardless of open state (harmless), but `display`
+     must stay scoped to [open] — an unscoped `display: flex` here has
+     higher specificity than the browser's own `dialog:not([open]) {
+     display: none }` (an ID selector beats a type+pseudo-class one), which
+     force-showed this dialog on every page load instead of only when
+     showModal() is called. Real bug, caught by the owner seeing it. */
+  dialog#resultsDialog { width: 90vw; max-width: 1100px; height: 70vh; }
+  dialog#resultsDialog[open] { display: flex; flex-direction: column; }
+  .dialog-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--border); gap: 12px; flex-wrap: wrap; }
+  .dialog-header h2 { font-size: 1rem; font-weight: 700; }
+  .dialog-meta { padding: 8px 18px; font-size: 0.78rem; color: var(--muted); border-bottom: 1px solid var(--border); }
+  .dialog-body { padding: 0; overflow: auto; flex: 1; }
+  table.results-table { border-collapse: collapse; width: 100%; font-size: 0.8rem; }
+  table.results-table th, table.results-table td {
+    border: 1px solid var(--border); padding: 6px 10px; text-align: left;
+    max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  table.results-table thead th { position: sticky; top: 0; background: var(--bg); z-index: 1; }
+  .cell-null { font-style: italic; color: var(--muted); }
+  .results-definition {
+    font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
+    font-size: 0.82rem; line-height: 1.55; white-space: pre-wrap; word-break: break-word;
+    padding: 16px 18px; margin: 0; color: var(--text);
+  }
+
+  dialog#confirmDialog { width: 440px; max-width: 90vw; padding: 20px; }
+  dialog#confirmDialog h2 { font-size: 1rem; font-weight: 700; margin-bottom: 8px; }
+  dialog#confirmDialog pre {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 7px;
+    padding: 8px 10px; font-size: 0.76rem; margin: 10px 0; white-space: pre-wrap;
+    max-height: 8em; overflow: auto; font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
+  }
+
+  /* ---- Show-command help dialog ---- */
+  dialog#helpDialog {
+    border: 1px solid var(--border); border-radius: 10px; padding: 0;
+    background: var(--surface); color: var(--text);
+    width: 90vw; max-width: 900px; height: 75vh;
+  }
+  /* display kept scoped to [open] — see the resultsDialog comment above
+     for why an unscoped display rule here would force this dialog to
+     show permanently instead of only via showModal(). */
+  dialog#helpDialog[open] { display: flex; flex-direction: column; }
+  .help-cat { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+    color: var(--accent); padding: 12px 18px 4px; }
+  .help-cmd { display: flex; align-items: baseline; gap: 10px; padding: 6px 18px; cursor: pointer; }
+  .help-cmd:hover { background: var(--bg); }
+  .help-cmd code { font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace; font-size: 0.78rem;
+    color: var(--accent); white-space: nowrap; flex: none; }
+  .help-cmd .help-desc { font-size: 0.76rem; color: var(--muted); flex: 1; }
+  .help-cmd .help-action-tag {
+    font-size: 0.68rem; font-weight: 600; white-space: nowrap; flex: none; margin-left: auto;
+    color: var(--muted); opacity: 0.75;
+  }
+
+</style>
+</head>
+<body>
+
+<header>
+  <h1>SQL <span>Studio</span></h1>
+</header>
+
+<div class="layout">
+
+  <!-- ================= LEFT COLUMN: editor ================= -->
+  <div class="col-left">
+    <div class="card">
+      <div class="buffer-tabs" id="bufferTabs"></div>
+      <div class="btn-row">
+        <button class="action" id="btnFormat" title="Ctrl+Enter">✨ Format</button>
+        <button class="action run" id="btnRun" title="Connect to a database first" disabled>▶ Run</button>
+        <div class="schema-filter-wrap">
+          <button type="button" class="action secondary small" id="btnSchemaFilter" disabled title="Connect to a database first">Schemas: public ▾</button>
+          <div class="schema-filter-panel" id="schemaFilterPanel">
+            <label class="schema-filter-item schema-filter-all">
+              <input type="checkbox" id="chkAllSchemas" /> All schemas
+            </label>
+            <div class="schema-filter-list" id="schemaFilterList"></div>
+          </div>
+        </div>
+        <button class="action secondary small" id="btnFetchSchema" disabled title="Connect to a database first">⚡ Fetch Schema</button>
+        <button class="action secondary small" id="btnShowHelp" title="Show command reference">?</button>
+        <button class="action secondary small" id="btnCopy">📋 Copy</button>
+        <button class="action secondary small" id="btnClear">Clear</button>
+        <label class="check-inline">
+          <input type="checkbox" id="chkAutoFormat" /> Auto-format on paste
+        </label>
+        <span class="copied-flash" id="copiedFlash">Copied!</span>
+        <span class="stats" id="stats">0 lines · 0 chars</span>
+      </div>
+      <div class="editor-wrap" id="editor"></div>
+      <div class="err-box" id="formatErr"></div>
+    </div>
+  </div>
+
+  <!-- ================= RIGHT COLUMN: connection / templates / schema ================= -->
+  <div class="col-right">
+    <details class="card" id="detConnection">
+      <summary><h2>Connection <span class="count-badge status-badge disconnected" id="connectionStatusBadge">● Disconnected</span></h2><span class="chev">▶</span></summary>
+      <div class="body">
+        <div id="connectionForm">
+          <p class="hint">
+            Connects through this tool's own backend to a real Postgres
+            database (a pool of up to 3 connections). Host/port/database/
+            username are remembered between visits — the password never is;
+            re-enter it each time you connect.
+          </p>
+          <div class="conn-row">
+            <div class="conn-field" style="flex: 2;">
+              <label>Host</label>
+              <input type="text" id="connHost" placeholder="localhost" />
+            </div>
+            <div class="conn-field" style="flex: 1;">
+              <label>Port</label>
+              <input type="number" id="connPort" value="5432" />
+            </div>
+          </div>
+          <div class="conn-field">
+            <label>Database</label>
+            <input type="text" id="connDatabase" />
+          </div>
+          <div class="conn-field">
+            <label>Username</label>
+            <input type="text" id="connUsername" />
+          </div>
+          <div class="conn-field">
+            <label>Password</label>
+            <input type="password" id="connPassword" />
+          </div>
+          <div class="btn-row" style="margin-top: 0;">
+            <button class="action" id="btnConnect">Connect</button>
+          </div>
+          <div class="err-box" id="connectErr"></div>
+        </div>
+        <div id="connectionStatusView" style="display: none;">
+          <p class="hint" id="connectionStatusText"></p>
+          <div class="btn-row" style="margin-top: 0;">
+            <button class="action secondary small" id="btnDisconnect">Disconnect</button>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <details class="card" id="detTemplates" open>
+      <summary><h2>Templates <span class="count-badge" id="templateResultCount">0</span></h2><span class="chev">▶</span></summary>
+      <div class="body">
+        <p class="hint">
+          Suggestions update as you type in the editor — matching the
+          current line, last word weighted highest. Search below to browse
+          the full library instead.
+        </p>
+        <input type="search" id="templateSearch" placeholder="Search all 125 templates…" />
+        <div class="template-list" id="templateList"></div>
+      </div>
+    </details>
+
+    <details class="card" id="detSchema" open>
+      <summary><h2>Schema <span class="count-badge" id="schemaCount">0 tables</span></h2><span class="chev">▶</span></summary>
+      <div class="body">
+        <p class="hint">
+          Don't have a connection? Copy the query below, run it in pgAdmin
+          (or psql) against your database instead, then paste its one-cell
+          JSON result into the box below and click Apply.
+        </p>
+        <div class="btn-row" style="margin-top:0;">
+          <button type="button" class="action secondary small" id="btnCopySchemaQuery">📋 Copy schema-fetch query</button>
+          <span class="copied-flash" id="schemaQueryCopiedFlash">Copied!</span>
+        </div>
+        <textarea id="schemaInput" placeholder='{&#10;  "users": { "id": "integer", "email": "text" }&#10;}'></textarea>
+        <div class="btn-row" style="margin-top:10px;">
+          <button class="action secondary small" id="btnApplySchema">Apply schema</button>
+          <button type="button" class="link-btn" id="btnLoadExample">Load example</button>
+        </div>
+        <div class="err-box" id="schemaErr"></div>
+      </div>
+    </details>
+  </div>
+
+</div>
+
+<dialog id="resultsDialog">
+  <div class="dialog-header">
+    <h2 id="resultsTitle">Results</h2>
+    <div class="btn-row" style="margin: 0;">
+      <button class="action secondary small" id="btnExportCsv" disabled>⬇ CSV</button>
+      <button class="action secondary small" id="btnExportJson" disabled>⬇ JSON</button>
+      <button class="action secondary small" id="btnCloseResults">✕ Close</button>
+    </div>
+  </div>
+  <div class="dialog-meta" id="resultsMeta"></div>
+  <div class="dialog-body" id="resultsBody"></div>
+</dialog>
+
+<dialog id="confirmDialog">
+  <h2 id="confirmTitle">Confirm</h2>
+  <p class="hint" id="confirmMessage" style="margin-bottom: 0;"></p>
+  <pre id="confirmPreview"></pre>
+  <div class="btn-row" style="margin-bottom: 0;">
+    <button class="action secondary" id="btnConfirmCancel">Cancel</button>
+    <button class="action" id="btnConfirmRun" style="background: var(--err-text);">Run Anyway</button>
+  </div>
+</dialog>
+
+<dialog id="helpDialog">
+  <div class="dialog-header">
+    <h2>Show command reference</h2>
+    <div class="btn-row" style="margin: 0;">
+      <button class="action secondary small" id="btnCloseHelp">✕ Close</button>
+    </div>
+  </div>
+  <div class="dialog-meta">Click any command to insert it at the cursor. Connect to a database, then press Run.</div>
+  <div class="dialog-body" id="helpBody"></div>
+</dialog>
+
+<script type="module">
+// Loaded from esm.sh, not jsDelivr's `+esm`: esm.sh resolves each package's
+// *internal* dependencies (e.g. codemirror's own `@codemirror/state@^6.0.0`)
+// through the same version-range shim URL every importer uses, so they all
+// converge on one shared module instance. jsDelivr's `+esm` instead bakes in
+// a fully-resolved exact version per package independently — pinning our own
+// @codemirror/state import there landed on a *different* patch version than
+// the one bundled inside codemirror@6.0.2, which is exactly the setup that
+// throws CodeMirror's "Unrecognized extension value" duplicate-instance
+// error. Importing `@codemirror/state@^6.0.0` here (matching codemirror's own
+// internal range, verified via its published bundle) is what makes this
+// resolve to the identical shared file — see sql-studio/CLAUDE.md.
+import { EditorView, basicSetup } from "https://esm.sh/codemirror@6.0.2?target=es2022";
+import { EditorState, Compartment } from "https://esm.sh/@codemirror/state@^6.0.0?target=es2022";
+import { keymap } from "https://esm.sh/@codemirror/view@^6.0.0?target=es2022";
+import { sql, PostgreSQL } from "https://esm.sh/@codemirror/lang-sql@6.10.0?target=es2022";
+import { search } from "https://esm.sh/@codemirror/search@6.7.2?target=es2022";
+import { snippet } from "https://esm.sh/@codemirror/autocomplete@^6.0.0?target=es2022";
+import { format as sqlFormat } from "https://esm.sh/sql-formatter@15.9.0?target=es2022";
+
+const $ = (id) => document.getElementById(id);
+
+const QUERY_KEY = "sql_studio_query"; // legacy single-buffer key — read only, for migration into BUFFERS_KEY below
+const SCHEMA_KEY = "sql_studio_schema";
+const BUFFERS_KEY = "sql_studio_buffers";
+const ACTIVE_BUFFER_KEY = "sql_studio_active_buffer";
+const AUTOFORMAT_KEY = "sql_studio_autoformat_on_paste";
+
+const EXAMPLE_SCHEMA = {
+  users: { id: "integer", email: "text", created_at: "timestamp" },
+  orders: { id: "integer", user_id: "integer", total: "numeric", status: "text" },
+};
+
+// Run this in pgAdmin/psql against the real database to get a one-cell
+// JSON result shaped exactly like what the schema box above expects —
+// paste that cell's text in and click Apply. Uses json_object_agg, not
+// jsonb_object_agg: jsonb canonicalizes/reorders object keys internally,
+// which silently discards the "ORDER BY a.attnum" below (verified against
+// a real Postgres — jsonb_object_agg produced columns out of table-
+// definition order despite the ORDER BY; json_object_agg preserves it).
+//
+// `schemas` is either "all" (every non-system schema — same filter as the
+// SHOW_COMMANDS SYS_SCHEMA_FILTER below) or an array of specific schema
+// names to restrict to. The schema box's format is flat {"table_name":
+// {...}} with no schema qualifier (matches @codemirror/lang-sql's
+// SQLNamespace shape, and the example/manually-pasted schema format users
+// already know) — fine for one schema, but selecting more than one schema
+// makes same-named tables across schemas a real possibility (verified
+// against a real Postgres with both `public.orders` and `analytics.orders`
+// present). Handled with a window-function pass: a table name gets
+// qualified as "schema.table" ONLY if it's not unique among the selected
+// schemas; everything else stays flat and backward-compatible with a
+// single-schema fetch.
+function buildSchemaFetchQuery(schemas) {
+  const filter = (!schemas || schemas === "all" || schemas.length === 0)
+    ? SYS_SCHEMA_FILTER
+    : `n.nspname IN (${schemas.map(sqlLiteral).join(", ")})`;
+  return `WITH per_table AS (
+  SELECT n.nspname AS schema_name, c.relname AS table_name,
+    json_object_agg(a.attname, format_type(a.atttypid, a.atttypmod) ORDER BY a.attnum) AS columns
+  FROM pg_attribute a
+  JOIN pg_class c ON c.oid = a.attrelid
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE ${filter}
+    AND c.relkind IN ('r', 'p') AND a.attnum > 0 AND NOT a.attisdropped
+  GROUP BY n.nspname, c.relname
+),
+disambiguated AS (
+  SELECT CASE WHEN count(*) OVER (PARTITION BY table_name) > 1
+              THEN schema_name || '.' || table_name
+              ELSE table_name END AS display_name,
+         columns
+  FROM per_table
+)
+SELECT json_object_agg(display_name, columns) FROM disambiguated`;
+}
+
+// ---------------------------------------------------------------------
+// Schema JSON -> CodeMirror SQL namespace
+// ---------------------------------------------------------------------
+function buildSchemaNamespace(schemaObj) {
+  const ns = {};
+  for (const [table, columns] of Object.entries(schemaObj || {})) {
+    ns[table] = Object.entries(columns || {}).map(([col, type]) => ({
+      label: col,
+      type: "property",
+      detail: String(type),
+    }));
+  }
+  return ns;
+}
+
+const sqlLangCompartment = new Compartment();
+
+function makeSqlExtension(schemaObj) {
+  return sql({ dialect: PostgreSQL, schema: buildSchemaNamespace(schemaObj), upperCaseKeywords: true });
+}
+
+// ---------------------------------------------------------------------
+// localStorage helpers (best-effort — private browsing / blocked storage
+// just means state doesn't persist, the tool still works)
+// ---------------------------------------------------------------------
+function loadStored(key, fallback) {
+  try {
+    const v = localStorage.getItem(key);
+    return v === null ? fallback : v;
+  } catch (e) { return fallback; }
+}
+function saveStored(key, value) {
+  try { localStorage.setItem(key, value); } catch (e) { /* ignore */ }
+}
+
+// ---------------------------------------------------------------------
+// Multi-buffer persistence — several named query buffers (tabs), each its
+// own saved text, instead of one flat "the query." Legacy-code work means
+// juggling several procedures at once; this replaces the old single
+// `sql_studio_query` key with an array under `sql_studio_buffers`.
+// ---------------------------------------------------------------------
+function newBufferId() {
+  return "buf" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+function loadBuffers() {
+  try {
+    const raw = localStorage.getItem(BUFFERS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length) return parsed;
+    }
+  } catch (e) { /* fall through to migration/fresh-start below */ }
+  // First run since this feature shipped: migrate whatever was in the old
+  // single-buffer key (if anything) into buffer #1, rather than losing it.
+  const legacyQuery = loadStored(QUERY_KEY, "");
+  return [{ id: newBufferId(), name: "Query 1", query: legacyQuery }];
+}
+
+function saveBuffers() {
+  saveStored(BUFFERS_KEY, JSON.stringify(buffers));
+}
+
+function currentBuffer() {
+  return buffers.find((b) => b.id === activeBufferId) || buffers[0];
+}
+
+const buffers = loadBuffers();
+let activeBufferId = loadStored(ACTIVE_BUFFER_KEY, buffers[0].id);
+if (!buffers.find((b) => b.id === activeBufferId)) activeBufferId = buffers[0].id;
+
+// ---------------------------------------------------------------------
+// Editor setup
+// ---------------------------------------------------------------------
+function updateStats(view) {
+  const doc = view.state.doc;
+  $("stats").textContent = doc.lines + " lines · " + doc.length + " chars";
+}
+
+const initialSchemaText = loadStored(SCHEMA_KEY, "");
+let currentSchemaObj = {};
+if (initialSchemaText.trim()) {
+  try { currentSchemaObj = JSON.parse(initialSchemaText); } catch (e) { currentSchemaObj = {}; }
+}
+
+const view = new EditorView({
+  state: EditorState.create({
+    doc: currentBuffer().query || "",
+    extensions: [
+      basicSetup,
+      sqlLangCompartment.of(makeSqlExtension(currentSchemaObj)),
+      // basicSetup already binds Ctrl+F/Ctrl+H etc. (searchKeymap) to the
+      // search-panel commands below — this just moves *where* that panel
+      // renders (top of the editor instead of the default bottom) and its
+      // look is overridden in CSS (#editor .cm-panel.cm-search) to float
+      // top-right like VS Code's find widget, rather than a full-width bar.
+      search({ top: true }),
+      keymap.of([
+        { key: "Mod-Enter", run: () => { formatQuery(); return true; } },
+        { key: "Mod-Shift-Enter", run: () => { runQuery(); return true; } },
+      ]),
+      EditorView.domEventHandlers({
+        paste: () => {
+          // The pasted text isn't in the document yet at paste-event time
+          // (CodeMirror inserts it in response to this same event) — defer
+          // one tick so formatQuery() sees the doc *after* the paste lands.
+          if ($("chkAutoFormat").checked) setTimeout(() => formatQuery(), 0);
+          return false; // don't suppress the normal paste
+        },
+      }),
+      EditorView.updateListener.of((update) => {
+        if (update.docChanged) {
+          currentBuffer().query = update.state.doc.toString();
+          saveBuffers();
+          updateStats(update.view);
+        }
+        // Keep the Templates sidebar's live suggestions in sync with
+        // wherever the cursor actually is — not just when text changes,
+        // since clicking to a different line should re-target it too.
+        if (update.docChanged || update.selectionSet) {
+          renderTemplateList();
+        }
+      }),
+    ],
+  }),
+  parent: $("editor"),
+});
+updateStats(view);
+
+// ---------------------------------------------------------------------
+// Buffer tabs UI
+// ---------------------------------------------------------------------
+function renderBufferTabs() {
+  const container = $("bufferTabs");
+  container.innerHTML = "";
+  buffers.forEach((b) => {
+    const tab = document.createElement("button");
+    tab.type = "button";
+    tab.className = "buffer-tab" + (b.id === activeBufferId ? " active" : "");
+    tab.title = "Double-click to rename";
+    const nameSpan = document.createElement("span");
+    nameSpan.textContent = b.name;
+    tab.appendChild(nameSpan);
+    if (buffers.length > 1) {
+      const close = document.createElement("span");
+      close.className = "buffer-tab-close";
+      close.textContent = "✕";
+      close.title = "Close buffer";
+      close.addEventListener("click", (e) => { e.stopPropagation(); closeBuffer(b.id); });
+      tab.appendChild(close);
+    }
+    tab.addEventListener("click", () => switchBuffer(b.id));
+    tab.addEventListener("dblclick", () => renameBuffer(b.id));
+    container.appendChild(tab);
+  });
+  const addBtn = document.createElement("button");
+  addBtn.type = "button";
+  addBtn.className = "buffer-tab-add";
+  addBtn.title = "New buffer";
+  addBtn.textContent = "+";
+  addBtn.addEventListener("click", addBuffer);
+  container.appendChild(addBtn);
+}
+
+function loadBufferIntoEditor(buf) {
+  view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: buf.query || "" } });
+  updateStats(view);
+  showFormatError(null);
+}
+
+function switchBuffer(id) {
+  if (id === activeBufferId) return;
+  currentBuffer().query = view.state.doc.toString();
+  saveBuffers();
+  activeBufferId = id;
+  saveStored(ACTIVE_BUFFER_KEY, id);
+  loadBufferIntoEditor(currentBuffer());
+  renderBufferTabs();
+  view.focus();
+}
+
+function addBuffer() {
+  currentBuffer().query = view.state.doc.toString();
+  const name = prompt("Name for the new buffer:", "Query " + (buffers.length + 1)) || ("Query " + (buffers.length + 1));
+  const buf = { id: newBufferId(), name: name.trim() || "Query " + (buffers.length + 1), query: "" };
+  buffers.push(buf);
+  activeBufferId = buf.id;
+  saveBuffers();
+  saveStored(ACTIVE_BUFFER_KEY, activeBufferId);
+  loadBufferIntoEditor(buf);
+  renderBufferTabs();
+  view.focus();
+}
+
+function closeBuffer(id) {
+  if (buffers.length <= 1) return; // always keep at least one buffer open
+  const idx = buffers.findIndex((b) => b.id === id);
+  if (idx === -1) return;
+  const wasActive = id === activeBufferId;
+  buffers.splice(idx, 1);
+  saveBuffers();
+  if (wasActive) {
+    activeBufferId = buffers[Math.max(0, idx - 1)].id;
+    saveStored(ACTIVE_BUFFER_KEY, activeBufferId);
+    loadBufferIntoEditor(currentBuffer());
+  }
+  renderBufferTabs();
+}
+
+function renameBuffer(id) {
+  const buf = buffers.find((b) => b.id === id);
+  if (!buf) return;
+  const name = prompt("Rename buffer:", buf.name);
+  if (name && name.trim()) {
+    buf.name = name.trim();
+    saveBuffers();
+    renderBufferTabs();
+  }
+}
+
+renderBufferTabs();
+
+// ---------------------------------------------------------------------
+// PL/pgSQL body formatter
+//
+// sql-formatter treats a whole $$...$$ / $tag$...$tag$ block as one opaque
+// string token — by design, since it's a generic SQL statement formatter,
+// not a PL/pgSQL parser, so it never reformats a stored procedure/function
+// body. That leaves exactly the case this tool exists for (messy legacy
+// procedures) completely untouched. The functions below post-process the
+// dollar-quoted body sql-formatter left alone: a small line-oriented
+// PL/pgSQL pretty-printer that tracks DECLARE/BEGIN/END, IF/ELSIF/ELSE/END
+// IF, LOOP/END LOOP (incl. FOR/WHILE headers), CASE/WHEN/END CASE, and
+// EXCEPTION/WHEN nesting via a block-frame stack, re-indenting each line
+// and running sql-formatter again on any embedded DML statement
+// (SELECT/INSERT/UPDATE/DELETE/WITH) it finds inside. See
+// sql-studio/CLAUDE.md for the verification trail and known limitations
+// (comparison-operator spacing inside conditions isn't touched; a `--`
+// comment immediately trailing a statement moves to its own line rather
+// than staying inline; a bare `FOR`/`CASE` inside plain SQL — e.g. `SELECT
+// ... FOR UPDATE` or an inline `CASE WHEN` expression — can be
+// mis-detected as PL/pgSQL control flow).
+
+function tokenizePlpgsqlBody(text) {
+  const segments = [];
+  let i = 0;
+  let buf = "";
+  const flushCode = () => { if (buf) { segments.push({ type: "code", text: buf }); buf = ""; } };
+  while (i < text.length) {
+    const two = text.slice(i, i + 2);
+    if (text[i] === "'") {
+      flushCode();
+      let j = i + 1;
+      let str = "'";
+      while (j < text.length) {
+        if (text[j] === "'" && text[j + 1] === "'") { str += "''"; j += 2; continue; }
+        if (text[j] === "'") { str += "'"; j += 1; break; }
+        str += text[j]; j += 1;
+      }
+      segments.push({ type: "string", text: str });
+      i = j;
+      continue;
+    }
+    if (two === "--") {
+      flushCode();
+      let j = i;
+      while (j < text.length && text[j] !== "\n") j += 1;
+      segments.push({ type: "linecomment", text: text.slice(i, j) });
+      i = j;
+      continue;
+    }
+    if (two === "/*") {
+      flushCode();
+      let j = text.indexOf("*/", i + 2);
+      j = j === -1 ? text.length : j + 2;
+      segments.push({ type: "blockcomment", text: text.slice(i, j) });
+      i = j;
+      continue;
+    }
+    if (text[i] === "$") {
+      const m = /^\$([A-Za-z_][A-Za-z0-9_]*)?\$/.exec(text.slice(i));
+      if (m) {
+        const tag = m[0];
+        const end = text.indexOf(tag, i + tag.length);
+        if (end !== -1) {
+          flushCode();
+          segments.push({ type: "string", text: text.slice(i, end + tag.length) });
+          i = end + tag.length;
+          continue;
+        }
+      }
+    }
+    buf += text[i];
+    i += 1;
+  }
+  flushCode();
+  return segments;
+}
+
+function insertStructuralBreaks(text) {
+  let t = text.replace(/[ \t\r\n]+/g, " ");
+  t = t.replace(/;/g, ";\n");
+  t = t.replace(/\bEND\b/gi, "\nEND");
+  t = t.replace(/\bBEGIN\b/gi, "\nBEGIN\n");
+  t = t.replace(/\bDECLARE\b/gi, "\nDECLARE\n");
+  // Guarded: "RAISE EXCEPTION '...'" is a single statement, not the
+  // EXCEPTION block-marker of a BEGIN...EXCEPTION...END handler.
+  t = t.replace(/(?<!RAISE )\bEXCEPTION\b/gi, "\nEXCEPTION\n");
+  // ELSIF/ELSEIF is followed by a condition + THEN on the same line (THEN's
+  // own break-after rule below splits it) — only break before, not after.
+  t = t.replace(/\b(ELSIF|ELSEIF)\b/gi, "\n$1");
+  // Plain ELSE has no condition following it, so it needs both breaks. When
+  // it's "ELSE IF ..." (nested-if style), IF's own break-before rule below
+  // adds a second consecutive break — harmless, collapsed by the empty-line
+  // filter later.
+  t = t.replace(/\bELSE\b/gi, "\nELSE\n");
+  t = t.replace(/\bWHEN\b/gi, "\nWHEN");
+  t = t.replace(/(?<!END )\bIF\b/gi, "\nIF");
+  t = t.replace(/(?<!END )\bCASE\b/gi, "\nCASE");
+  t = t.replace(/\bFOR\b/gi, "\nFOR");
+  t = t.replace(/\bWHILE\b/gi, "\nWHILE");
+  t = t.replace(/\bTHEN\b/gi, "THEN\n");
+  t = t.replace(/(?<!END )\bLOOP\b/gi, "LOOP\n");
+  t = t.replace(/\b(RETURN|RAISE)\b/gi, "\n$1");
+  return t;
+}
+
+function topFrame(stack, type) {
+  for (let i = stack.length - 1; i >= 0; i--) if (stack[i].type === type) return stack[i];
+  return null;
+}
+function popFrame(stack, type) {
+  for (let i = stack.length - 1; i >= 0; i--) if (stack[i].type === type) return stack.splice(i, 1)[0];
+  return stack.pop() || null;
+}
+
+function maybeFormatStatement(line) {
+  if (!/^(SELECT|INSERT|UPDATE|DELETE|WITH)\b/i.test(line)) return line;
+  try {
+    return sqlFormat(line, { language: "postgresql", tabWidth: 2, keywordCase: "upper" });
+  } catch (e) {
+    return line; // not real SQL after all (or sql-formatter choked) — leave as-is rather than crash the whole format
+  }
+}
+
+// Renders one PL/pgSQL body's lines using a block-frame stack: each opener
+// (DECLARE/BEGIN/IF/LOOP/CASE) pushes its own indent level ("enterDepth");
+// its matching closer (END/END IF/END LOOP/END CASE) pops back to that
+// exact recorded depth rather than doing relative +/-1 arithmetic — that
+// distinction matters because a branch's body can nest arbitrarily deep
+// before its ELSE/ELSIF/END is reached, so only the recorded frame depth is
+// safe to dedent back to.
+function formatPlpgsqlBody(rawBody, baseIndent) {
+  const INDENT = "  ";
+  const segments = tokenizePlpgsqlBody(rawBody);
+
+  let flat = "";
+  for (const seg of segments) {
+    if (seg.type === "code") flat += insertStructuralBreaks(seg.text);
+    else { flat += seg.text; if (seg.type === "linecomment") flat += "\n"; }
+  }
+
+  const rawLines = flat.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+
+  const stack = [];
+  let depth = 0;
+  const outLines = [];
+
+  for (const line of rawLines) {
+    const upper = line.toUpperCase();
+    let renderDepth = depth;
+
+    if (/^END\b/.test(upper)) {
+      let type = "begin";
+      if (/^END\s+IF\b/.test(upper)) type = "if";
+      else if (/^END\s+LOOP\b/.test(upper)) type = "loop";
+      else if (/^END\s+CASE\b/.test(upper)) type = "case";
+      const frame = popFrame(stack, type);
+      depth = frame ? frame.enterDepth : Math.max(0, depth - 1);
+      renderDepth = depth;
+    } else if (/^DECLARE\b/.test(upper)) {
+      renderDepth = depth;
+      stack.push({ type: "declare", enterDepth: depth });
+      depth += 1;
+    } else if (/^BEGIN\b/.test(upper)) {
+      // A BEGIN right after a DECLARE section closes that section first, so
+      // BEGIN renders at DECLARE's own level, not one level deeper.
+      if (stack.length && stack[stack.length - 1].type === "declare") {
+        const frame = stack.pop();
+        depth = frame.enterDepth;
+      }
+      renderDepth = depth;
+      stack.push({ type: "begin", enterDepth: depth });
+      depth += 1;
+    } else if (/^EXCEPTION\b/.test(upper)) {
+      const frame = topFrame(stack, "begin");
+      renderDepth = frame ? frame.enterDepth : Math.max(0, depth - 1);
+      depth = renderDepth + 1;
+    } else if (/^(ELSIF|ELSEIF)\b/.test(upper)) {
+      const frame = topFrame(stack, "if");
+      renderDepth = frame ? frame.enterDepth : Math.max(0, depth - 1);
+      depth = renderDepth + 1;
+    } else if (/^ELSE\b/.test(upper)) {
+      const frame = topFrame(stack, "if");
+      renderDepth = frame ? frame.enterDepth : Math.max(0, depth - 1);
+      depth = renderDepth + 1;
+    } else if (/^WHEN\b/.test(upper)) {
+      const frame = topFrame(stack, "case") || topFrame(stack, "begin");
+      renderDepth = frame ? frame.enterDepth : Math.max(0, depth - 1);
+      depth = renderDepth + 1;
+    } else if (/^IF\b/.test(upper)) {
+      renderDepth = depth;
+      stack.push({ type: "if", enterDepth: depth });
+      depth += 1;
+    } else if (/^CASE\b/.test(upper)) {
+      renderDepth = depth;
+      stack.push({ type: "case", enterDepth: depth });
+      depth += 1;
+    } else if (/\bLOOP$/.test(upper.replace(/;$/, ""))) {
+      // Catches a bare LOOP opener and FOR/WHILE ... LOOP headers alike —
+      // LOOP never breaks onto its own line (see insertStructuralBreaks),
+      // so it's always the last word of whatever statement opened it.
+      renderDepth = depth;
+      stack.push({ type: "loop", enterDepth: depth });
+      depth += 1;
+    } else {
+      renderDepth = depth;
+    }
+
+    const indentStr = baseIndent + INDENT.repeat(Math.max(0, renderDepth));
+    const rendered = maybeFormatStatement(line);
+    for (const rl of rendered.split("\n")) outLines.push(indentStr + rl);
+  }
+
+  return outLines.join("\n");
+}
+
+// Finds each $$...$$ / $tag$...$tag$ pair sql-formatter left untouched in
+// its own output and splices in a pretty-printed body. Scanning the
+// ALREADY-formatted outer SQL (not the original input) means we don't have
+// to guess where sql-formatter placed the block — we just look for it.
+function reformatDollarQuotedBodies(formattedSql) {
+  const re = /\$([A-Za-z_][A-Za-z0-9_]*)?\$/g;
+  let result = "";
+  let lastIndex = 0;
+  let m;
+  const openStack = [];
+  while ((m = re.exec(formattedSql)) !== null) {
+    const tag = m[0];
+    if (openStack.length && openStack[openStack.length - 1].tag === tag) {
+      const open = openStack.pop();
+      const rawBody = formattedSql.slice(open.index + tag.length, m.index);
+      const lineStart = formattedSql.lastIndexOf("\n", open.index) + 1;
+      const baseIndent = formattedSql.slice(lineStart, open.index).match(/^\s*/)[0];
+      let prettyBody = rawBody;
+      // Skip pretty-printing if the body itself contains another
+      // dollar-quote tag (e.g. a literal $$ embedded via a differently-
+      // tagged outer quote) — too rare a case to be worth the splicing
+      // complexity of handling true nested dollar-quotes; left as raw text.
+      if (rawBody.trim().length > 0 && !/\$[A-Za-z_]*\$/.test(rawBody)) {
+        try {
+          prettyBody = formatPlpgsqlBody(rawBody, baseIndent);
+        } catch (e) {
+          prettyBody = rawBody; // best-effort — never let this crash the whole format
+        }
+      }
+      result += formattedSql.slice(lastIndex, open.index + tag.length);
+      result += "\n" + prettyBody + "\n" + baseIndent;
+      lastIndex = m.index;
+    } else {
+      openStack.push({ tag, index: m.index });
+    }
+  }
+  result += formattedSql.slice(lastIndex);
+  return result;
+}
+
+// ---------------------------------------------------------------------
+// Format
+// ---------------------------------------------------------------------
+function showFormatError(msg) {
+  const box = $("formatErr");
+  if (!msg) { box.classList.remove("show"); box.textContent = ""; return; }
+  box.textContent = "Couldn't format this query: " + msg;
+  box.classList.add("show");
+}
+
+function formatQuery() {
+  const current = view.state.doc.toString();
+  let formatted;
+  try {
+    formatted = sqlFormat(current, {
+      language: "postgresql",
+      tabWidth: 2,
+      keywordCase: "upper",
+      linesBetweenQueries: 2,
+    });
+    formatted = reformatDollarQuotedBodies(formatted);
+  } catch (err) {
+    showFormatError(err.message);
+    return;
+  }
+  showFormatError(null);
+  view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: formatted } });
+}
+
+$("btnFormat").addEventListener("click", formatQuery);
+
+$("btnCopy").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(view.state.doc.toString());
+    const flash = $("copiedFlash");
+    flash.classList.add("show");
+    setTimeout(() => flash.classList.remove("show"), 1400);
+  } catch (e) {
+    alert("Couldn't access the clipboard — select and copy the query manually.");
+  }
+});
+
+$("btnClear").addEventListener("click", () => {
+  view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: "" } });
+  showFormatError(null);
+});
+
+// ---------------------------------------------------------------------
+// Schema panel
+// ---------------------------------------------------------------------
+function updateSchemaCount(schemaObj) {
+  const n = Object.keys(schemaObj || {}).length;
+  $("schemaCount").textContent = n + (n === 1 ? " table" : " tables");
+}
+
+function showSchemaError(msg) {
+  const box = $("schemaErr");
+  if (!msg) { box.classList.remove("show"); box.textContent = ""; return; }
+  box.textContent = msg;
+  box.classList.add("show");
+}
+
+function applySchema(text) {
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (e) {
+    showSchemaError("Not valid JSON: " + e.message);
+    return;
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    showSchemaError('Expected an object like {"table_name": {"column_name": "data_type"}}.');
+    return;
+  }
+  showSchemaError(null);
+  currentSchemaObj = parsed;
+  view.dispatch({ effects: sqlLangCompartment.reconfigure(makeSqlExtension(currentSchemaObj)) });
+  updateSchemaCount(currentSchemaObj);
+  saveStored(SCHEMA_KEY, text);
+}
+
+$("schemaInput").value = initialSchemaText;
+updateSchemaCount(currentSchemaObj);
+
+$("btnApplySchema").addEventListener("click", () => applySchema($("schemaInput").value));
+
+$("btnLoadExample").addEventListener("click", () => {
+  const text = JSON.stringify(EXAMPLE_SCHEMA, null, 2);
+  $("schemaInput").value = text;
+  applySchema(text);
+});
+
+$("btnCopySchemaQuery").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(buildSchemaFetchQuery(getCurrentSchemaFilter()));
+    const flash = $("schemaQueryCopiedFlash");
+    flash.classList.add("show");
+    setTimeout(() => flash.classList.remove("show"), 1400);
+  } catch (e) {
+    alert("Couldn't access the clipboard — select and copy the query manually.");
+  }
+});
+
+// ---------------------------------------------------------------------
+// Show commands — psql-style introspection shortcuts ("show tables",
+// "show table orders definition", ...) recognized at Run time and
+// silently swapped for the real Postgres system-catalog SQL before
+// being sent — the editor still shows "show tables", only what's
+// actually executed differs. Every mapped query was verified against a
+// real Postgres (this tool's own dev database, with real tables, views,
+// functions, triggers, indexes, constraints, an enum type) before being
+// added here, not written from memory — see sql-studio/CLAUDE.md's
+// "Show commands" section for the full verification trail.
+//
+// Matching is a linear scan over SHOW_COMMANDS (first match wins), which
+// is why array ORDER matters: a literal multi-word command like "show
+// table sizes" is listed before the generic single-parameter "show table
+// <name>" pattern, or "sizes" would be swallowed as if it were a table
+// name. Every parameterized pattern is anchored with ^...$ specifically
+// so "show table X" (no trailing text) and "show table X definition"
+// (trailing " definition") never collide regardless of order — only the
+// literal-phrase-vs-generic-pattern case above needs explicit ordering.
+//
+// Object lookups filter out pg_catalog/information_schema/pg_toast%/
+// pg_temp% — "widely used, easy to see" means user objects, not the
+// database's own internals. A name match against more than one schema
+// (rare) picks one deterministically (ORDER BY schema name, LIMIT 1)
+// rather than erroring — same spirit as this tool's other introspection
+// helpers, not a promise of perfect schema-qualification support.
+// ---------------------------------------------------------------------
+function sqlLiteral(s) {
+  return "'" + String(s).replace(/'/g, "''") + "'";
+}
+
+const SYS_SCHEMA_FILTER =
+  "n.nspname NOT IN ('pg_catalog', 'information_schema') " +
+  "AND n.nspname NOT LIKE 'pg\\_toast%' AND n.nspname NOT LIKE 'pg\\_temp%'";
+
+const SHOW_COMMANDS = [
+  // ---- Literal-phrase commands (no parameter) — MUST come before any
+  // generic parameterized pattern they could be mistaken for (see
+  // "show table sizes" vs "show table <name>" above). ----
+  {
+    cat: "Show: Tables", name: "Show Tables", template: "show tables",
+    desc: "Every table's columns — schema_name, table_name, column_name, column_datatype.",
+    pattern: /^show\s+tables$/i,
+    buildSql: () => `SELECT n.nspname AS schema_name, c.relname AS table_name, a.attname AS column_name,
+  format_type(a.atttypid, a.atttypmod) AS column_datatype
+FROM pg_attribute a
+JOIN pg_class c ON c.oid = a.attrelid
+JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE c.relkind IN ('r', 'p') AND a.attnum > 0 AND NOT a.attisdropped AND ${SYS_SCHEMA_FILTER}
+ORDER BY n.nspname, c.relname, a.attnum`,
+  },
+  {
+    cat: "Show: Tables", name: "Show Table Sizes", template: "show table sizes",
+    desc: "Every table's estimated row count and on-disk size, biggest first.",
+    pattern: /^show\s+table\s+sizes$/i,
+    buildSql: () => `SELECT n.nspname AS schema_name, c.relname AS table_name,
+  c.reltuples::bigint AS row_estimate, pg_size_pretty(pg_total_relation_size(c.oid)) AS total_size
+FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE c.relkind = 'r' AND ${SYS_SCHEMA_FILTER}
+ORDER BY pg_total_relation_size(c.oid) DESC`,
+  },
+  {
+    cat: "Show: Schemas", name: "Show Schemas", template: "show schemas",
+    desc: "Every schema — owner and how many tables it has.",
+    pattern: /^show\s+schemas$/i,
+    buildSql: () => `SELECT n.nspname AS schema_name, pg_get_userbyid(n.nspowner) AS owner,
+  (SELECT count(*) FROM pg_class c WHERE c.relnamespace = n.oid AND c.relkind = 'r') AS table_count
+FROM pg_namespace n
+WHERE ${SYS_SCHEMA_FILTER}
+ORDER BY n.nspname`,
+  },
+  {
+    cat: "Show: Schemas", name: "Show Current Schema", template: "show current schema",
+    desc: "The schema new unqualified objects resolve to, and the full search_path.",
+    pattern: /^show\s+current\s+schema$/i,
+    buildSql: () => `SELECT current_schema() AS current_schema, current_setting('search_path') AS search_path`,
+  },
+  {
+    cat: "Show: Views", name: "Show Views", template: "show views",
+    desc: "Every view — schema, name, column count.",
+    pattern: /^show\s+views$/i,
+    buildSql: () => `SELECT n.nspname AS schema_name, c.relname AS view_name,
+  (SELECT count(*) FROM pg_attribute a WHERE a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped) AS column_count
+FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE c.relkind = 'v' AND ${SYS_SCHEMA_FILTER}
+ORDER BY n.nspname, c.relname`,
+  },
+  {
+    cat: "Show: Views", name: "Show Materialized Views", template: "show materialized views",
+    desc: "Every materialized view — is it populated, how big is it.",
+    pattern: /^show\s+materialized\s+views$/i,
+    buildSql: () => `SELECT n.nspname AS schema_name, c.relname AS view_name, c.relispopulated AS is_populated,
+  pg_size_pretty(pg_total_relation_size(c.oid)) AS size
+FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE c.relkind = 'm' AND ${SYS_SCHEMA_FILTER}
+ORDER BY n.nspname, c.relname`,
+  },
+  {
+    cat: "Show: Indexes & Constraints", name: "Show Indexes", template: "show indexes",
+    desc: "Every index in the database — table, index name, definition, unique?",
+    pattern: /^show\s+indexes$/i,
+    buildSql: () => `SELECT n.nspname AS schema_name, t.relname AS table_name, i.relname AS index_name,
+  pg_get_indexdef(ix.indexrelid) AS index_def, ix.indisunique AS is_unique
+FROM pg_index ix
+JOIN pg_class i ON i.oid = ix.indexrelid
+JOIN pg_class t ON t.oid = ix.indrelid
+JOIN pg_namespace n ON n.oid = t.relnamespace
+WHERE ${SYS_SCHEMA_FILTER}
+ORDER BY t.relname, i.relname`,
+  },
+  {
+    cat: "Show: Indexes & Constraints", name: "Show Foreign Keys", template: "show foreign keys",
+    desc: "Every foreign-key relationship in the database — table.column -> references_table.references_column.",
+    pattern: /^show\s+foreign\s+keys$/i,
+    buildSql: () => `SELECT n.nspname AS schema_name, t.relname AS table_name, a.attname AS column_name,
+  ft.relname AS references_table, fa.attname AS references_column
+FROM pg_constraint c
+JOIN pg_class t ON t.oid = c.conrelid
+JOIN pg_namespace n ON n.oid = t.relnamespace
+JOIN pg_class ft ON ft.oid = c.confrelid
+JOIN unnest(c.conkey) WITH ORDINALITY AS ck(attnum, ord) ON true
+JOIN unnest(c.confkey) WITH ORDINALITY AS fck(attnum, ord) ON fck.ord = ck.ord
+JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ck.attnum
+JOIN pg_attribute fa ON fa.attrelid = ft.oid AND fa.attnum = fck.attnum
+WHERE c.contype = 'f'
+ORDER BY t.relname`,
+  },
+  {
+    cat: "Show: Indexes & Constraints", name: "Show Primary Keys", template: "show primary keys",
+    desc: "Every table's primary key column(s).",
+    pattern: /^show\s+primary\s+keys$/i,
+    buildSql: () => `SELECT n.nspname AS schema_name, t.relname AS table_name,
+  string_agg(a.attname, ', ' ORDER BY a.attnum) AS column_names
+FROM pg_constraint c
+JOIN pg_class t ON t.oid = c.conrelid
+JOIN pg_namespace n ON n.oid = t.relnamespace
+JOIN unnest(c.conkey) AS colnum ON true
+JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = colnum
+WHERE c.contype = 'p' AND ${SYS_SCHEMA_FILTER}
+GROUP BY n.nspname, t.relname
+ORDER BY t.relname`,
+  },
+  {
+    cat: "Show: Functions & Procedures", name: "Show Functions", template: "show functions",
+    desc: "Every function — schema, name, return type, arguments (includes trigger functions).",
+    pattern: /^show\s+functions$/i,
+    buildSql: () => `SELECT n.nspname AS schema_name, p.proname AS function_name,
+  pg_get_function_result(p.oid) AS return_type, pg_get_function_arguments(p.oid) AS argument_types
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE p.prokind = 'f' AND ${SYS_SCHEMA_FILTER}
+ORDER BY n.nspname, p.proname`,
+  },
+  {
+    cat: "Show: Functions & Procedures", name: "Show Procedures", template: "show procedures",
+    desc: "Every stored procedure (CALL-able, not RETURNS-based) — schema, name, arguments.",
+    pattern: /^show\s+procedures$/i,
+    buildSql: () => `SELECT n.nspname AS schema_name, p.proname AS procedure_name, pg_get_function_arguments(p.oid) AS argument_types
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE p.prokind = 'p' AND ${SYS_SCHEMA_FILTER}
+ORDER BY n.nspname, p.proname`,
+  },
+  {
+    cat: "Show: Triggers", name: "Show Triggers", template: "show triggers",
+    desc: "Every trigger — table, name, timing (BEFORE/AFTER), event, function it calls.",
+    pattern: /^show\s+triggers$/i,
+    buildSql: () => `SELECT t.relname AS table_name, tg.tgname AS trigger_name,
+  CASE WHEN tg.tgtype & 2 > 0 THEN 'BEFORE' WHEN tg.tgtype & 64 > 0 THEN 'INSTEAD OF' ELSE 'AFTER' END AS timing,
+  CASE WHEN tg.tgtype & 4 > 0 THEN 'INSERT' WHEN tg.tgtype & 8 > 0 THEN 'DELETE' WHEN tg.tgtype & 16 > 0 THEN 'UPDATE' ELSE 'TRUNCATE' END AS event,
+  p.proname AS function_name
+FROM pg_trigger tg
+JOIN pg_class t ON t.oid = tg.tgrelid
+JOIN pg_proc p ON p.oid = tg.tgfoid
+JOIN pg_namespace n ON n.oid = t.relnamespace
+WHERE NOT tg.tgisinternal AND ${SYS_SCHEMA_FILTER}
+ORDER BY t.relname, tg.tgname`,
+  },
+  {
+    cat: "Show: Sequences & Types", name: "Show Sequences", template: "show sequences",
+    desc: "Every sequence — current value, increment, which table/column owns it.",
+    pattern: /^show\s+sequences$/i,
+    buildSql: () => `SELECT n.nspname AS schema_name, c.relname AS sequence_name,
+  pg_sequence_last_value(c.oid::regclass) AS current_value, s.seqincrement AS increment_by,
+  (SELECT rel.relname FROM pg_depend dep JOIN pg_class rel ON rel.oid = dep.refobjid
+     WHERE dep.objid = c.oid AND dep.deptype = 'a') AS owned_by_table
+FROM pg_sequence s
+JOIN pg_class c ON c.oid = s.seqrelid
+JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE ${SYS_SCHEMA_FILTER}
+ORDER BY n.nspname, c.relname`,
+  },
+  {
+    cat: "Show: Sequences & Types", name: "Show Types", template: "show types",
+    desc: "Every custom enum type and its allowed values.",
+    pattern: /^show\s+types$/i,
+    buildSql: () => `SELECT n.nspname AS schema_name, t.typname AS type_name, 'enum' AS kind,
+  string_agg(e.enumlabel, ', ' ORDER BY e.enumsortorder) AS values
+FROM pg_type t
+JOIN pg_namespace n ON n.oid = t.typnamespace
+JOIN pg_enum e ON e.enumtypid = t.oid
+GROUP BY n.nspname, t.typname
+ORDER BY n.nspname, t.typname`,
+  },
+  {
+    cat: "Show: Roles & Permissions", name: "Show Roles", template: "show roles",
+    desc: "Every non-system role — superuser?, can log in?, can create databases?",
+    pattern: /^show\s+roles$/i,
+    buildSql: () => `SELECT rolname AS role_name, rolsuper AS is_superuser, rolcanlogin AS can_login, rolcreatedb AS can_create_db
+FROM pg_roles
+WHERE rolname NOT LIKE 'pg\\_%'
+ORDER BY rolname`,
+  },
+  {
+    cat: "Show: Size & Diagnostics", name: "Show Database Size", template: "show database size",
+    desc: "Total on-disk size of the connected database.",
+    pattern: /^show\s+database\s+size$/i,
+    buildSql: () => `SELECT pg_size_pretty(pg_database_size(current_database())) AS database_size`,
+  },
+  {
+    cat: "Show: Size & Diagnostics", name: "Show Activity", template: "show activity",
+    desc: "Currently running queries on this database — pid, state, duration, query text.",
+    pattern: /^show\s+activity$/i,
+    buildSql: () => `SELECT pid, state, now() - query_start AS duration, query
+FROM pg_stat_activity
+WHERE datname = current_database() AND pid != pg_backend_pid()
+ORDER BY query_start`,
+  },
+  {
+    cat: "Show: Size & Diagnostics", name: "Show Locks", template: "show locks",
+    desc: "Current lock activity — what's held, what's waiting, on which table.",
+    pattern: /^show\s+locks$/i,
+    buildSql: () => `SELECT l.pid, l.mode, l.granted, c.relname AS table_name, a.query
+FROM pg_locks l
+LEFT JOIN pg_class c ON c.oid = l.relation
+LEFT JOIN pg_stat_activity a ON a.pid = l.pid
+WHERE l.pid != pg_backend_pid()
+ORDER BY l.pid`,
+  },
+  {
+    cat: "Show: Size & Diagnostics", name: "Show Version", template: "show version",
+    desc: "The connected server's Postgres version string.",
+    pattern: /^show\s+version$/i,
+    buildSql: () => `SELECT version() AS version`,
+  },
+  {
+    cat: "Show: Size & Diagnostics", name: "Show Extensions", template: "show extensions",
+    desc: "Every installed Postgres extension and its version.",
+    pattern: /^show\s+extensions$/i,
+    buildSql: () => `SELECT extname AS extension_name, extversion AS version FROM pg_extension ORDER BY extname`,
+  },
+
+  // ---- Parameterized commands (take one identifier). ----
+  {
+    cat: "Show: Tables", name: "Show Tables In Schema", template: "show tables in schema_name",
+    desc: "Same as Show Tables, filtered to one schema.",
+    pattern: /^show\s+tables\s+in\s+(\S+)$/i,
+    buildSql: (m) => `SELECT n.nspname AS schema_name, c.relname AS table_name, a.attname AS column_name,
+  format_type(a.atttypid, a.atttypmod) AS column_datatype
+FROM pg_attribute a
+JOIN pg_class c ON c.oid = a.attrelid
+JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE c.relkind IN ('r', 'p') AND a.attnum > 0 AND NOT a.attisdropped AND n.nspname = ${sqlLiteral(m[1])}
+ORDER BY c.relname, a.attnum`,
+  },
+  {
+    cat: "Show: Tables", name: "Show Table Definition", template: "show table table_name definition",
+    desc: "Reconstructed CREATE TABLE — columns, defaults, PK/FK/CHECK constraints, and any non-PK indexes.",
+    pattern: /^show\s+table\s+(\S+)\s+definition$/i,
+    buildSql: (m) => `WITH tbl AS (
+  SELECT c.oid, n.nspname, c.relname
+  FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE c.relname = ${sqlLiteral(m[1])} AND c.relkind IN ('r', 'p') AND ${SYS_SCHEMA_FILTER}
+  ORDER BY n.nspname LIMIT 1
+),
+cols AS (
+  SELECT '  ' || a.attname || ' ' || format_type(a.atttypid, a.atttypmod) ||
+    CASE WHEN a.attnotnull THEN ' NOT NULL' ELSE '' END ||
+    CASE WHEN d.adbin IS NOT NULL THEN ' DEFAULT ' || pg_get_expr(d.adbin, d.adrelid) ELSE '' END AS line,
+    a.attnum AS ord
+  FROM tbl
+  JOIN pg_attribute a ON a.attrelid = tbl.oid
+  LEFT JOIN pg_attrdef d ON d.adrelid = tbl.oid AND d.adnum = a.attnum
+  WHERE a.attnum > 0 AND NOT a.attisdropped
+),
+cons AS (
+  SELECT '  CONSTRAINT ' || con.conname || ' ' || pg_get_constraintdef(con.oid) AS line, 1000 AS ord
+  FROM pg_constraint con, tbl WHERE con.conrelid = tbl.oid
+),
+body AS (SELECT line, ord FROM cols UNION ALL SELECT line, ord FROM cons),
+table_sql AS (
+  SELECT (SELECT 'CREATE TABLE ' || nspname || '.' || relname || ' (' FROM tbl) || E'\\n' ||
+    string_agg(line, ',' || E'\\n' ORDER BY ord) || E'\\n);' AS stmt
+  FROM body
+),
+extra_indexes AS (
+  SELECT string_agg(pg_get_indexdef(ix.indexrelid) || ';', E'\\n') AS stmt
+  FROM pg_index ix, tbl
+  WHERE ix.indrelid = tbl.oid AND NOT ix.indisprimary
+    AND ix.indexrelid NOT IN (SELECT conindid FROM pg_constraint WHERE conrelid = tbl.oid AND conindid != 0)
+)
+SELECT table_sql.stmt || COALESCE(E'\\n\\n' || extra_indexes.stmt, '') AS table_definition
+FROM table_sql, extra_indexes`,
+  },
+  {
+    cat: "Show: Tables", name: "Show Table Columns", template: "show table table_name",
+    desc: "One table's columns — name, type, nullable?, default, position. (\"show columns <name>\" also works.)",
+    pattern: /^show\s+(?:table|columns)\s+(\S+)$/i,
+    buildSql: (m) => `SELECT a.attname AS column_name, format_type(a.atttypid, a.atttypmod) AS data_type,
+  NOT a.attnotnull AS is_nullable, pg_get_expr(d.adbin, d.adrelid) AS default_value, a.attnum AS ordinal_position
+FROM pg_attribute a
+JOIN pg_class c ON c.oid = a.attrelid
+JOIN pg_namespace n ON n.oid = c.relnamespace
+LEFT JOIN pg_attrdef d ON d.adrelid = c.oid AND d.adnum = a.attnum
+WHERE c.relname = ${sqlLiteral(m[1])} AND a.attnum > 0 AND NOT a.attisdropped AND ${SYS_SCHEMA_FILTER}
+ORDER BY a.attnum`,
+  },
+  {
+    cat: "Show: Views", name: "Show View Definition", template: "show view view_name definition",
+    desc: "A view's actual SELECT statement.",
+    pattern: /^show\s+view\s+(\S+)\s+definition$/i,
+    buildSql: (m) => `SELECT pg_get_viewdef(v.oid, true) AS view_definition
+FROM pg_class v JOIN pg_namespace n ON n.oid = v.relnamespace
+WHERE v.relname = ${sqlLiteral(m[1])} AND v.relkind = 'v' AND ${SYS_SCHEMA_FILTER}
+ORDER BY n.nspname LIMIT 1`,
+  },
+  {
+    cat: "Show: Views", name: "Show Materialized View Definition", template: "show materialized view view_name definition",
+    desc: "A materialized view's underlying SELECT statement.",
+    pattern: /^show\s+materialized\s+view\s+(\S+)\s+definition$/i,
+    buildSql: (m) => `SELECT pg_get_viewdef(v.oid, true) AS view_definition
+FROM pg_class v JOIN pg_namespace n ON n.oid = v.relnamespace
+WHERE v.relname = ${sqlLiteral(m[1])} AND v.relkind = 'm' AND ${SYS_SCHEMA_FILTER}
+ORDER BY n.nspname LIMIT 1`,
+  },
+  {
+    cat: "Show: Indexes & Constraints", name: "Show Indexes For Table", template: "show indexes table_name",
+    desc: "Same as Show Indexes, filtered to one table.",
+    pattern: /^show\s+indexes\s+(\S+)$/i,
+    buildSql: (m) => `SELECT i.relname AS index_name, pg_get_indexdef(ix.indexrelid) AS index_def, ix.indisunique AS is_unique
+FROM pg_index ix
+JOIN pg_class i ON i.oid = ix.indexrelid
+JOIN pg_class t ON t.oid = ix.indrelid
+WHERE t.relname = ${sqlLiteral(m[1])}
+ORDER BY i.relname`,
+  },
+  {
+    cat: "Show: Indexes & Constraints", name: "Show Constraints", template: "show constraints table_name",
+    desc: "One table's PK/FK/UNIQUE/CHECK constraints and their definitions.",
+    pattern: /^show\s+constraints\s+(\S+)$/i,
+    buildSql: (m) => `SELECT conname AS constraint_name,
+  CASE contype WHEN 'p' THEN 'PRIMARY KEY' WHEN 'f' THEN 'FOREIGN KEY' WHEN 'u' THEN 'UNIQUE' WHEN 'c' THEN 'CHECK' ELSE contype::text END AS constraint_type,
+  pg_get_constraintdef(oid) AS definition
+FROM pg_constraint
+WHERE conrelid = ${sqlLiteral(m[1])}::regclass
+ORDER BY contype`,
+  },
+  {
+    cat: "Show: Functions & Procedures", name: "Show Function Definition", template: "show function function_name definition",
+    desc: "A function's full CREATE OR REPLACE FUNCTION source.",
+    pattern: /^show\s+function\s+(\S+)\s+definition$/i,
+    buildSql: (m) => `SELECT pg_get_functiondef(p.oid) AS function_definition
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE p.proname = ${sqlLiteral(m[1])} AND p.prokind = 'f' AND ${SYS_SCHEMA_FILTER}
+ORDER BY n.nspname LIMIT 1`,
+  },
+  {
+    cat: "Show: Functions & Procedures", name: "Show Procedure Definition", template: "show procedure procedure_name definition",
+    desc: "A procedure's full CREATE OR REPLACE PROCEDURE source.",
+    pattern: /^show\s+procedure\s+(\S+)\s+definition$/i,
+    buildSql: (m) => `SELECT pg_get_functiondef(p.oid) AS procedure_definition
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE p.proname = ${sqlLiteral(m[1])} AND p.prokind = 'p' AND ${SYS_SCHEMA_FILTER}
+ORDER BY n.nspname LIMIT 1`,
+  },
+  {
+    cat: "Show: Triggers", name: "Show Triggers For Table", template: "show triggers table_name",
+    desc: "Same as Show Triggers, filtered to one table.",
+    pattern: /^show\s+triggers\s+(\S+)$/i,
+    buildSql: (m) => `SELECT tg.tgname AS trigger_name,
+  CASE WHEN tg.tgtype & 2 > 0 THEN 'BEFORE' WHEN tg.tgtype & 64 > 0 THEN 'INSTEAD OF' ELSE 'AFTER' END AS timing,
+  CASE WHEN tg.tgtype & 4 > 0 THEN 'INSERT' WHEN tg.tgtype & 8 > 0 THEN 'DELETE' WHEN tg.tgtype & 16 > 0 THEN 'UPDATE' ELSE 'TRUNCATE' END AS event,
+  p.proname AS function_name
+FROM pg_trigger tg
+JOIN pg_class t ON t.oid = tg.tgrelid
+JOIN pg_proc p ON p.oid = tg.tgfoid
+WHERE t.relname = ${sqlLiteral(m[1])} AND NOT tg.tgisinternal
+ORDER BY tg.tgname`,
+  },
+  {
+    cat: "Show: Triggers", name: "Show Trigger Definition", template: "show trigger trigger_name definition",
+    desc: "A trigger's full CREATE TRIGGER statement.",
+    pattern: /^show\s+trigger\s+(\S+)\s+definition$/i,
+    buildSql: (m) => `SELECT pg_get_triggerdef(tg.oid, true) AS trigger_definition
+FROM pg_trigger tg JOIN pg_class t ON t.oid = tg.tgrelid JOIN pg_namespace n ON n.oid = t.relnamespace
+WHERE tg.tgname = ${sqlLiteral(m[1])} AND NOT tg.tgisinternal AND ${SYS_SCHEMA_FILTER}
+ORDER BY n.nspname LIMIT 1`,
+  },
+  {
+    cat: "Show: Roles & Permissions", name: "Show Grants", template: "show grants table_name",
+    desc: "Who has what privileges (SELECT/INSERT/UPDATE/...) on one table.",
+    pattern: /^show\s+grants\s+(\S+)$/i,
+    buildSql: (m) => `SELECT grantee, privilege_type FROM information_schema.role_table_grants WHERE table_name = ${sqlLiteral(m[1])}`,
+  },
+];
+
+// The one entry point runQuery() calls. Returns { name, sql } on a match
+// (sql is the real query to actually run), or null for ordinary SQL that
+// should go through the normal pipeline untouched.
+function matchShowCommand(statementText) {
+  // Order matters: stripping a trailing ";" (plus whatever trails it)
+  // BEFORE trimming/collapsing is what handles "show tables ;" correctly
+  // — done the other way around, the space that used to sit before the
+  // ";" survives as a trailing space and silently breaks every pattern's
+  // end-of-string anchor. Caught by testing this against real messy
+  // input, not assumed.
+  const normalized = statementText.replace(/;\s*$/, "").trim().replace(/\s+/g, " ");
+  for (const cmd of SHOW_COMMANDS) {
+    const m = cmd.pattern.exec(normalized);
+    if (m) return { name: cmd.name, sql: cmd.buildSql(m) };
+  }
+  return null;
+}
+
+// The "?" cheatsheet — every SHOW_COMMANDS entry, grouped by category,
+// click-to-insert. Built once from the same registry Run matches against,
+// so this can never drift out of sync with what actually works.
+//
+// Groups explicitly by category (a Map, not "does this row's cat differ
+// from the previous row's") — SHOW_COMMANDS itself is NOT grouped by
+// category in array order: it's ordered for RUN-TIME MATCHING precedence
+// instead (literal-phrase commands like "show table sizes" listed before
+// the generic parameterized "show table <name>" pattern they'd otherwise
+// collide with — see matchShowCommand() above). Naively emitting a new
+// "Show: Tables" header every time cmd.cat changed from the previous row
+// split every category with both literal AND parameterized commands
+// (Tables, Views, Functions & Procedures, Triggers, ...) into two
+// separate, non-adjacent sections — a real reported bug, not
+// hypothetical. This groups fully by category first, so each one prints
+// as one contiguous block regardless of where its entries sit in
+// SHOW_COMMANDS — while leaving that array's own order untouched, since
+// changing it would break the matching precedence it exists for.
+(function buildHelpDialog() {
+  const body = $("helpBody");
+  const byCategory = new Map();
+  for (const cmd of SHOW_COMMANDS) {
+    if (!byCategory.has(cmd.cat)) byCategory.set(cmd.cat, []);
+    byCategory.get(cmd.cat).push(cmd);
+  }
+  for (const [cat, cmds] of byCategory) {
+    const catEl = document.createElement("div");
+    catEl.className = "help-cat";
+    catEl.textContent = cat;
+    body.appendChild(catEl);
+    for (const cmd of cmds) {
+      // Every parameterized command's pattern is written with exactly one
+      // `(\S+)` capture group (see SHOW_COMMANDS above) — a cheap, reliable
+      // way to tell "needs a name typed in" apart from "nothing to fill
+      // in, just run it" without a separate flag to keep in sync by hand.
+      const needsParam = cmd.pattern.source.includes("(\\S+)");
+      const row = document.createElement("div");
+      row.className = "help-cmd";
+      row.innerHTML =
+        '<code>' + escHtml(cmd.template) + '</code>' +
+        '<span class="help-desc">' + escHtml(cmd.desc) + '</span>' +
+        '<span class="help-action-tag">' + (needsParam ? "✎ fill in & run" : "▶ run now") + '</span>';
+      row.addEventListener("click", () => {
+        $("helpDialog").close();
+        // A no-parameter command runs immediately (once connected) — the
+        // whole point of this fix: "show materialized views" should show
+        // you the list right away, not paste text you then have to run
+        // yourself. Still falls back to inserting (so there's SOMETHING
+        // useful to do) when disconnected, since there's nothing to run
+        // against yet, and always falls back for parameterized commands,
+        // since a placeholder still needs a real name typed in first.
+        if (!needsParam && isConnected) {
+          sendQuery(cmd.buildSql(), false, cmd.name);
+        } else {
+          insertTemplate(cmd.template);
+        }
+      });
+      body.appendChild(row);
+    }
+  }
+})();
+
+$("btnShowHelp").addEventListener("click", () => $("helpDialog").showModal());
+$("btnCloseHelp").addEventListener("click", () => $("helpDialog").close());
+
+// ---------------------------------------------------------------------
+// Connection panel + Run — talks to this tool's own backend (server.py /
+// db_engine.py / query_guard.py), which is the only part of SQL Studio
+// that isn't 100% client-side. See sql-studio/CLAUDE.md for the full
+// design (why a single global connection, the 500-row LIMIT-wrap, why
+// export reads a cached result instead of re-running SQL).
+// ---------------------------------------------------------------------
+const CONNECTION_KEY = "sql_studio_connection";
+let isConnected = false;
+
+function loadConnectionFields() {
+  try {
+    const raw = localStorage.getItem(CONNECTION_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) { /* ignore */ }
+  return null;
+}
+function saveConnectionFields() {
+  try {
+    localStorage.setItem(CONNECTION_KEY, JSON.stringify({
+      host: $("connHost").value,
+      port: $("connPort").value,
+      database: $("connDatabase").value,
+      username: $("connUsername").value,
+    }));
+  } catch (e) { /* ignore */ }
+}
+(function prefillConnectionFields() {
+  const saved = loadConnectionFields();
+  if (!saved) return;
+  $("connHost").value = saved.host || "";
+  $("connPort").value = saved.port || 5432;
+  $("connDatabase").value = saved.database || "";
+  $("connUsername").value = saved.username || "";
+})();
+
+function showConnectError(msg) {
+  const box = $("connectErr");
+  if (!msg) { box.classList.remove("show"); box.textContent = ""; return; }
+  box.textContent = msg;
+  box.classList.add("show");
+}
+
+function updateConnectionGatedButtons() {
+  const runBtn = $("btnRun");
+  runBtn.disabled = !isConnected;
+  runBtn.title = isConnected
+    ? "Runs the selection if you have one, else the whole query — Ctrl+Shift+Enter"
+    : "Connect to a database first";
+  const fetchSchemaBtn = $("btnFetchSchema");
+  fetchSchemaBtn.disabled = !isConnected;
+  fetchSchemaBtn.title = isConnected
+    ? "Fetch schema from connected DB — re-run any time to refresh"
+    : "Connect to a database first";
+  const schemaFilterBtn = $("btnSchemaFilter");
+  schemaFilterBtn.disabled = !isConnected;
+  schemaFilterBtn.title = isConnected
+    ? "Choose which schema(s) Fetch Schema pulls tables from"
+    : "Connect to a database first";
+}
+
+// Collapsed by default (see the HTML — no `open` attribute), not shown
+// expanded on page load. The instant a connection succeeds, it collapses
+// to a compact status line so it doesn't permanently occupy sidebar
+// space — click it to re-expand. Deliberate UX (see sql-studio/CLAUDE.md).
+// `forceOpen` is only passed true from an explicit Disconnect click, so
+// the form is right there to reconnect — a silent status check (page
+// load) must NOT force the panel open on its own.
+function applyConnectionStatus(status, forceOpen) {
+  const wasConnected = isConnected;
+  isConnected = !!status.connected;
+  // A different database (or the same one reconnected) may have an
+  // entirely different set of schemas — never show a stale schema list
+  // or a stale selection under a new connection. Only reset on an actual
+  // transition, not on every redundant status poll while already in
+  // whatever state it's already in. resetSchemaFilterState() is defined
+  // later in this file (function declarations are hoisted, so it's
+  // already callable here regardless of source order).
+  if (isConnected !== wasConnected) resetSchemaFilterState();
+  const badge = $("connectionStatusBadge");
+  const details = $("detConnection");
+  if (isConnected) {
+    badge.textContent = "● Connected";
+    badge.className = "count-badge status-badge connected";
+    $("connectionStatusText").textContent =
+      `Connected — ${status.username}@${status.host}:${status.port}/${status.database}`;
+    $("connectionForm").style.display = "none";
+    $("connectionStatusView").style.display = "block";
+    details.open = false;
+  } else {
+    badge.textContent = "● Disconnected";
+    badge.className = "count-badge status-badge disconnected";
+    $("connectionForm").style.display = "block";
+    $("connectionStatusView").style.display = "none";
+    if (forceOpen) details.open = true;
+  }
+  updateConnectionGatedButtons();
+}
+
+$("btnConnect").addEventListener("click", async () => {
+  const body = {
+    host: $("connHost").value.trim(),
+    port: parseInt($("connPort").value, 10) || 5432,
+    database: $("connDatabase").value.trim(),
+    username: $("connUsername").value.trim(),
+    password: $("connPassword").value,
+  };
+  if (!body.host || !body.database || !body.username) {
+    showConnectError("Host, database, and username are required.");
+    return;
+  }
+  const btn = $("btnConnect");
+  btn.disabled = true;
+  btn.textContent = "Connecting…";
+  try {
+    const res = await fetch("connect", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      showConnectError(data.error || "Couldn't connect.");
+      return;
+    }
+    showConnectError(null);
+    $("connPassword").value = ""; // never persisted, never left sitting in the field either
+    saveConnectionFields();
+    applyConnectionStatus(data);
+  } catch (e) {
+    showConnectError("Network error: " + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Connect";
+  }
+});
+
+$("btnDisconnect").addEventListener("click", async () => {
+  try {
+    await fetch("disconnect", { method: "POST" });
+  } catch (e) { /* best-effort — clear the UI either way */ }
+  applyConnectionStatus({ connected: false }, true); // re-expand so the form is right there to reconnect
+});
+
+(async function loadInitialStatus() {
+  try {
+    const res = await fetch("status");
+    applyConnectionStatus(await res.json());
+  } catch (e) {
+    applyConnectionStatus({ connected: false });
+  }
+})();
+
+// ---- Run: client-side statement split + destructive check ----
+// Reuses tokenizePlpgsqlBody (defined above, in the formatter section) so
+// a ';' or a keyword inside a string/comment/dollar-quoted body is never
+// mistaken for a statement boundary or the leading keyword. This is a
+// UX-only fast path (instant confirm dialog, zero round-trip) — the real,
+// authoritative check is query_guard.py on the server, which never trusts
+// a client-supplied `confirmed: true` without re-deriving this itself.
+const DESTRUCTIVE_KEYWORDS = new Set(["DROP", "TRUNCATE", "DELETE", "ALTER"]);
+
+// A chunk that's just a trailing/leading comment with no real SQL in it
+// (e.g. the "-- trailing comment" left over after splitting "SELECT 1;
+// -- trailing comment" on its ';') isn't a second statement and shouldn't
+// count against the one-statement-per-Run limit. Mirrors
+// query_guard.py's _is_only_comments_or_whitespace() — keep both in sync.
+function isOnlyCommentsOrWhitespace(statement) {
+  for (const seg of tokenizePlpgsqlBody(statement)) {
+    if (seg.type === "code" && seg.text.trim()) return false;
+    if (seg.type === "string") return false;
+  }
+  return true;
+}
+
+function splitTopLevelStatements(text) {
+  const segments = tokenizePlpgsqlBody(text);
+  const statements = [];
+  let current = "";
+  for (const seg of segments) {
+    if (seg.type === "code") {
+      const parts = seg.text.split(";");
+      parts.forEach((part, idx) => {
+        current += part;
+        if (idx < parts.length - 1) { statements.push(current); current = ""; }
+      });
+    } else {
+      current += seg.text;
+    }
+  }
+  if (current) statements.push(current);
+  return statements
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0 && !isOnlyCommentsOrWhitespace(s));
+}
+
+function firstStatementKeyword(statement) {
+  for (const seg of tokenizePlpgsqlBody(statement)) {
+    if (seg.type === "code") {
+      const m = /[A-Za-z_][A-Za-z0-9_]*/.exec(seg.text);
+      if (m) return m[0].toUpperCase();
+    }
+  }
+  return "";
+}
+
+let pendingConfirmAction = null;
+function openConfirmDialog(kind, statementPreview, onConfirm) {
+  $("confirmTitle").textContent = "Confirm " + kind;
+  $("confirmMessage").textContent = `This is a ${kind} statement. Are you sure you want to run it?`;
+  $("confirmPreview").textContent = statementPreview.length > 500 ? statementPreview.slice(0, 500) + "…" : statementPreview;
+  pendingConfirmAction = onConfirm;
+  $("confirmDialog").showModal();
+}
+$("btnConfirmCancel").addEventListener("click", () => {
+  $("confirmDialog").close();
+  pendingConfirmAction = null;
+});
+$("btnConfirmRun").addEventListener("click", () => {
+  $("confirmDialog").close();
+  const action = pendingConfirmAction;
+  pendingConfirmAction = null;
+  if (action) action();
+});
+
+function setExportEnabled(enabled) {
+  $("btnExportCsv").disabled = !enabled;
+  $("btnExportJson").disabled = !enabled;
+}
+
+function showResultsError(msg) {
+  $("resultsTitle").textContent = "Error";
+  $("resultsMeta").textContent = "";
+  $("resultsBody").innerHTML = '<div class="err-box show" style="margin:14px 18px;">' + escHtml(msg) + '</div>';
+  setExportEnabled(false);
+  $("resultsDialog").showModal();
+}
+
+function renderResults(data, label) {
+  if (data.kind === "status") {
+    $("resultsTitle").textContent = label || "Result";
+    $("resultsMeta").textContent = `${data.message} · ${data.elapsed_ms} ms`;
+    $("resultsBody").innerHTML = "";
+    setExportEnabled(false);
+    $("resultsDialog").showModal();
+    return;
+  }
+  $("resultsTitle").textContent = label || "Results";
+  const capNote = data.capped ? ` (capped at ${data.row_count_returned})` : "";
+  $("resultsMeta").textContent = `${data.row_count_returned} row(s)${capNote} · ${data.elapsed_ms} ms`;
+
+  // A single-row, single-column, multi-line text result — a "show ...
+  // definition" command's DDL/source, or any query that happens to
+  // return one big text blob — reads far better as preformatted text
+  // than squeezed into a table cell. table.results-table's CSS uses
+  // `white-space: nowrap` (needed so ordinary short-value rows don't
+  // blow out the layout), which silently collapsed embedded newlines in
+  // exactly this case — a real reported bug ("showing like one line"),
+  // not hypothetical. Detected by shape (1 row, 1 column, contains a
+  // newline), not by command name, so it also helps for an ordinary
+  // query that happens to return one long text column.
+  const singleCell = (data.rows.length === 1 && data.columns.length === 1) ? data.rows[0][0] : null;
+  if (typeof singleCell === "string" && singleCell.includes("\n")) {
+    $("resultsBody").innerHTML = "";
+    const pre = document.createElement("pre");
+    pre.className = "results-definition";
+    pre.textContent = singleCell;
+    $("resultsBody").appendChild(pre);
+    setExportEnabled(true);
+    $("resultsDialog").showModal();
+    return;
+  }
+
+  const table = document.createElement("table");
+  table.className = "results-table";
+  const thead = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  data.columns.forEach((c) => {
+    const th = document.createElement("th");
+    th.textContent = c;
+    headRow.appendChild(th);
+  });
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+  data.rows.forEach((row) => {
+    const tr = document.createElement("tr");
+    row.forEach((cell) => {
+      const td = document.createElement("td");
+      if (cell === null) {
+        td.innerHTML = '<span class="cell-null">NULL</span>';
+      } else {
+        const text = typeof cell === "object" ? JSON.stringify(cell) : String(cell);
+        td.textContent = text;
+        td.title = text;
+      }
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+
+  $("resultsBody").innerHTML = "";
+  $("resultsBody").appendChild(table);
+  setExportEnabled(true);
+  $("resultsDialog").showModal();
+}
+
+$("btnCloseResults").addEventListener("click", () => $("resultsDialog").close());
+$("btnExportCsv").addEventListener("click", () => { window.location.href = "export/csv"; });
+$("btnExportJson").addEventListener("click", () => { window.location.href = "export/json"; });
+
+function setRunButtonBusy(busy) {
+  const btn = $("btnRun");
+  btn.textContent = busy ? "Running…" : "▶ Run";
+  btn.disabled = busy ? true : !isConnected;
+}
+
+async function sendQuery(sqlText, confirmed, resultLabel) {
+  setRunButtonBusy(true);
+  try {
+    const res = await fetch("query", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sql: sqlText, confirmed }),
+    });
+    const data = await res.json();
+    if (res.status === 409 && data.requires_confirmation) {
+      openConfirmDialog(data.kind, sqlText, () => sendQuery(sqlText, true, resultLabel));
+      return;
+    }
+    if (!res.ok) {
+      showResultsError(data.error || "Query failed.");
+      return;
+    }
+    renderResults(data, resultLabel);
+  } catch (e) {
+    showResultsError("Network error: " + e.message);
+  } finally {
+    setRunButtonBusy(false);
+  }
+}
+
+function runQuery() {
+  if (!isConnected) return;
+  // pgAdmin/DataGrip-style "run selection": a non-empty selection runs
+  // ONLY the selected text, letting you execute a subquery or a single
+  // line out of a larger script without touching the rest of the buffer.
+  // No selection (the common case) falls back to the whole document,
+  // unchanged from before. Everything downstream (multi-statement check,
+  // show-command matching, destructive check) already operates on
+  // whatever `sqlText` is, so this one change covers the Run button, the
+  // Ctrl+Shift+Enter keymap, and the destructive-confirm preview alike.
+  const selection = view.state.selection.main;
+  const sqlText = selection.empty
+    ? view.state.doc.toString()
+    : view.state.sliceDoc(selection.from, selection.to);
+  const statements = splitTopLevelStatements(sqlText);
+  if (statements.length !== 1) {
+    showResultsError(
+      `Run works on exactly one statement at a time (found ${statements.length}). ` +
+      "Split into separate Run clicks — Format still handles whole scripts/procedures."
+    );
+    return;
+  }
+  // Show commands (e.g. "show tables") are matched against the single
+  // extracted statement, not the raw buffer — reuses the same
+  // multi-statement guard above instead of duplicating it. A match always
+  // resolves to a plain read-only SELECT, so it skips the destructive
+  // check entirely and goes straight to sendQuery().
+  const shown = matchShowCommand(statements[0]);
+  if (shown) {
+    sendQuery(shown.sql, false, shown.name);
+    return;
+  }
+  const keyword = firstStatementKeyword(statements[0]);
+  if (DESTRUCTIVE_KEYWORDS.has(keyword)) {
+    openConfirmDialog(keyword, statements[0], () => sendQuery(sqlText, true, null));
+  } else {
+    sendQuery(sqlText, false, null);
+  }
+}
+
+$("btnRun").addEventListener("click", runQuery);
+
+// ---------------------------------------------------------------------
+// Schema-filter dropdown — which schema(s) "Fetch Schema" / "Copy
+// schema-fetch query" pull tables from. Options are populated live from
+// the connected database (query_guard-safe plain SELECT, same
+// SYS_SCHEMA_FILTER as the SHOW_COMMANDS schema-listing commands), not
+// hardcoded — a fresh connection may have entirely different schemas
+// than the last one. Cached per-connection (`schemaListLoaded`) so
+// re-opening the dropdown doesn't re-query every time; cleared on every
+// connect/disconnect transition in applyConnectionStatus() so a new
+// database's schema list is never shown stale under an old one's name.
+// ---------------------------------------------------------------------
+let schemaListLoaded = false;
+let availableSchemas = [];
+let schemaFilterAll = false;
+let selectedSchemas = new Set(); // used when schemaFilterAll is false
+
+function resetSchemaFilterState() {
+  schemaListLoaded = false;
+  availableSchemas = [];
+  schemaFilterAll = false;
+  selectedSchemas = new Set();
+  $("chkAllSchemas").checked = false; // renderSchemaFilterList() rebuilds #schemaFilterList itself on next open, but this checkbox is a separate static element and needs its own reset
+  $("schemaFilterPanel").classList.remove("show");
+  updateSchemaFilterButtonLabel();
+}
+
+function updateSchemaFilterButtonLabel() {
+  const btn = $("btnSchemaFilter");
+  if (schemaFilterAll) {
+    btn.textContent = "Schemas: All ▾";
+  } else if (selectedSchemas.size === 0) {
+    btn.textContent = "Schemas: none ▾";
+  } else if (selectedSchemas.size === 1) {
+    btn.textContent = "Schemas: " + [...selectedSchemas][0] + " ▾";
+  } else {
+    btn.textContent = "Schemas: " + selectedSchemas.size + " selected ▾";
+  }
+}
+
+// Returns what buildSchemaFetchQuery() expects: "all" or an array of names.
+function getCurrentSchemaFilter() {
+  return schemaFilterAll ? "all" : [...selectedSchemas];
+}
+
+function renderSchemaFilterList() {
+  const list = $("schemaFilterList");
+  list.innerHTML = "";
+  if (!availableSchemas.length) {
+    list.innerHTML = '<div class="schema-filter-empty">No schemas found.</div>';
+    return;
+  }
+  for (const name of availableSchemas) {
+    const label = document.createElement("label");
+    label.className = "schema-filter-item" + (schemaFilterAll ? " disabled" : "");
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = selectedSchemas.has(name);
+    cb.addEventListener("change", () => {
+      if (cb.checked) selectedSchemas.add(name); else selectedSchemas.delete(name);
+      updateSchemaFilterButtonLabel();
+    });
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(name));
+    list.appendChild(label);
+  }
+}
+
+$("chkAllSchemas").addEventListener("change", (e) => {
+  schemaFilterAll = e.target.checked;
+  renderSchemaFilterList(); // re-render so individual items grey out/back in
+  updateSchemaFilterButtonLabel();
+});
+
+async function ensureSchemaListLoaded() {
+  if (schemaListLoaded) return;
+  try {
+    const res = await fetch("query", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sql: `SELECT n.nspname AS schema_name FROM pg_namespace n WHERE ${SYS_SCHEMA_FILTER} ORDER BY n.nspname` }),
+    });
+    const data = await res.json();
+    if (res.ok && data.kind === "rows") {
+      availableSchemas = data.rows.map((r) => r[0]);
+      // Default selection: 'public' if it exists (matches this tool's
+      // original public-only behavior, so existing users aren't
+      // surprised), else just leave nothing pre-checked — better than
+      // guessing at an unfamiliar database's "main" schema.
+      selectedSchemas = new Set(availableSchemas.includes("public") ? ["public"] : []);
+      schemaListLoaded = true;
+    }
+  } catch (e) {
+    // best-effort — the panel will just show "No schemas found" and the
+    // user can still fall back to "All schemas"
+  }
+  renderSchemaFilterList();
+  updateSchemaFilterButtonLabel();
+}
+
+$("btnSchemaFilter").addEventListener("click", async (e) => {
+  e.stopPropagation();
+  if (!isConnected) return;
+  const panel = $("schemaFilterPanel");
+  const opening = !panel.classList.contains("show");
+  if (opening) {
+    await ensureSchemaListLoaded();
+    panel.classList.add("show");
+  } else {
+    panel.classList.remove("show");
+  }
+});
+document.addEventListener("click", (e) => {
+  const wrap = $("btnSchemaFilter").closest(".schema-filter-wrap");
+  if (!wrap.contains(e.target)) $("schemaFilterPanel").classList.remove("show");
+});
+
+// Runs buildSchemaFetchQuery() directly against the connected database
+// and loads the result straight into the schema box — the live-connection
+// replacement for "copy the query, run it in pgAdmin, paste the result
+// back." Re-runnable any time (after connecting to a different database,
+// switching the schema-filter selection, or after altering tables) to
+// refresh the schema. Goes through the same /query endpoint as Run, but
+// silently — no results dialog, no destructive-confirm dance (it's a
+// plain SELECT, query_guard.py's own classification confirms that), just
+// a fetch straight into applySchema().
+$("btnFetchSchema").addEventListener("click", async () => {
+  if (!isConnected) return;
+  if (!schemaFilterAll && selectedSchemas.size === 0) {
+    showSchemaError("Select at least one schema (or check \"All schemas\") first.");
+    return;
+  }
+  const btn = $("btnFetchSchema");
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Fetching…";
+  showSchemaError(null);
+  try {
+    const res = await fetch("query", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sql: buildSchemaFetchQuery(getCurrentSchemaFilter()) }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showSchemaError(data.error || "Couldn't fetch the schema.");
+      return;
+    }
+    const cell = data.rows && data.rows[0] ? data.rows[0][0] : null;
+    if (!cell) {
+      showSchemaError("No tables found in the selected schema(s).");
+      return;
+    }
+    // cell is already a parsed object — psycopg decodes json/jsonb columns
+    // automatically, and that decoded value round-trips through this
+    // response's own JSON encoding, so no JSON.parse needed here. Re-stringify
+    // it (pretty-printed) so it displays in the textarea the same way a
+    // manually-pasted schema would.
+    const text = JSON.stringify(cell, null, 2);
+    $("schemaInput").value = text;
+    applySchema(text);
+  } catch (e) {
+    showSchemaError("Network error: " + e.message);
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = !isConnected;
+  }
+});
+
+function escHtml(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+const TEMPLATES = [
+  // ---- Tables & Schema ----
+  { cat: "Tables & Schema", name: "Create Table", sql: `CREATE TABLE table_name (\n  id bigserial PRIMARY KEY,\n  name text NOT NULL,\n  created_at timestamptz NOT NULL DEFAULT now()\n);` },
+  { cat: "Tables & Schema", name: "Create Table With Foreign Key", sql: `CREATE TABLE order_items (\n  id bigserial PRIMARY KEY,\n  order_id bigint NOT NULL REFERENCES orders (id) ON DELETE CASCADE,\n  product_id bigint NOT NULL REFERENCES products (id),\n  quantity integer NOT NULL DEFAULT 1\n);` },
+  { cat: "Tables & Schema", name: "Alter Table Add Column", sql: `ALTER TABLE table_name\n  ADD COLUMN column_name text;` },
+  { cat: "Tables & Schema", name: "Alter Table Drop Column", sql: `ALTER TABLE table_name\n  DROP COLUMN column_name;` },
+  { cat: "Tables & Schema", name: "Alter Table Rename Column", sql: `ALTER TABLE table_name\n  RENAME COLUMN old_name TO new_name;` },
+  { cat: "Tables & Schema", name: "Alter Table Rename Table", sql: `ALTER TABLE old_table_name RENAME TO new_table_name;` },
+  { cat: "Tables & Schema", name: "Alter Table Set Column Type", sql: `ALTER TABLE table_name\n  ALTER COLUMN column_name TYPE numeric(10, 2) USING column_name::numeric;` },
+  { cat: "Tables & Schema", name: "Alter Table Set Default", sql: `ALTER TABLE table_name\n  ALTER COLUMN column_name SET DEFAULT 0;` },
+  { cat: "Tables & Schema", name: "Alter Table Set Not Null", sql: `ALTER TABLE table_name\n  ALTER COLUMN column_name SET NOT NULL;` },
+  { cat: "Tables & Schema", name: "Drop Table", sql: `DROP TABLE IF EXISTS table_name;` },
+  { cat: "Tables & Schema", name: "Create Schema", sql: `CREATE SCHEMA IF NOT EXISTS schema_name;` },
+  { cat: "Tables & Schema", name: "Create Enum Type", sql: `CREATE TYPE status_type AS ENUM ('pending', 'active', 'archived');` },
+  { cat: "Tables & Schema", name: "Create Composite Type", sql: `CREATE TYPE address_type AS (\n  street text,\n  city text,\n  postal_code text\n);` },
+
+  // ---- Constraints & Indexes ----
+  { cat: "Constraints & Indexes", name: "Create Index", sql: `CREATE INDEX idx_table_name_column ON table_name (column_name);` },
+  { cat: "Constraints & Indexes", name: "Create Unique Index", sql: `CREATE UNIQUE INDEX idx_table_name_column_unique ON table_name (column_name);` },
+  { cat: "Constraints & Indexes", name: "Create Partial Index", sql: `CREATE INDEX idx_table_name_active ON table_name (column_name)\n  WHERE is_active = true;` },
+  { cat: "Constraints & Indexes", name: "Create Composite Index", sql: `CREATE INDEX idx_table_name_col1_col2 ON table_name (column_1, column_2);` },
+  { cat: "Constraints & Indexes", name: "Drop Index", sql: `DROP INDEX IF EXISTS idx_table_name_column;` },
+  { cat: "Constraints & Indexes", name: "Add Primary Key Constraint", sql: `ALTER TABLE table_name\n  ADD CONSTRAINT table_name_pkey PRIMARY KEY (id);` },
+  { cat: "Constraints & Indexes", name: "Add Foreign Key Constraint", sql: `ALTER TABLE table_name\n  ADD CONSTRAINT table_name_fk_other FOREIGN KEY (other_id)\n  REFERENCES other_table (id) ON DELETE CASCADE;` },
+  { cat: "Constraints & Indexes", name: "Add Unique Constraint", sql: `ALTER TABLE table_name\n  ADD CONSTRAINT table_name_column_unique UNIQUE (column_name);` },
+  { cat: "Constraints & Indexes", name: "Add Check Constraint", sql: `ALTER TABLE table_name\n  ADD CONSTRAINT table_name_column_check CHECK (column_name > 0);` },
+  { cat: "Constraints & Indexes", name: "Drop Constraint", sql: `ALTER TABLE table_name\n  DROP CONSTRAINT table_name_column_check;` },
+
+  // ---- Views ----
+  { cat: "Views", name: "Create View", sql: `CREATE VIEW view_name AS\nSELECT column_1, column_2\nFROM table_name\nWHERE is_active = true;` },
+  { cat: "Views", name: "Create Or Replace View", sql: `CREATE OR REPLACE VIEW view_name AS\nSELECT column_1, column_2\nFROM table_name;` },
+  { cat: "Views", name: "Create Materialized View", sql: `CREATE MATERIALIZED VIEW mview_name AS\nSELECT column_1, count(*) AS total\nFROM table_name\nGROUP BY column_1\nWITH DATA;` },
+  { cat: "Views", name: "Refresh Materialized View", sql: `REFRESH MATERIALIZED VIEW CONCURRENTLY mview_name;` },
+  { cat: "Views", name: "Drop View", sql: `DROP VIEW IF EXISTS view_name;` },
+
+  // ---- Sequences ----
+  { cat: "Sequences", name: "Create Sequence", sql: `CREATE SEQUENCE seq_name START WITH 1 INCREMENT BY 1;` },
+  { cat: "Sequences", name: "Alter Sequence Restart", sql: `ALTER SEQUENCE seq_name RESTART WITH 1;` },
+  { cat: "Sequences", name: "Next Value From Sequence", sql: `SELECT nextval('seq_name');` },
+
+  // ---- Functions ----
+  { cat: "Functions", name: "Create Function (scalar return)", sql: `CREATE OR REPLACE FUNCTION function_name(param_1 integer)\nRETURNS integer\nLANGUAGE plpgsql\nAS $$\nBEGIN\n  RETURN param_1 * 2;\nEND;\n$$;` },
+  { cat: "Functions", name: "Create Function (RETURNS TABLE)", sql: `CREATE OR REPLACE FUNCTION function_name(min_amount numeric)\nRETURNS TABLE (id bigint, total numeric)\nLANGUAGE plpgsql\nAS $$\nBEGIN\n  RETURN QUERY\n  SELECT o.id, o.total\n  FROM orders o\n  WHERE o.total >= min_amount;\nEND;\n$$;` },
+  { cat: "Functions", name: "Create Function (RETURNS SETOF)", sql: `CREATE OR REPLACE FUNCTION function_name()\nRETURNS SETOF orders\nLANGUAGE plpgsql\nAS $$\nBEGIN\n  RETURN QUERY SELECT * FROM orders WHERE status = 'pending';\nEND;\n$$;` },
+  { cat: "Functions", name: "Create Function (RETURNS void)", sql: `CREATE OR REPLACE FUNCTION function_name(customer_id bigint)\nRETURNS void\nLANGUAGE plpgsql\nAS $$\nBEGIN\n  UPDATE customers SET last_seen_at = now() WHERE id = customer_id;\nEND;\n$$;` },
+  { cat: "Functions", name: "Create SQL Function (no plpgsql)", sql: `CREATE OR REPLACE FUNCTION function_name(a integer, b integer)\nRETURNS integer\nLANGUAGE sql\nIMMUTABLE\nAS $$\n  SELECT a + b;\n$$;` },
+  { cat: "Functions", name: "Drop Function", sql: `DROP FUNCTION IF EXISTS function_name(integer);` },
+
+  // ---- Procedures ----
+  { cat: "Procedures", name: "Create Procedure (basic)", sql: `CREATE OR REPLACE PROCEDURE procedure_name(customer_id bigint)\nLANGUAGE plpgsql\nAS $$\nBEGIN\n  UPDATE customers SET status = 'active' WHERE id = customer_id;\nEND;\n$$;` },
+  { cat: "Procedures", name: "Create Procedure With Transaction Control", sql: `CREATE OR REPLACE PROCEDURE procedure_name()\nLANGUAGE plpgsql\nAS $$\nBEGIN\n  UPDATE accounts SET balance = balance - 100 WHERE id = 1;\n  COMMIT;\n  UPDATE accounts SET balance = balance + 100 WHERE id = 2;\n  COMMIT;\nEND;\n$$;` },
+  { cat: "Procedures", name: "Call Procedure", sql: `CALL procedure_name(1);` },
+  { cat: "Procedures", name: "Drop Procedure", sql: `DROP PROCEDURE IF EXISTS procedure_name(bigint);` },
+
+  // ---- Triggers ----
+  { cat: "Triggers", name: "Create Trigger Function", sql: `CREATE OR REPLACE FUNCTION trigger_function_name()\nRETURNS trigger\nLANGUAGE plpgsql\nAS $$\nBEGIN\n  NEW.updated_at := now();\n  RETURN NEW;\nEND;\n$$;` },
+  { cat: "Triggers", name: "Create Trigger (BEFORE INSERT)", sql: `CREATE TRIGGER trigger_name\n  BEFORE INSERT ON table_name\n  FOR EACH ROW\n  EXECUTE FUNCTION trigger_function_name();` },
+  { cat: "Triggers", name: "Create Trigger (AFTER UPDATE)", sql: `CREATE TRIGGER trigger_name\n  AFTER UPDATE ON table_name\n  FOR EACH ROW\n  WHEN (OLD.status IS DISTINCT FROM NEW.status)\n  EXECUTE FUNCTION trigger_function_name();` },
+  { cat: "Triggers", name: "Create Trigger (per statement)", sql: `CREATE TRIGGER trigger_name\n  AFTER INSERT ON table_name\n  FOR EACH STATEMENT\n  EXECUTE FUNCTION trigger_function_name();` },
+  { cat: "Triggers", name: "Drop Trigger", sql: `DROP TRIGGER IF EXISTS trigger_name ON table_name;` },
+
+  // ---- Control Flow (PL/pgSQL) ----
+  { cat: "Control Flow", name: "DECLARE Block", sql: `DECLARE\n  row_count integer;\n  customer_name text;\nBEGIN\n\nEND;` },
+  { cat: "Control Flow", name: "IF / ELSE", sql: `IF condition THEN\n  -- statements\nELSE\n  -- statements\nEND IF;` },
+  { cat: "Control Flow", name: "IF / ELSIF / ELSE", sql: `IF condition_1 THEN\n  -- statements\nELSIF condition_2 THEN\n  -- statements\nELSE\n  -- statements\nEND IF;` },
+  { cat: "Control Flow", name: "CASE (expression)", sql: `CASE\n  WHEN condition_1 THEN 'value_1'\n  WHEN condition_2 THEN 'value_2'\n  ELSE 'default_value'\nEND` },
+  { cat: "Control Flow", name: "CASE (PL/pgSQL statement)", sql: `CASE\n  WHEN condition_1 THEN\n    -- statements\n  WHEN condition_2 THEN\n    -- statements\n  ELSE\n    -- statements\nEND CASE;` },
+  { cat: "Control Flow", name: "Basic LOOP", sql: `LOOP\n  -- statements\n  EXIT WHEN condition;\nEND LOOP;` },
+  { cat: "Control Flow", name: "WHILE LOOP", sql: `WHILE condition LOOP\n  -- statements\nEND LOOP;` },
+  { cat: "Control Flow", name: "FOR Loop (integer range)", sql: `FOR i IN 1..10 LOOP\n  -- statements\nEND LOOP;` },
+  { cat: "Control Flow", name: "FOR Loop (reverse range)", sql: `FOR i IN REVERSE 10..1 LOOP\n  -- statements\nEND LOOP;` },
+  { cat: "Control Flow", name: "FOR Loop (query result)", sql: `FOR row_var IN SELECT * FROM table_name LOOP\n  RAISE NOTICE '%', row_var.column_name;\nEND LOOP;` },
+  { cat: "Control Flow", name: "FOREACH Loop (array)", sql: `FOREACH item_var IN ARRAY array_var LOOP\n  -- statements\nEND LOOP;` },
+  { cat: "Control Flow", name: "EXIT WHEN", sql: `EXIT WHEN condition;` },
+  { cat: "Control Flow", name: "CONTINUE WHEN", sql: `CONTINUE WHEN condition;` },
+  { cat: "Control Flow", name: "RAISE NOTICE", sql: `RAISE NOTICE 'value is %', some_variable;` },
+  { cat: "Control Flow", name: "RAISE WARNING", sql: `RAISE WARNING 'unexpected state: %', some_variable;` },
+  { cat: "Control Flow", name: "RAISE EXCEPTION", sql: `RAISE EXCEPTION 'invalid input: %', some_variable;` },
+  { cat: "Control Flow", name: "RAISE EXCEPTION With Error Code", sql: `RAISE EXCEPTION 'customer % not found', customer_id\n  USING ERRCODE = 'no_data_found';` },
+  { cat: "Control Flow", name: "RETURN", sql: `RETURN result_value;` },
+  { cat: "Control Flow", name: "RETURN QUERY", sql: `RETURN QUERY\n  SELECT id, name FROM table_name WHERE is_active = true;` },
+  { cat: "Control Flow", name: "RETURN NEXT", sql: `FOR row_var IN SELECT * FROM table_name LOOP\n  RETURN NEXT row_var;\nEND LOOP;\nRETURN;` },
+  { cat: "Control Flow", name: "Variable Assignment", sql: `variable_name := expression;` },
+  { cat: "Control Flow", name: "GET DIAGNOSTICS (row count)", sql: `GET DIAGNOSTICS row_count = ROW_COUNT;` },
+
+  // ---- Exception Handling ----
+  { cat: "Exception Handling", name: "BEGIN / EXCEPTION / END Block", sql: `BEGIN\n  -- statements\nEXCEPTION\n  WHEN OTHERS THEN\n    RAISE NOTICE 'error: %', SQLERRM;\nEND;` },
+  { cat: "Exception Handling", name: "Exception Handler (unique_violation)", sql: `BEGIN\n  INSERT INTO table_name (column_name) VALUES (new_value);\nEXCEPTION\n  WHEN unique_violation THEN\n    RAISE NOTICE 'value already exists: %', new_value;\nEND;` },
+  { cat: "Exception Handling", name: "Exception Handler (foreign_key_violation)", sql: `BEGIN\n  DELETE FROM table_name WHERE id = target_id;\nEXCEPTION\n  WHEN foreign_key_violation THEN\n    RAISE NOTICE 'cannot delete, still referenced: %', target_id;\nEND;` },
+  { cat: "Exception Handling", name: "GET STACKED DIAGNOSTICS", sql: `EXCEPTION\n  WHEN OTHERS THEN\n    GET STACKED DIAGNOSTICS error_text = MESSAGE_TEXT;\n    RAISE NOTICE 'failed: %', error_text;` },
+
+  // ---- Cursors & Dynamic SQL ----
+  { cat: "Cursors & Dynamic SQL", name: "Declare Cursor", sql: `DECLARE cursor_name CURSOR FOR\n  SELECT id, name FROM table_name WHERE is_active = true;` },
+  { cat: "Cursors & Dynamic SQL", name: "Open / Fetch / Close Cursor", sql: `OPEN cursor_name;\nLOOP\n  FETCH cursor_name INTO row_var;\n  EXIT WHEN NOT FOUND;\n  -- statements\nEND LOOP;\nCLOSE cursor_name;` },
+  { cat: "Cursors & Dynamic SQL", name: "Cursor FOR Loop", sql: `FOR row_var IN cursor_name LOOP\n  -- statements\nEND LOOP;` },
+  { cat: "Cursors & Dynamic SQL", name: "EXECUTE Dynamic SQL", sql: `EXECUTE format('SELECT * FROM %I WHERE id = $1', table_name)\n  USING target_id;` },
+  { cat: "Cursors & Dynamic SQL", name: "EXECUTE ... INTO", sql: `EXECUTE 'SELECT count(*) FROM ' || quote_ident(table_name)\n  INTO row_count;` },
+
+  // ---- Queries ----
+  { cat: "Queries", name: "Select Basic", sql: `SELECT column_1, column_2\nFROM table_name;` },
+  { cat: "Queries", name: "Select With WHERE", sql: `SELECT *\nFROM table_name\nWHERE column_name = 'value';` },
+  { cat: "Queries", name: "Select With INNER JOIN", sql: `SELECT o.id, o.total, c.name\nFROM orders o\nINNER JOIN customers c ON c.id = o.customer_id;` },
+  { cat: "Queries", name: "Select With LEFT JOIN", sql: `SELECT c.id, c.name, o.id AS order_id\nFROM customers c\nLEFT JOIN orders o ON o.customer_id = c.id;` },
+  { cat: "Queries", name: "Select With Multiple Joins", sql: `SELECT o.id, c.name, p.name AS product_name\nFROM orders o\nJOIN customers c ON c.id = o.customer_id\nJOIN order_items oi ON oi.order_id = o.id\nJOIN products p ON p.id = oi.product_id;` },
+  { cat: "Queries", name: "Select With Subquery", sql: `SELECT *\nFROM table_name\nWHERE column_name IN (\n  SELECT column_name FROM other_table WHERE is_active = true\n);` },
+  { cat: "Queries", name: "Select With EXISTS", sql: `SELECT *\nFROM customers c\nWHERE EXISTS (\n  SELECT 1 FROM orders o WHERE o.customer_id = c.id\n);` },
+  { cat: "Queries", name: "Select With CTE (WITH)", sql: `WITH recent_orders AS (\n  SELECT * FROM orders WHERE created_at > now() - interval '30 days'\n)\nSELECT customer_id, count(*) AS total_orders\nFROM recent_orders\nGROUP BY customer_id;` },
+  { cat: "Queries", name: "Select With Recursive CTE", sql: `WITH RECURSIVE org_chart AS (\n  SELECT id, name, manager_id\n  FROM employees\n  WHERE manager_id IS NULL\n  UNION ALL\n  SELECT e.id, e.name, e.manager_id\n  FROM employees e\n  JOIN org_chart oc ON e.manager_id = oc.id\n)\nSELECT * FROM org_chart;` },
+  { cat: "Queries", name: "Select With GROUP BY / HAVING", sql: `SELECT customer_id, sum(total) AS total_spent\nFROM orders\nGROUP BY customer_id\nHAVING sum(total) > 1000;` },
+  { cat: "Queries", name: "Select With Pagination", sql: `SELECT *\nFROM table_name\nORDER BY id\nLIMIT 20 OFFSET 0;` },
+  { cat: "Queries", name: "Select DISTINCT ON", sql: `SELECT DISTINCT ON (customer_id) customer_id, id, created_at\nFROM orders\nORDER BY customer_id, created_at DESC;` },
+  { cat: "Queries", name: "Select With UNION", sql: `SELECT id, name FROM table_a\nUNION\nSELECT id, name FROM table_b;` },
+
+  // ---- Window Functions ----
+  { cat: "Window Functions", name: "ROW_NUMBER", sql: `SELECT id, customer_id,\n  row_number() OVER (PARTITION BY customer_id ORDER BY created_at) AS rn\nFROM orders;` },
+  { cat: "Window Functions", name: "RANK / DENSE_RANK", sql: `SELECT id, total,\n  rank() OVER (ORDER BY total DESC) AS rank,\n  dense_rank() OVER (ORDER BY total DESC) AS dense_rank\nFROM orders;` },
+  { cat: "Window Functions", name: "LAG / LEAD", sql: `SELECT id, created_at,\n  lag(created_at) OVER (ORDER BY created_at) AS previous_at,\n  lead(created_at) OVER (ORDER BY created_at) AS next_at\nFROM orders;` },
+  { cat: "Window Functions", name: "Running Total", sql: `SELECT id, created_at, total,\n  sum(total) OVER (ORDER BY created_at) AS running_total\nFROM orders;` },
+  { cat: "Window Functions", name: "NTILE (bucket)", sql: `SELECT id, total,\n  ntile(4) OVER (ORDER BY total) AS quartile\nFROM orders;` },
+
+  // ---- Insert / Update / Delete ----
+  { cat: "Insert / Update / Delete", name: "Insert Single Row", sql: `INSERT INTO table_name (column_1, column_2)\nVALUES ('value_1', 'value_2');` },
+  { cat: "Insert / Update / Delete", name: "Insert Multiple Rows", sql: `INSERT INTO table_name (column_1, column_2)\nVALUES\n  ('value_1', 'value_2'),\n  ('value_3', 'value_4');` },
+  { cat: "Insert / Update / Delete", name: "Insert ... SELECT", sql: `INSERT INTO table_name (column_1, column_2)\nSELECT column_1, column_2\nFROM other_table\nWHERE is_active = true;` },
+  { cat: "Insert / Update / Delete", name: "Insert ... RETURNING", sql: `INSERT INTO table_name (column_1)\nVALUES ('value_1')\nRETURNING id;` },
+  { cat: "Insert / Update / Delete", name: "Upsert (ON CONFLICT DO NOTHING)", sql: `INSERT INTO table_name (id, column_1)\nVALUES (1, 'value_1')\nON CONFLICT (id) DO NOTHING;` },
+  { cat: "Insert / Update / Delete", name: "Upsert (ON CONFLICT DO UPDATE)", sql: `INSERT INTO table_name (id, column_1)\nVALUES (1, 'value_1')\nON CONFLICT (id) DO UPDATE\n  SET column_1 = EXCLUDED.column_1;` },
+  { cat: "Insert / Update / Delete", name: "Update Basic", sql: `UPDATE table_name\nSET column_name = 'new_value'\nWHERE id = 1;` },
+  { cat: "Insert / Update / Delete", name: "Update With FROM", sql: `UPDATE orders o\nSET customer_name = c.name\nFROM customers c\nWHERE c.id = o.customer_id;` },
+  { cat: "Insert / Update / Delete", name: "Update ... RETURNING", sql: `UPDATE table_name\nSET column_name = 'new_value'\nWHERE id = 1\nRETURNING *;` },
+  { cat: "Insert / Update / Delete", name: "Delete Basic", sql: `DELETE FROM table_name\nWHERE id = 1;` },
+  { cat: "Insert / Update / Delete", name: "Delete With USING", sql: `DELETE FROM orders o\nUSING customers c\nWHERE c.id = o.customer_id AND c.is_banned = true;` },
+  { cat: "Insert / Update / Delete", name: "Truncate Table", sql: `TRUNCATE TABLE table_name RESTART IDENTITY CASCADE;` },
+
+  // ---- JSON & Arrays ----
+  { cat: "JSON & Arrays", name: "JSON Field Access", sql: `SELECT data ->> 'name' AS name, data -> 'address' AS address\nFROM table_name;` },
+  { cat: "JSON & Arrays", name: "JSONB Containment", sql: `SELECT *\nFROM table_name\nWHERE data @> '{"status": "active"}'::jsonb;` },
+  { cat: "JSON & Arrays", name: "json_agg / jsonb_agg", sql: `SELECT customer_id, jsonb_agg(jsonb_build_object('id', id, 'total', total)) AS orders\nFROM orders\nGROUP BY customer_id;` },
+  { cat: "JSON & Arrays", name: "jsonb_build_object", sql: `SELECT jsonb_build_object('id', id, 'name', name) AS payload\nFROM table_name;` },
+  { cat: "JSON & Arrays", name: "Array Literal & unnest", sql: `SELECT unnest(ARRAY[1, 2, 3]) AS value;` },
+  { cat: "JSON & Arrays", name: "Array Aggregate", sql: `SELECT customer_id, array_agg(id) AS order_ids\nFROM orders\nGROUP BY customer_id;` },
+  { cat: "JSON & Arrays", name: "Array Contains", sql: `SELECT *\nFROM table_name\nWHERE tags @> ARRAY['urgent'];` },
+
+  // ---- Transactions & Admin ----
+  { cat: "Transactions & Admin", name: "BEGIN / COMMIT / ROLLBACK", sql: `BEGIN;\n  -- statements\nCOMMIT;` },
+  { cat: "Transactions & Admin", name: "SAVEPOINT", sql: `SAVEPOINT before_update;\n-- statements\nROLLBACK TO SAVEPOINT before_update;` },
+  { cat: "Transactions & Admin", name: "GRANT", sql: `GRANT SELECT, INSERT, UPDATE ON table_name TO role_name;` },
+  { cat: "Transactions & Admin", name: "REVOKE", sql: `REVOKE ALL ON table_name FROM role_name;` },
+  { cat: "Transactions & Admin", name: "EXPLAIN ANALYZE", sql: `EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM table_name WHERE column_name = 'value';` },
+  { cat: "Transactions & Admin", name: "VACUUM ANALYZE", sql: `VACUUM (ANALYZE, VERBOSE) table_name;` },
+
+  // ---- Common Patterns ----
+  { cat: "Common Patterns", name: "Audit Trigger Pattern", sql: `CREATE OR REPLACE FUNCTION audit_row_change()\nRETURNS trigger\nLANGUAGE plpgsql\nAS $$\nBEGIN\n  INSERT INTO audit_log (table_name, row_id, action, changed_at)\n  VALUES (TG_TABLE_NAME, NEW.id, TG_OP, now());\n  RETURN NEW;\nEND;\n$$;` },
+  { cat: "Common Patterns", name: "Soft Delete Pattern", sql: `UPDATE table_name\nSET deleted_at = now()\nWHERE id = target_id AND deleted_at IS NULL;` },
+  { cat: "Common Patterns", name: "Upsert Via PL/pgSQL Function", sql: `CREATE OR REPLACE FUNCTION upsert_customer(p_id bigint, p_name text)\nRETURNS void\nLANGUAGE plpgsql\nAS $$\nBEGIN\n  UPDATE customers SET name = p_name WHERE id = p_id;\n  IF NOT FOUND THEN\n    INSERT INTO customers (id, name) VALUES (p_id, p_name);\n  END IF;\nEND;\n$$;` },
+  { cat: "Common Patterns", name: "Full Text Search Query", sql: `SELECT *\nFROM articles\nWHERE to_tsvector('english', title || ' ' || body) @@ to_tsquery('english', 'search_term');` },
+  { cat: "Common Patterns", name: "Date Range Filter", sql: `SELECT *\nFROM table_name\nWHERE created_at >= date_trunc('month', now())\n  AND created_at < date_trunc('month', now()) + interval '1 month';` },
+];
+
+// Fold SHOW_COMMANDS (defined above, near runQuery()) into the same
+// TEMPLATES array so they get the same live-filter/search/Tab-stop-field
+// insertion behavior as everything else, with zero changes to
+// renderTemplateList()/insertTemplate() — typing "show" surfaces these
+// exactly like any other template. Placeholder words in each command's
+// `template` text (table_name, function_name, ...) are already in
+// PLACEHOLDER_TOKENS from the original 125 templates, so they become
+// Tab-stop fields automatically too.
+SHOW_COMMANDS.forEach((cmd) => {
+  TEMPLATES.push({ cat: cmd.cat, name: cmd.name, sql: cmd.template });
+});
+$("templateSearch").placeholder = "Search all " + TEMPLATES.length + " templates…";
+
+const MAX_LIVE_MATCHES = 12; // keep the live (typing-driven) list short and fast to scan
+const MAX_SEARCH_MATCHES = 40; // an explicit search is a deliberate browse — allow more
+
+// Words typed so far on the current line, up to the cursor — not the whole
+// line, so text sitting after the cursor doesn't influence what "you just
+// typed" means.
+function currentLineWords() {
+  const state = view.state;
+  const pos = state.selection.main.head;
+  const line = state.doc.lineAt(pos);
+  const textBeforeCursor = line.text.slice(0, pos - line.from);
+  return (textBeforeCursor.toLowerCase().match(/[a-z_][a-z0-9_]*/g) || []).filter((w) => w.length >= 2);
+}
+
+// The exact [from, to) span of the word ending right at the cursor (e.g.
+// typing "begin" with the cursor right after it) — used by insertTemplate()
+// so picking a live-filtered suggestion REPLACES what triggered the match
+// instead of leaving it sitting there next to the inserted template. Returns
+// null when the cursor isn't glued to a word (trailing space, start of a
+// fresh line, etc.) — in that case insertTemplate() falls back to a plain
+// insert-at-cursor, since there's nothing to replace.
+function currentLineLastWordSpan() {
+  const state = view.state;
+  const pos = state.selection.main.head;
+  const line = state.doc.lineAt(pos);
+  const textBeforeCursor = line.text.slice(0, pos - line.from);
+  const m = /[a-zA-Z_][a-zA-Z0-9_]*$/.exec(textBeforeCursor);
+  if (!m) return null;
+  return { from: line.from + m.index, to: pos };
+}
+
+// Ranks a template against the line's words: the LAST word (what's being
+// typed right now) is weighted far higher than earlier words on the line,
+// and a match in the template's own name counts more than a match buried
+// in its SQL body — both per the "priority to last word" / "type alter or
+// rank" ask this was built for.
+function scoreTemplate(t, words) {
+  const nameLC = t.name.toLowerCase();
+  const bodyLC = t.sql.toLowerCase();
+  let score = 0;
+  words.forEach((w, i) => {
+    const weight = i === words.length - 1 ? 5 : 1;
+    if (nameLC.includes(w)) score += weight * 3;
+    else if (bodyLC.includes(w)) score += weight;
+  });
+  return score;
+}
+
+function renderTemplateList() {
+  const q = $("templateSearch").value.trim().toLowerCase();
+  const list = $("templateList");
+  let matches;
+  let emptyMessage;
+
+  if (q) {
+    matches = TEMPLATES
+      .filter((t) => (t.name + " " + t.cat + " " + t.sql).toLowerCase().includes(q))
+      .slice(0, MAX_SEARCH_MATCHES);
+    emptyMessage = "No templates match — try a different search term.";
+  } else {
+    const words = currentLineWords();
+    if (!words.length) {
+      matches = [];
+      emptyMessage = "Start typing in the editor (e.g. “alter”, “rank”, “insert”) to see matching templates here — or search above to browse all " + TEMPLATES.length + ".";
+    } else {
+      matches = TEMPLATES
+        .map((t) => ({ t, score: scoreTemplate(t, words) }))
+        .filter((x) => x.score > 0)
+        .sort((a, b) => b.score - a.score || a.t.name.localeCompare(b.t.name))
+        .slice(0, MAX_LIVE_MATCHES)
+        .map((x) => x.t);
+      emptyMessage = "No templates match what you're typing — search above to browse all " + TEMPLATES.length + ".";
+    }
+  }
+
+  $("templateResultCount").textContent = matches.length;
+  list.innerHTML = "";
+  if (!matches.length) {
+    list.innerHTML = '<p class="template-empty">' + escHtml(emptyMessage) + '</p>';
+    return;
+  }
+
+  for (const t of matches) {
+    const previewLines = t.sql.trim().split("\n");
+    const preview = previewLines.slice(0, 2).join("\n") + (previewLines.length > 2 ? "\n…" : "");
+    const item = document.createElement("div");
+    item.className = "template-item";
+    item.innerHTML =
+      '<div class="template-cat">' + escHtml(t.cat) + '</div>' +
+      '<div class="template-name">' + escHtml(t.name) + '</div>' +
+      '<pre class="template-preview">' + escHtml(preview) + '</pre>';
+    item.addEventListener("click", () => insertTemplate(t.sql));
+    list.appendChild(item);
+  }
+}
+
+// Whether `pos` has nothing but indentation before/after it on its own
+// line — not just "is the previous/next character a newline." A word
+// replaced after 6 spaces of indentation (e.g. "      alter") still counts
+// as a line boundary: the single-character check used before this treated
+// that leading space as "real content" and wrongly padded with a blank
+// line, pushing the inserted template onto new lines instead of right
+// after the existing indentation — a real reported bug, not hypothetical.
+function isAtLineStart(state, pos) {
+  const line = state.doc.lineAt(pos);
+  return /^\s*$/.test(line.text.slice(0, pos - line.from));
+}
+function isAtLineEnd(state, pos) {
+  const line = state.doc.lineAt(pos);
+  return /^\s*$/.test(line.text.slice(pos - line.from));
+}
+
+// Generic fill-in-the-blank tokens used across TEMPLATES — deliberately a
+// whitelist, not "any lowercase snake_case identifier": most templates also
+// use realistic illustrative names (orders, customers, customer_id, now(),
+// jsonb_build_object, ...) that are part of the example pattern itself, not
+// blanks meant to be tabbed through and replaced. Wrapping those too would
+// turn every template into a dozen-field slog instead of a couple of real
+// decisions. Extracted from the actual template text and curated by hand —
+// if you add a template with a genuinely generic placeholder that isn't
+// already covered, add its exact token here (word-boundary matched, so it
+// can't collide with a same-named substring inside a longer identifier like
+// "idx_table_name_column").
+const PLACEHOLDER_TOKENS = new Set([
+  "table_name", "column_name", "column_1", "column_2", "function_name", "procedure_name",
+  "trigger_name", "trigger_function_name", "view_name", "mview_name", "seq_name", "schema_name",
+  "other_table", "other_id", "row_var", "row_count", "condition", "condition_1", "condition_2",
+  "value", "value_1", "value_2", "value_3", "value_4", "some_variable", "new_value", "target_id",
+  "cursor_name", "old_name", "new_name", "old_table_name", "new_table_name", "status_type",
+  "address_type", "param_1", "min_amount", "last_seen_at", "default_value", "item_var", "array_var",
+  "role_name", "p_id", "p_name", "search_term", "before_update", "result_value", "variable_name",
+  "expression", "error_text", "table_a", "table_b",
+  "idx_table_name_column", "idx_table_name_column_unique", "idx_table_name_active",
+  "idx_table_name_col1_col2", "table_name_pkey", "table_name_fk_other",
+  "table_name_column_unique", "table_name_column_check",
+]);
+
+// Turns plain template SQL into CodeMirror snippet syntax: each whitelisted
+// placeholder token becomes a `${token}` tab-stop field (repeats of the same
+// token within one template are automatically LINKED fields — editing one
+// updates all, handled by CodeMirror itself, not by this function). A
+// trailing `${}` is always appended as the final tab-stop landing spot;
+// for a template with zero real placeholders this ends up as the only
+// field, which CodeMirror's own snippet() treats as "no active fields" and
+// just inserts plain text — verified, not assumed, so no special-casing
+// needed here for the "no placeholders" case.
+function toSnippetTemplate(sql) {
+  return sql.replace(/\b[A-Za-z_][A-Za-z0-9_]*\b/g, (tok) =>
+    PLACEHOLDER_TOKENS.has(tok) ? "${" + tok + "}" : tok
+  ) + "${}";
+}
+
+function insertTemplate(templateSql) {
+  const state = view.state;
+  // Live mode (search box empty) means whatever's currently shown was
+  // matched against the word the user just typed — e.g. typing "begin"
+  // and picking a template should REPLACE "begin", not leave it sitting
+  // there with the template appended after it. Explicit search mode has
+  // no such trigger word tied to the editor, so it keeps the old plain
+  // insert-at-cursor behavior.
+  const isLiveMode = !$("templateSearch").value.trim();
+  const wordSpan = isLiveMode ? currentLineLastWordSpan() : null;
+  const from = wordSpan ? wordSpan.from : state.selection.main.from;
+  const to = wordSpan ? wordSpan.to : state.selection.main.to;
+
+  const atStart = isAtLineStart(state, from);
+  const atEnd = isAtLineEnd(state, to);
+  let body = toSnippetTemplate(templateSql.trim());
+  if (state.doc.length > 0) {
+    if (!atStart) body = "\n\n" + body;
+    if (!atEnd) body = body + "\n\n";
+  }
+  // snippet()'s returned function does its own view.dispatch (changes,
+  // selection on the first field, scrollIntoView) — nothing else to do
+  // here beyond handing it the computed range.
+  snippet(body)(view, null, from, to);
+  view.focus();
+}
+
+$("templateSearch").addEventListener("input", renderTemplateList);
+
+renderTemplateList();
+
+// ---------------------------------------------------------------------
+// Keyboard-only flow: Ctrl+Enter to format is wired as a CodeMirror keymap
+// (only fires with focus in the editor, so it can't steal Enter from the
+// schema textarea or elsewhere). Ctrl+K to jump into template search is
+// global — reclaims the browser's own Ctrl+K (address-bar/search) binding
+// within this page via preventDefault, same convention as most editors'
+// "quick open" shortcut.
+// ---------------------------------------------------------------------
+document.addEventListener("keydown", (e) => {
+  const mod = e.ctrlKey || e.metaKey;
+  if (mod && e.key.toLowerCase() === "k") {
+    e.preventDefault();
+    $("detTemplates").open = true;
+    $("detTemplates").scrollIntoView({ behavior: "smooth", block: "start" });
+    $("templateSearch").focus();
+    $("templateSearch").select();
+  }
+});
+
+// ---------------------------------------------------------------------
+// Auto-format on paste — persisted so the preference survives a reload.
+// ---------------------------------------------------------------------
+$("chkAutoFormat").checked = loadStored(AUTOFORMAT_KEY, "false") === "true";
+$("chkAutoFormat").addEventListener("change", () => {
+  saveStored(AUTOFORMAT_KEY, $("chkAutoFormat").checked ? "true" : "false");
+});
+</script>
+</body>
+</html>

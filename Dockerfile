@@ -72,11 +72,18 @@ COPY cookie-lab/ui/       ./cookie_lab/ui/
 # extra backend modules (engine.py, steps.py) alongside server.py.
 COPY df-studio/ ./df_studio/
 
+# SQL Studio (tool #12) — copied as a whole folder (not the usual two-line
+# server.py + ui/ copy), same reason as df-studio above: it has extra
+# backend modules now (db_engine.py, query_guard.py) that back the Run
+# feature's live Postgres connection. Format/Templates/Schema autocomplete
+# stay fully client-side — only Run/Connect/Export touch this backend.
+COPY sql-studio/ ./sql_studio/
+
 COPY main.py .
 COPY registry.yaml .
 
 # Create empty __init__.py files so Python treats these as packages.
-RUN touch core/__init__.py api/__init__.py encode_decode/__init__.py subnet_calc/__init__.py dns_lookup/__init__.py vlan_designer/__init__.py packet_journey/__init__.py curl_builder/__init__.py header_reference/__init__.py http_methods_status/__init__.py cookie_lab/__init__.py df_studio/__init__.py
+RUN touch core/__init__.py api/__init__.py encode_decode/__init__.py subnet_calc/__init__.py dns_lookup/__init__.py vlan_designer/__init__.py packet_journey/__init__.py curl_builder/__init__.py header_reference/__init__.py http_methods_status/__init__.py cookie_lab/__init__.py df_studio/__init__.py sql_studio/__init__.py
 
 # --- Runtime config ----------------------------------------------------------
 # Tell Python not to write .pyc files and not to buffer stdout/stderr.
@@ -90,14 +97,27 @@ EXPOSE 8080
 # Start the toolbox app (main.py) with uvicorn — this is the one process
 # that serves the home page and every mounted tool.
 # --host 0.0.0.0  makes it reachable from outside the container.
-# --workers 1     MUST stay 1. DataFrame Studio keeps session state
-#                 (engine.SESSIONS) in an in-memory dict inside one process.
-#                 With >1 worker, uvicorn runs separate OS processes that
-#                 don't share memory, so a session created by one worker is
-#                 invisible to the other — the /load that created it and a
-#                 later /step can land on different workers and produce
-#                 "No active session" for what looks like no reason. Every
-#                 other tool here is stateless/client-side and wouldn't
-#                 care, but this one does. Don't raise this without giving
-#                 df-studio a real shared session store first.
+# --workers 1     MUST stay 1, for TWO independent stateful tools now:
+#                 - DataFrame Studio keeps session state (engine.SESSIONS)
+#                   in an in-memory dict inside one process. With >1
+#                   worker, uvicorn runs separate OS processes that don't
+#                   share memory, so a session created by one worker is
+#                   invisible to the other — the /load that created it and
+#                   a later /step can land on different workers and
+#                   produce "No active session" for what looks like no
+#                   reason (this happened for real once, see
+#                   df-studio/CLAUDE.md).
+#                 - SQL Studio keeps its live Postgres connection pool
+#                   (db_engine.STATE) the same way — a single in-process
+#                   global. With >1 worker, "Connect" on one worker would
+#                   be invisible to "Run" landing on another, and worse: an
+#                   orphaned pool here isn't just a lost in-memory value
+#                   like df-studio's case, it's REAL connections held open
+#                   against a REAL external database (visible in
+#                   pg_stat_activity), consuming that database's own
+#                   connection-limit budget until something notices and
+#                   kills it. See sql-studio/CLAUDE.md.
+#                 Every other tool here is stateless/client-side and
+#                 wouldn't care, but these two do. Don't raise this without
+#                 giving BOTH a real shared store first.
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1"]
