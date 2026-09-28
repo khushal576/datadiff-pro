@@ -26,6 +26,20 @@ services:
     # Restart the container automatically if it crashes.
     restart: unless-stopped
 
+    # Lets the container reach services running on the HOST (not in this
+    # compose file) via the stable name `host.docker.internal`, the same
+    # name Docker Desktop provides automatically — on native Linux it
+    # needs this explicit mapping. Added for Schema Map's "AI Assist"
+    # initiative: an Ollama instance runs as its own separate container
+    # (a different docker-compose project entirely, not part of this
+    # one), reachable only via its host-published port. Without this,
+    # the only working address was the bridge gateway IP (172.17.0.1 on
+    # this host) — correct today, but an implementation detail of this
+    # specific machine's Docker networking, not something to hardcode
+    # into application code.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
     # Environment variables available inside the container.
     # Add any future config here (e.g. LOG_LEVEL, MAX_PAYLOAD_MB).
     environment:
@@ -35,3 +49,17 @@ services:
     # without rebuilding the image.  Uncomment during development:
     # volumes:
     #   - ./ui:/app/ui:ro
+
+    # Schema Map's Projects/Versions are stored in a SQLite file at
+    # /app/data/schema-map/projects.db (see schema-map/project_store.py).
+    # Without this, that file lives only in the container's writable
+    # layer and every `docker-compose up --build` (a full recreate, not
+    # just a restart) would silently wipe every project and its entire
+    # version history. A named volume is Docker-managed storage that
+    # survives image rebuilds and `docker-compose down` — only an
+    # explicit `docker-compose down -v` removes it.
+    volumes:
+      - schema_map_data:/app/data/schema-map
+
+volumes:
+  schema_map_data:

@@ -48,6 +48,7 @@
     color: var(--muted); font-size: 0.9rem; text-align: center; padding: 40px;
   }
   #graphCanvas { position: absolute; inset: 0; }
+  #editorCanvas { position: absolute; inset: 0; }
 
   /* ---- Zoom controls — floating over the graph canvas ---- */
   .zoom-controls {
@@ -154,11 +155,11 @@
   }
   .conn-row { display: flex; gap: 8px; }
   .conn-field { margin-bottom: 10px; flex: 1; }
-  .conn-field input {
+  .conn-field input, .conn-field select {
     width: 100%; background: var(--bg); color: var(--text);
     border: 1px solid var(--border); border-radius: 7px; padding: 7px 10px; font-size: 0.82rem;
   }
-  .conn-field input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .conn-field input:focus, .conn-field select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 
   .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 10px; align-items: center; }
   button.action {
@@ -225,6 +226,106 @@
   .cluster-item-actions button:hover { color: var(--accent); }
   .cluster-item-actions button.danger:hover { color: var(--err-text); }
 
+  /* ---- Editor mode — column/FK rows, add-table/column/fk forms ---- */
+  .editor-row {
+    display: flex; justify-content: space-between; align-items: center; gap: 6px;
+    padding: 5px 6px; border-radius: 6px; font-size: 0.78rem;
+  }
+  .editor-row:hover { background: var(--bg); }
+  .editor-row-main { word-break: break-word; }
+  .editor-row-meta { font-size: 0.68rem; color: var(--muted); }
+  .editor-row button {
+    cursor: pointer; border: none; background: none; color: var(--muted);
+    font-size: 0.72rem; font-weight: 600; padding: 0; flex: none;
+  }
+  .editor-row button:hover { color: var(--err-text); }
+  #addTableForm, #addColumnForm, #addFkForm {
+    margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);
+  }
+  .editor-col-row { padding: 6px; border-radius: 6px; margin-bottom: 2px; }
+  .editor-col-row:hover { background: var(--bg); }
+  .editor-col-row-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+  .editor-col-row-typeline { display: flex; align-items: center; gap: 6px; margin-top: 3px; flex-wrap: wrap; }
+  .editor-col-type-select, .editor-col-type-custom {
+    font-size: 0.72rem; padding: 3px 6px; border-radius: 5px;
+    border: 1px solid var(--border); background: var(--bg); color: var(--text);
+  }
+  .editor-col-type-custom { width: 150px; }
+  /* ---- Type parameter boxes — shown next to the type picker for
+     parameterized types (character varying's length, numeric's
+     precision/scale) instead of baking one fixed length/precision into
+     the dropdown option itself. ---- */
+  .type-param-row { display: flex; gap: 6px; margin-top: 6px; }
+  .type-param-input {
+    width: 64px; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 7px; padding: 6px 8px; font-size: 0.78rem;
+  }
+  .editor-col-row .type-param-row { margin-top: 0; }
+  .editor-col-row .type-param-input { width: 52px; padding: 3px 6px; font-size: 0.72rem; border-radius: 5px; }
+
+  /* ---- Version comparison — a modal, the one place this app uses that
+     pattern (see the modal's own HTML comment for why: a temporary
+     result to look at and close, not a mode you stay in). ---- */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(28,32,53,0.5); z-index: 100;
+    display: flex; align-items: center; justify-content: center; padding: 30px;
+  }
+  .modal-box {
+    background: var(--surface); border-radius: 12px; max-width: 680px; width: 100%;
+    max-height: 85vh; overflow-y: auto; padding: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+  }
+  .compare-row {
+    border-left: 3px solid var(--border); border-radius: 4px; padding: 6px 10px; margin-bottom: 4px;
+    font-size: 0.78rem; background: var(--bg);
+  }
+  .compare-row-path { font-weight: 600; word-break: break-word; margin-bottom: 2px; }
+  .compare-row-label {
+    display: inline-block; font-size: 0.66rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.4px; color: var(--muted); margin-bottom: 2px;
+  }
+  .compare-added { border-left-color: var(--ok-text); }
+  .compare-added .compare-row-label { color: var(--ok-text); }
+  .compare-removed { border-left-color: var(--err-text); }
+  .compare-removed .compare-row-label { color: var(--err-text); }
+  .compare-changed { border-left-color: var(--accent); }
+  .compare-changed .compare-row-label { color: var(--accent); }
+
+  /* ---- Projects screen — the app's real entry point. A Project is the
+     top-level container everything else (a live connection, Clusters,
+     eventually the Editor) lives inside; this is shown before anything
+     else, and .layout stays fully hidden until a project is opened. ---- */
+  #projectsScreen { flex: 1; overflow-y: auto; padding: 30px 20px; display: none; }
+  .projects-wrap { max-width: 560px; margin: 0 auto; }
+  .projects-wrap h2 { font-size: 1.05rem; margin-bottom: 6px; }
+  .project-item {
+    border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px;
+    margin-bottom: 8px; cursor: pointer; display: flex;
+    justify-content: space-between; align-items: center; gap: 10px;
+  }
+  .project-item:hover { border-color: var(--accent); background: var(--bg); }
+  .project-item-delete {
+    cursor: pointer; border: none; background: none; color: var(--muted);
+    font-size: 0.9rem; padding: 0; line-height: 1;
+  }
+  .project-item-delete:hover { color: var(--err-text); }
+  .mono-textarea {
+    width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 7px; padding: 8px 10px; font-size: 0.74rem; font-family: 'SF Mono', Consolas, monospace;
+    resize: vertical;
+  }
+  .project-item-name { font-weight: 700; font-size: 0.9rem; }
+  .project-item-meta { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+  .project-origin-badge {
+    font-size: 0.64rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+    color: var(--accent); border: 1px solid var(--accent); border-radius: 20px;
+    padding: 2px 9px; flex: none;
+  }
+
+  /* ---- Current-project sidebar card — always visible once inside a
+     project, regardless of Explore/Clusters mode ---- */
+  .project-header-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .project-current-name { font-size: 0.92rem; font-weight: 700; word-break: break-word; }
+
   /* ---- Cluster workspace — main area, Clusters mode ---- */
   #clustersMain { position: absolute; inset: 0; padding: 20px; display: none; flex-direction: column; }
   #clusterWorkspace { display: none; flex-direction: column; height: 100%; min-height: 0; gap: 14px; }
@@ -278,12 +379,151 @@
     <div class="mode-toggle" id="modeToggle" style="display: none;">
       <button type="button" class="mode-btn active" id="modeBtnExplore">Explore</button>
       <button type="button" class="mode-btn" id="modeBtnClusters">Clusters</button>
+      <button type="button" class="mode-btn" id="modeBtnEditor">Editor</button>
     </div>
   </div>
 </header>
 
-<div class="layout">
+<div id="projectsScreen">
+  <div class="projects-wrap">
+    <h2>Your Projects</h2>
+    <p class="hint">
+      A Project is where a schema design lives — its structure and its
+      version history. Open one below, or create a new one.
+    </p>
+    <div id="projectList"></div>
+
+    <div class="card" style="margin-top: 20px;">
+      <div class="body" style="padding-top: 14px;">
+        <h2 style="margin-bottom: 10px;">New Project — Direct Database</h2>
+        <p class="hint">You have (or can be given) direct access to connect.</p>
+        <div class="conn-field">
+          <label>Project name</label>
+          <input type="text" id="newProjectName" placeholder="e.g. Order Fulfillment DB" />
+        </div>
+        <div class="btn-row" style="margin-top: 0;">
+          <button class="action small" id="btnCreateProject">Create</button>
+        </div>
+        <div class="err-box" id="createProjectErr"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top: 14px;">
+      <div class="body" style="padding-top: 14px;">
+        <h2 style="margin-bottom: 10px;">New Project — Paste Query Results</h2>
+        <p class="hint">
+          No direct access (private network, no credentials to share)?
+          Run these two queries yourself in whatever Postgres client you
+          do have — psql, pgAdmin, DBeaver, anything — one at a time, and
+          paste each JSON result back here. Nothing on this card ever
+          needs a live connection to this app.
+        </p>
+        <div class="conn-field">
+          <label>Step 1 — run this query (the tables)</label>
+          <textarea id="pasteTablesQueryDisplay" rows="4" readonly class="mono-textarea"></textarea>
+          <div class="btn-row" style="margin-top: 8px;">
+            <button class="action secondary small" id="btnCopyTablesQuery">Copy to clipboard</button>
+          </div>
+        </div>
+        <div class="conn-field">
+          <label>Step 2 — paste its JSON result here</label>
+          <textarea id="pasteTablesInput" rows="4" class="mono-textarea"
+            placeholder='[{"schema_name": "...", "table_name": "...", ...}, ...]'></textarea>
+        </div>
+        <div class="conn-field">
+          <label>Step 3 — run this query (the foreign keys)</label>
+          <textarea id="pasteForeignKeysQueryDisplay" rows="4" readonly class="mono-textarea"></textarea>
+          <div class="btn-row" style="margin-top: 8px;">
+            <button class="action secondary small" id="btnCopyForeignKeysQuery">Copy to clipboard</button>
+          </div>
+        </div>
+        <div class="conn-field">
+          <label>Step 4 — paste its JSON result here</label>
+          <textarea id="pasteForeignKeysInput" rows="4" class="mono-textarea"
+            placeholder='[{"from_schema": "...", "from_table": "...", ...}, ...]'></textarea>
+        </div>
+        <div class="conn-field">
+          <label>Step 5 — run this query (columns, optional — lets you see each table's columns without a live connection)</label>
+          <textarea id="pasteColumnsQueryDisplay" rows="4" readonly class="mono-textarea"></textarea>
+          <div class="btn-row" style="margin-top: 8px;">
+            <button class="action secondary small" id="btnCopyColumnsQuery">Copy to clipboard</button>
+          </div>
+        </div>
+        <div class="conn-field">
+          <label>Step 6 — paste its JSON result here (optional)</label>
+          <textarea id="pasteColumnsInput" rows="4" class="mono-textarea"
+            placeholder='[{"schema_name": "...", "table_name": "...", "column_name": "...", ...}, ...] (leave blank to skip)'></textarea>
+        </div>
+        <div class="conn-field">
+          <label>Project name</label>
+          <input type="text" id="pasteProjectName" placeholder="e.g. Order Fulfillment DB" />
+        </div>
+        <div class="btn-row" style="margin-top: 0;">
+          <button class="action small" id="btnLoadPasteImport">Load</button>
+        </div>
+        <div class="err-box" id="pasteImportErr"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top: 14px;">
+      <div class="body" style="padding-top: 14px;">
+        <h2 style="margin-bottom: 10px;">New Project — From Scratch</h2>
+        <p class="hint">
+          No existing database at all — design the structure by hand in
+          the Editor, table by table, then export it as DDL when you're
+          ready to actually build it.
+        </p>
+        <div class="conn-field">
+          <label>Project name</label>
+          <input type="text" id="scratchProjectName" placeholder="e.g. New Service Schema" />
+        </div>
+        <div class="btn-row" style="margin-top: 0;">
+          <button class="action small" id="btnCreateScratchProject">Create</button>
+        </div>
+        <div class="err-box" id="scratchProjectErr"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="layout" id="mainLayout">
   <div class="sidebar">
+   <div class="card" id="detProject" style="display: none;">
+     <div class="body" style="padding-top: 14px;">
+       <div class="project-header-row">
+         <div>
+           <div class="project-current-name" id="projectCurrentName"></div>
+           <span class="project-origin-badge" id="projectCurrentOrigin"></span>
+         </div>
+         <button class="action secondary small" id="btnBackToProjects">← All Projects</button>
+       </div>
+       <div class="btn-row" style="margin-top: 10px; flex-wrap: nowrap;">
+         <input type="text" id="versionLabelInput" placeholder="Version note (optional)"
+           style="flex: 1; min-width: 0; background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 7px 9px; font-size: 0.78rem;" />
+         <button class="action small" id="btnSaveVersion">Save as Version</button>
+       </div>
+       <div class="err-box" id="versionErr"></div>
+       <div class="btn-row" style="margin-top: 10px;">
+         <button class="action secondary small" id="btnExportDdl">Export Full DDL</button>
+         <button class="action secondary small" id="btnExportStaticHtml">Export Static HTML</button>
+       </div>
+       <label style="margin-top: 10px;">Version history</label>
+       <div id="projectVersionList"></div>
+
+       <div id="compareVersionsSection" style="display: none; margin-top: 10px;">
+         <label>Compare versions</label>
+         <div class="btn-row" style="margin-top: 0; flex-wrap: nowrap;">
+           <select id="compareVersionA" style="flex: 1; min-width: 0;"></select>
+           <select id="compareVersionB" style="flex: 1; min-width: 0;"></select>
+         </div>
+         <div class="btn-row" style="margin-top: 0;">
+           <button class="action secondary small" id="btnCompareVersions">Compare</button>
+         </div>
+         <div class="err-box" id="compareErr"></div>
+       </div>
+     </div>
+   </div>
+
    <div id="exploreSidebar">
     <details class="card" id="detConnection">
       <summary><h2>Connection <span class="status-badge disconnected" id="connectionStatusBadge">● Disconnected</span></h2><span class="chev">▶</span></summary>
@@ -434,6 +674,128 @@
        </div>
      </div>
    </div>
+
+   <div id="editorSidebar" style="display: none;">
+     <div class="card" style="margin-bottom: 14px;">
+       <div class="body" style="padding-top: 14px;">
+         <p class="hint">
+           Add or edit tables, columns, and foreign keys by hand.
+           Changes update the diagram immediately — nothing is saved
+           until you click "Save as Version" above.
+         </p>
+         <div class="btn-row">
+           <button class="action small" id="btnShowAddTableForm">+ Add Table</button>
+         </div>
+         <div id="addTableForm" style="display: none;">
+           <div class="conn-field">
+             <label>Table name</label>
+             <input type="text" id="newTableName" placeholder="e.g. orders" />
+           </div>
+           <div class="conn-field">
+             <label>Schema</label>
+             <input type="text" id="newTableSchema" placeholder="e.g. public" />
+           </div>
+           <div class="btn-row" style="margin-top: 0;">
+             <button class="action small" id="btnConfirmAddTable">Add</button>
+             <button class="action secondary small" id="btnCancelAddTable">Cancel</button>
+           </div>
+           <div class="err-box" id="addTableErr"></div>
+         </div>
+       </div>
+     </div>
+
+     <div class="card" id="editorTableCard" style="display: none;">
+       <div class="body" style="padding-top: 14px;">
+         <div class="project-header-row">
+           <div class="project-current-name" id="editorTableTitle"></div>
+           <button class="action secondary small" id="btnDeleteTable">Delete</button>
+         </div>
+         <label style="margin-top: 10px;">Columns</label>
+         <div id="editorColumnsList"></div>
+         <div class="btn-row" style="margin-top: 4px;">
+           <button class="action secondary small" id="btnShowAddColumnForm">+ Add Column</button>
+         </div>
+         <div id="addColumnForm" style="display: none;">
+           <div class="conn-field">
+             <label>Column name</label>
+             <input type="text" id="newColumnName" placeholder="e.g. status" />
+           </div>
+           <div class="conn-field">
+             <label>Type</label>
+             <select id="newColumnType">
+               <option value="bigint">bigint</option>
+               <option value="integer">integer</option>
+               <option value="smallint">smallint</option>
+               <option value="numeric">numeric</option>
+               <option value="real">real</option>
+               <option value="double precision">double precision</option>
+               <option value="text">text</option>
+               <option value="character varying">character varying</option>
+               <option value="character">character</option>
+               <option value="boolean">boolean</option>
+               <option value="date">date</option>
+               <option value="time">time</option>
+               <option value="timestamp">timestamp</option>
+               <option value="timestamp with time zone">timestamp with time zone</option>
+               <option value="interval">interval</option>
+               <option value="uuid">uuid</option>
+               <option value="json">json</option>
+               <option value="jsonb">jsonb</option>
+               <option value="bytea">bytea</option>
+               <option value="__custom__">Custom…</option>
+             </select>
+             <div class="type-param-row" id="newColumnTypeParams" style="display: none;">
+               <input type="text" id="newColumnTypeParam1" class="type-param-input" placeholder="length" />
+               <input type="text" id="newColumnTypeParam2" class="type-param-input" placeholder="scale" style="display: none;" />
+             </div>
+             <input type="text" id="newColumnTypeCustom" placeholder="e.g. character varying(64)"
+               style="display: none; margin-top: 6px;" />
+           </div>
+           <div class="btn-row" style="margin-top: 0;">
+             <label class="hint" style="display: inline-flex; align-items: center; gap: 4px; margin: 0;">
+               <input type="checkbox" id="newColumnNotNull" /> NOT NULL
+             </label>
+             <label class="hint" style="display: inline-flex; align-items: center; gap: 4px; margin: 0;">
+               <input type="checkbox" id="newColumnUnique" /> UNIQUE
+             </label>
+             <label class="hint" style="display: inline-flex; align-items: center; gap: 4px; margin: 0;">
+               <input type="checkbox" id="newColumnPk" /> PRIMARY KEY
+             </label>
+           </div>
+           <div class="btn-row" style="margin-top: 10px;">
+             <button class="action small" id="btnConfirmAddColumn">Add</button>
+             <button class="action secondary small" id="btnCancelAddColumn">Cancel</button>
+           </div>
+           <div class="err-box" id="addColumnErr"></div>
+         </div>
+
+         <label style="margin-top: 10px;">Foreign keys from this table</label>
+         <div id="editorFksList"></div>
+         <div class="btn-row" style="margin-top: 4px;">
+           <button class="action secondary small" id="btnShowAddFkForm">+ Add Foreign Key</button>
+         </div>
+         <div id="addFkForm" style="display: none;">
+           <div class="conn-field">
+             <label>This table's column</label>
+             <select id="newFkFromColumn"></select>
+           </div>
+           <div class="conn-field">
+             <label>References table</label>
+             <select id="newFkToTable"></select>
+           </div>
+           <div class="conn-field">
+             <label>References column</label>
+             <select id="newFkToColumn"></select>
+           </div>
+           <div class="btn-row" style="margin-top: 0;">
+             <button class="action small" id="btnConfirmAddFk">Add</button>
+             <button class="action secondary small" id="btnCancelAddFk">Cancel</button>
+           </div>
+           <div class="err-box" id="addFkErr"></div>
+         </div>
+       </div>
+     </div>
+   </div>
   </div>
 
   <div class="main">
@@ -451,9 +813,24 @@
       <button type="button" id="btnZoomIn" title="Zoom in">+</button>
       <button type="button" id="btnZoomOut" title="Zoom out">−</button>
       <button type="button" id="btnZoomFit" title="Fit to screen">⊡</button>
+      <button type="button" id="btnResetLayout" title="Reset layout — recompute positions from scratch">↻</button>
       <div class="zoom-level" id="zoomLevel">100%</div>
     </div>
     <div class="node-tooltip" id="nodeTooltip" style="display: none;"></div>
+   </div>
+
+   <div id="editorMain" style="display: none;">
+     <div class="main-placeholder" id="editorPlaceholder">
+       No tables yet — click "+ Add Table" to start.
+     </div>
+     <div id="editorCanvas" style="display: none;"></div>
+     <div class="zoom-controls" id="editorZoomControls" style="display: none;">
+       <button type="button" id="btnEditorZoomIn" title="Zoom in">+</button>
+       <button type="button" id="btnEditorZoomOut" title="Zoom out">−</button>
+       <button type="button" id="btnEditorZoomFit" title="Fit to screen">⊡</button>
+       <button type="button" id="btnEditorResetLayout" title="Reset layout — recompute positions from scratch">↻</button>
+       <div class="zoom-level" id="editorZoomLevel">100%</div>
+     </div>
    </div>
 
    <div id="clustersMain" style="display: none;">
@@ -497,6 +874,45 @@
   </div>
 </div>
 
+<!-- Version comparison result — a modal, not another mode/panel, since
+     it's a genuinely temporary "show me this and let me close it" view,
+     unlike Explore/Clusters/Editor which you stay in and keep working
+     within. -->
+<div class="modal-overlay" id="compareModal" style="display: none;">
+  <div class="modal-box">
+    <div class="detail-header">
+      <h2 id="compareModalTitle">Comparing versions</h2>
+      <button type="button" class="detail-close" id="btnCloseCompareModal" title="Close">✕</button>
+    </div>
+    <div id="compareSummary"></div>
+    <div class="btn-row" style="margin-top: 0;">
+      <button class="action secondary small" id="btnGenerateMigrationDdl">Generate Migration DDL</button>
+    </div>
+    <div id="compareRecords"></div>
+  </div>
+</div>
+
+<!-- DDL export — CREATE TABLE only, scoped to columns/NOT NULL/UNIQUE/
+     PRIMARY KEY/FOREIGN KEY. No indexes, defaults, partitioning, or other
+     business logic — see generateDDL() for the exact reasoning. -->
+<div class="modal-overlay" id="ddlModal" style="display: none;">
+  <div class="modal-box">
+    <div class="detail-header">
+      <h2 id="ddlModalTitle">Export Full DDL</h2>
+      <button type="button" class="detail-close" id="btnCloseDdlModal" title="Close">✕</button>
+    </div>
+    <p class="hint" id="ddlModalSubtitle">
+      Structure only: columns, NOT NULL, UNIQUE, PRIMARY KEY, and FOREIGN
+      KEY constraints. No indexes, defaults, partitioning, or other
+      business logic.
+    </p>
+    <textarea id="ddlOutput" readonly class="mono-textarea" style="width: 100%; height: 400px;"></textarea>
+    <div class="btn-row" style="margin-top: 10px;">
+      <button class="action small" id="btnCopyDdl">Copy to clipboard</button>
+    </div>
+  </div>
+</div>
+
 <!-- Classic (non-module) script, same "load off cdnjs" precedent as
      DataFrame Studio's Tabulator.js — cytoscape.js is a UMD build, not
      an ES module, so it's loaded this way (not via the esm.sh imports
@@ -512,7 +928,6 @@ const $ = (id) => document.getElementById(id);
 
 const CONNECTION_KEY = "schema_map_connection";
 let isConnected = false;
-let currentConnectionKey = null; // "host:port:database", set in applyConnectionStatus(); scopes cluster storage
 
 function loadConnectionFields() {
   try {
@@ -565,19 +980,19 @@ function applyConnectionStatus(status, forceOpen) {
     $("connectionForm").style.display = "none";
     $("connectionStatusView").style.display = "block";
     details.open = false;
-    // Clusters are scoped to the connected database, not the browser
-    // globally — so switching databases never mixes one schema's
-    // clusters into another's list. Username deliberately excluded:
-    // clusters are a property of the schema, not of who's looking.
-    currentConnectionKey = `${status.host}:${status.port}:${status.database}`;
   } else {
     badge.textContent = "● Disconnected";
     badge.className = "status-badge disconnected";
     $("connectionForm").style.display = "block";
     $("connectionStatusView").style.display = "none";
     if (forceOpen) details.open = true;
-    currentConnectionKey = null;
-    switchMode("explore"); // Clusters mode needs a live connection key
+    // Explore's own graph is meaningless with no connection and no
+    // saved version loaded — switch back to it so the "Connect to a
+    // database" placeholder is what's actually on screen, not whatever
+    // mode you happened to be in. Clusters/Editor no longer depend on a
+    // live connection at all (see clustersStorageKey()'s own comment),
+    // so this is purely about Explore's own display, not about them.
+    switchMode("explore");
   }
   $("detSchemaPicker").style.display = isConnected ? "block" : "none";
   if (isConnected) {
@@ -586,6 +1001,48 @@ function applyConnectionStatus(status, forceOpen) {
     showGraphPlaceholder("Connect to a database to start exploring its structure.");
   }
 }
+
+// The backend closes an idle connection after 20 minutes with nothing
+// touching it (schema-map/db_engine.py's reaper — a deliberate safety
+// feature, not a bug, so a forgotten tab doesn't hold a live DB
+// connection open forever). Left unaddressed, the frontend had no way
+// to ever find out this happened: isConnected only ever got set at
+// connect/disconnect time, so the badge kept showing "Connected"
+// indefinitely and the first sign of trouble was some LATER action
+// failing with a generic error. This polls /status periodically (while
+// actually connected — no point polling once we already know we're
+// not) and reacts the moment the server's view and ours disagree.
+//
+// Deliberately NOT just calling applyConnectionStatus(status) here —
+// that function's disconnected branch calls switchMode("explore") and
+// wipes the canvas to the "Connect to a database" placeholder, which is
+// right for an explicit Disconnect click but wrong here: Editor mode
+// doesn't need a live connection at all once loaded, and even Explore's
+// already-rendered graph is still perfectly valid to keep looking at.
+// This only updates the Connection panel itself and surfaces a clear
+// explanation — it never touches whatever's already on screen.
+const CONNECTION_POLL_INTERVAL_MS = 60 * 1000;
+
+function handleServerSideDisconnect() {
+  isConnected = false;
+  const badge = $("connectionStatusBadge");
+  badge.textContent = "● Disconnected";
+  badge.className = "status-badge disconnected";
+  $("connectionForm").style.display = "block";
+  $("connectionStatusView").style.display = "none";
+  $("detSchemaPicker").style.display = "none";
+  $("detConnection").open = true; // this happened silently — surface it, don't bury it collapsed
+  showConnectError("Connection timed out after being idle and was closed automatically. Reconnect to keep browsing live — anything already loaded here stays exactly as it was.");
+}
+
+setInterval(async () => {
+  if (!isConnected) return;
+  try {
+    const res = await fetch("status");
+    const data = await res.json();
+    if (!data.connected) handleServerSideDisconnect();
+  } catch (e) { /* a transient network hiccup here isn't itself a disconnect — just skip this tick */ }
+}, CONNECTION_POLL_INTERVAL_MS);
 
 // ---------------------------------------------------------------------
 // Schema picker + graph rendering (Step 3: basic rendering — proving the
@@ -609,7 +1066,16 @@ function showGraphPlaceholder(text) {
   // actually being loaded, not just "connected" (connecting alone
   // leaves lastGraphData null until "Load graph" is clicked).
   $("modeToggle").style.display = "none";
-  switchMode("explore");
+  // skipRender: this function already just destroyed `cy` and set the
+  // placeholder text itself — switchMode("explore") is only here to
+  // reset which sidebar/main is shown and which mode button is active,
+  // never to trigger a fresh render. Without this flag, switchMode's
+  // own "no cy yet, rebuild" logic would immediately rebuild the exact
+  // graph this function just tore down, from whatever lastGraphData
+  // happens to still be set to (a real bug found by reasoning through
+  // it: disconnecting while viewing a project would silently redraw
+  // the old graph right after showGraphPlaceholder tried to hide it).
+  switchMode("explore", { skipRender: true });
   closeDetailPanel();
   hideNodeTooltip();
 }
@@ -657,6 +1123,7 @@ async function loadGraph() {
     }
     lastGraphData = data; // cached so the size-mode toggle can re-render without a fresh fetch
     renderGraph(data);
+    await autoSaveInitialVersionIfNeeded();
   } catch (e) {
     showGraphErr("Network error: " + e.message);
   } finally {
@@ -826,10 +1293,117 @@ function currentSizeMode() {
   return $("sizeModeUniform").checked ? "uniform" : "volume";
 }
 
+// Shared by renderGraph() (Explore) and renderEditorCanvas() (Editor) —
+// used to be Explore-only, with Editor hardcoding a fixed 46x46 for
+// every node regardless of row count. Extracted so both canvases size
+// nodes identically, respecting the SAME "Node size" radio toggle
+// (currentSizeMode() reads it directly from the DOM, so it's shared
+// state regardless of which mode's sidebar is currently visible) —
+// same reasoning as nodePositions being one shared map, not two:
+// Explore and Editor show the same underlying structure and should
+// look the same, not just occupy the same positions.
+function buildSizeFor(tables) {
+  const rowEstimates = tables.map((t) => Math.max(t.row_estimate, 0));
+  const maxRows = Math.max(1, ...rowEstimates);
+  const UNIFORM_SIZE = 46;
+  // Node diameter scales with row count (sqrt, not linear — linear would
+  // make one huge table's node dwarf everything else into invisible
+  // specks), clamped so an empty table doesn't disappear entirely.
+  // "Uniform" mode skips the scaling to focus purely on the FK
+  // structure instead of volume, when that's what you want to see.
+  return (rowEstimate) => {
+    if (currentSizeMode() === "uniform") return UNIFORM_SIZE;
+    const frac = Math.max(rowEstimate, 0) / maxRows;
+    return 28 + Math.round(Math.sqrt(frac) * 60);
+  };
+}
+
 let lastGraphData = null;
 let currentShowLabels = true; // set in renderGraph(); clearFilter() resets to this, not to "always on"
 
+// Shared by renderGraph() and renderEditorCanvas() — Cytoscape throws
+// ("Can not create edge ... with nonexistent source/target") if an edge
+// references a node id that isn't in the node set, which crashes the
+// WHOLE canvas build, not just that one edge. This happens for real: a
+// foreign key can cross schemas (_FOREIGN_KEYS_SQL_ONE_SCHEMA
+// deliberately includes an FK when EITHER end matches the selected
+// schema, per the Filter feature's own "show both directions"
+// requirement), so loading just one schema while its FK partner is in a
+// different, unloaded schema leaves that edge's other endpoint with no
+// node at all. Found live: loading only `public` when `analytics.orders`
+// references `public.customers` crashed both Explore's graph AND
+// Editor's canvas construction outright — editorCy never got assigned,
+// so no click on ANY node worked afterward, not just "the second one."
+// Filtering to edges where both ends are actually loaded is the fix;
+// same judgment call as DDL export's `createdTables` filter in
+// generateDDL() — an edge to a table outside the current scope is
+// correctly left out rather than crashing the render.
+function edgeSafeForeignKeys(tables, foreignKeys) {
+  const nodeIds = new Set(tables.map((t) => `${t.schema_name}.${t.table_name}`));
+  return (foreignKeys || []).filter((fk) =>
+    nodeIds.has(`${fk.from_schema}.${fk.from_table}`) && nodeIds.has(`${fk.to_schema}.${fk.to_table}`)
+  );
+}
+
+// ---------------------------------------------------------------------
+// Node position memory — Cytoscape's `cose` layout is force-directed and
+// non-deterministic, so without this, the SAME data reshuffles visually
+// on every re-render (a fresh "Load graph" click, reopening a project,
+// switching back from Editor/Clusters to Explore) — disorienting for
+// something you're trying to build a mental map of. ONE shared map for
+// BOTH Explore and Editor (not two separate ones — that was tried first
+// and reversed: the owner correctly pointed out the same table jumping
+// to a different spot just from switching modes was disorienting, since
+// both canvases represent the same underlying structure) — a table
+// positioned in Explore shows at that exact spot in Editor too, and
+// vice versa; Reset Layout in either mode reshuffles both, since it's
+// the same underlying memory. Only genuinely NEW nodes (never
+// positioned before) get auto-placed; everything already positioned is
+// locked in place while that placement runs, then unlocked again so
+// normal interaction still works. Cleared only by the explicit "Reset
+// Layout" button — never automatically.
+// ---------------------------------------------------------------------
+let nodePositions = new Map();
+
+function capturePositions(cyInstance, positionMap) {
+  if (!cyInstance) return;
+  cyInstance.nodes().forEach((n) => positionMap.set(n.id(), n.position()));
+}
+
+// Stamps a `position` field onto any node-data entry we already have a
+// remembered position for, before the elements are ever handed to
+// cytoscape — this is what makes that node START (and, once locked,
+// stay) exactly where it was before.
+function applyStoredPositions(nodes, positionMap) {
+  for (const n of nodes) {
+    const pos = positionMap.get(n.data.id);
+    if (pos) n.position = { x: pos.x, y: pos.y };
+  }
+}
+
+// Call right after a cytoscape instance is constructed (elements added,
+// no layout run yet). Locks every node with a remembered position so
+// cose can't move it, runs cose (which only ever moves unlocked nodes),
+// unlocks everything again, then captures the resulting positions
+// (including the newly-placed nodes) back into positionMap for next
+// time. `forceReset`: clears positionMap first — the "Reset Layout"
+// button's case — so every node is treated as new and gets a fresh
+// full layout.
+function layoutPreservingPositions(cyInstance, positionMap, { forceReset = false, padding = 40 } = {}) {
+  if (forceReset) positionMap.clear();
+  const known = cyInstance.nodes().filter((n) => positionMap.has(n.id()));
+  known.lock();
+  cyInstance.layout({ name: "cose", animate: false, padding }).run();
+  known.unlock();
+  capturePositions(cyInstance, positionMap);
+}
+
 function renderGraph(data) {
+  // Whatever prompted this render (a fresh fetch, a version switch, or
+  // switchMode("explore") catching up on Editor changes) makes the
+  // Explore canvas current again — see editorStructureDirty's own
+  // comment for why switchMode() needs this cleared here, not just set.
+  editorStructureDirty = false;
   if (!data.tables.length) {
     showGraphPlaceholder("No tables found in the selected scope.");
     $("zoomControls").style.display = "none";
@@ -841,7 +1415,7 @@ function renderGraph(data) {
   $("canvasSearch").style.display = "block";
   closeDetailPanel();
   hideNodeTooltip();
-  if (cy) cy.destroy();
+  if (cy) { capturePositions(cy, nodePositions); cy.destroy(); }
 
   // schemaColors is still needed as the node-data fallback color even
   // in Cluster mode (see computeNodeColoring()) — the actual legend
@@ -856,19 +1430,7 @@ function renderGraph(data) {
   renderInsights(data);
   $("modeToggle").style.display = "flex";
 
-  const rowEstimates = data.tables.map((t) => Math.max(t.row_estimate, 0));
-  const maxRows = Math.max(1, ...rowEstimates);
-  const UNIFORM_SIZE = 46;
-  // Node diameter scales with row count (sqrt, not linear — linear would
-  // make one huge table's node dwarf everything else into invisible
-  // specks), clamped so an empty table doesn't disappear entirely.
-  // "Uniform" mode skips the scaling to focus purely on the FK
-  // structure instead of volume, when that's what you want to see.
-  const sizeFor = (rowEstimate) => {
-    if (currentSizeMode() === "uniform") return UNIFORM_SIZE;
-    const frac = Math.max(rowEstimate, 0) / maxRows;
-    return 28 + Math.round(Math.sqrt(frac) * 60);
-  };
+  const sizeFor = buildSizeFor(data.tables);
 
   const nodes = data.tables.map((t) => ({
     data: {
@@ -882,12 +1444,13 @@ function renderGraph(data) {
       clusterNames: [],
     },
   }));
+  applyStoredPositions(nodes, nodePositions);
   // fk.to_schema (not fk.from_schema) for the target id — a foreign key
   // can reference a table in a different schema than the one holding
   // it; introspection_postgres.py's FK query was fixed to actually
   // report which schema the target is really in (see its own comment)
   // rather than this code assuming it matches the source's schema.
-  const edges = data.foreign_keys.map((fk, i) => ({
+  const edges = edgeSafeForeignKeys(data.tables, data.foreign_keys).map((fk, i) => ({
     data: {
       id: `fk${i}`,
       source: `${fk.from_schema}.${fk.from_table}`,
@@ -904,7 +1467,15 @@ function renderGraph(data) {
   // actual fix is not showing that many at once (progressive
   // disclosure — not built yet, this is a stopgap for the current
   // load-everything-at-once behavior, not a replacement for it).
-  const LABEL_VISIBLE_THRESHOLD = 60;
+  //
+  // Originally 60 — raised after a real 70-table single-schema
+  // legacy database tripped it and looked broken (no labels, and
+  // uniform color too, since one schema means one palette entry): 60
+  // was picked before Search/Insights/Filter existed, when labels were
+  // the ONLY way to identify a table at all. They're not anymore, so
+  // that number was too conservative for what's actually a completely
+  // ordinary schema size, not a "500 tables" extreme case.
+  const LABEL_VISIBLE_THRESHOLD = 150;
   const showLabels = data.tables.length <= LABEL_VISIBLE_THRESHOLD;
   currentShowLabels = showLabels;
 
@@ -956,7 +1527,12 @@ function renderGraph(data) {
         },
       },
     ],
-    layout: { name: "cose", animate: false, padding: 40 },
+    // "preset" — no automatic layout run here. layoutPreservingPositions()
+    // below does the real placement: nodes with a remembered position
+    // (applyStoredPositions() above) stay locked in place, only new
+    // nodes get auto-placed. A plain "cose" here would reshuffle every
+    // node on every render regardless of the position memory.
+    layout: { name: "preset" },
     // Bounded so keepLabelSizeConstant()'s BASE_FONT_SIZE / zoom division
     // stays in a sane range — cytoscape's own default zoom range is
     // effectively unbounded (1e-50 to 1e50), and without a cap here a
@@ -966,6 +1542,7 @@ function renderGraph(data) {
     minZoom: 0.05,
     maxZoom: 8,
   });
+  layoutPreservingPositions(cy, nodePositions, { padding: 40 });
 
   applyNodeColoring(); // sets the real color/pie data + legend, honoring the current Color-by mode
 
@@ -1273,6 +1850,50 @@ $("btnZoomFit").addEventListener("click", () => {
   if (!cy) return;
   cy.fit(undefined, 40);
 });
+// Explicit, manual-only re-layout — position memory (see
+// nodePositions/layoutPreservingPositions() near renderGraph()) means
+// the graph never reshuffles on its own; this is the one deliberate way
+// to ask for a genuinely fresh arrangement.
+$("btnResetLayout").addEventListener("click", () => {
+  if (!cy) return;
+  layoutPreservingPositions(cy, nodePositions, { forceReset: true, padding: 40 });
+  cy.fit(undefined, 40);
+});
+
+// Same zoom controls, mirrored for the Editor canvas — separate ids/
+// instance (editorCy, not cy), same reasoning: scroll-to-zoom alone
+// isn't discoverable and gives no precise "reset to fit" action.
+function updateEditorZoomLevel() {
+  if (!editorCy) return;
+  $("editorZoomLevel").textContent = Math.round(editorCy.zoom() * 100) + "%";
+}
+$("btnEditorZoomIn").addEventListener("click", () => {
+  if (!editorCy) return;
+  editorCy.zoom({ level: editorCy.zoom() * 1.25, renderedPosition: { x: editorCy.width() / 2, y: editorCy.height() / 2 } });
+});
+$("btnEditorZoomOut").addEventListener("click", () => {
+  if (!editorCy) return;
+  editorCy.zoom({ level: editorCy.zoom() / 1.25, renderedPosition: { x: editorCy.width() / 2, y: editorCy.height() / 2 } });
+});
+$("btnEditorZoomFit").addEventListener("click", () => {
+  if (!editorCy) return;
+  editorCy.fit(undefined, 40);
+  // Same clamp as the initial render — fitting 1-3 nodes wants to zoom
+  // in past 100%, which reads as broken rather than "fit to screen."
+  if (editorCy.zoom() > 1) {
+    editorCy.zoom({ level: 1, renderedPosition: { x: editorCy.width() / 2, y: editorCy.height() / 2 } });
+    editorCy.center();
+  }
+});
+$("btnEditorResetLayout").addEventListener("click", () => {
+  if (!editorCy) return;
+  layoutPreservingPositions(editorCy, nodePositions, { forceReset: true, padding: 40 });
+  editorCy.fit(undefined, 40);
+  if (editorCy.zoom() > 1) {
+    editorCy.zoom({ level: 1, renderedPosition: { x: editorCy.width() / 2, y: editorCy.height() / 2 } });
+    editorCy.center();
+  }
+});
 
 // ---------------------------------------------------------------------
 // Canvas search — find a table by name and jump straight to it, instead
@@ -1416,47 +2037,69 @@ async function openTableDetail(nodeData) {
   const fkOutCols = new Set(outgoing.map((fk) => fk.from_column));
   const fkInCols = new Set(incoming.map((fk) => fk.to_column));
 
-  try {
-    const res = await fetch(`table/${encodeURIComponent(nodeData.schema)}/${encodeURIComponent(nodeData.label)}`);
-    const data = await res.json();
-    if (!res.ok) {
-      $("detailBody").innerHTML = '<p class="detail-loading">' + escHtml(data.error || "Couldn't load columns.") + "</p>";
-      return;
-    }
-    if (!data.columns.length) {
-      $("detailBody").innerHTML = '<p class="detail-loading">No columns found.</p>' + relationshipsHtml;
-      return;
-    }
-    const rows = data.columns.map((c) => {
-      const isOut = fkOutCols.has(c.column_name);
-      const isIn = fkInCols.has(c.column_name);
-      let badge = "";
-      if (isOut || isIn) {
-        const tip = isOut && isIn
-          ? "References another table and is referenced by one — see Relationships below"
-          : isOut
-          ? "References another table — see Relationships below"
-          : "Referenced by another table — see Relationships below";
-        badge = `<span class="col-fk-badge" title="${escHtml(tip)}">🔗</span>`;
+  // Two sources for a table's columns: a LIVE connection fetches them
+  // lazily per-table (the original, still-preferred path — never
+  // bulk-fetched, see introspection_postgres.py's own comment on why).
+  // With no live connection (paste-import or a reopened project with
+  // none active right now), fall back to lastGraphData.columns — bulk-
+  // loaded up front for exactly this case, since there's no live
+  // connection to fetch from later on click. Neither may have data for
+  // this table (a live table with no columns is vanishingly rare but
+  // possible; a paste-import that skipped the optional columns step
+  // has none at all) — both paths render the same "no columns" message
+  // either way, just for different reasons.
+  if (isConnected) {
+    try {
+      const res = await fetch(`table/${encodeURIComponent(nodeData.schema)}/${encodeURIComponent(nodeData.label)}`);
+      const data = await res.json();
+      if (!res.ok) {
+        $("detailBody").innerHTML = '<p class="detail-loading">' + escHtml(data.error || "Couldn't load columns.") + "</p>";
+        return;
       }
-      return `
-        <tr>
-          <td>${escHtml(c.column_name)}${badge}${c.is_nullable ? "" : " *"}</td>
-          <td class="col-type">${escHtml(c.data_type)}</td>
-        </tr>
-      `;
-    }).join("");
-    $("detailBody").innerHTML = `
-      <table class="columns-table">
-        <thead><tr><th>Column</th><th>Type</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-      <p class="hint" style="margin-top:10px;">* = NOT NULL</p>
-      ${relationshipsHtml}
-    `;
-  } catch (e) {
-    $("detailBody").innerHTML = '<p class="detail-loading">Network error: ' + escHtml(e.message) + "</p>";
+      renderColumnsAndRelationships(data.columns, fkOutCols, fkInCols, relationshipsHtml);
+    } catch (e) {
+      $("detailBody").innerHTML = '<p class="detail-loading">Network error: ' + escHtml(e.message) + "</p>";
+    }
+  } else {
+    const bulkColumns = (lastGraphData.columns || [])
+      .filter((c) => c.schema_name === nodeData.schema && c.table_name === nodeData.label)
+      .sort((a, b) => (a.ordinal_position || 0) - (b.ordinal_position || 0));
+    renderColumnsAndRelationships(bulkColumns, fkOutCols, fkInCols, relationshipsHtml);
   }
+}
+
+function renderColumnsAndRelationships(columns, fkOutCols, fkInCols, relationshipsHtml) {
+  if (!columns.length) {
+    $("detailBody").innerHTML = '<p class="detail-loading">No column data available for this table.</p>' + relationshipsHtml;
+    return;
+  }
+  const rows = columns.map((c) => {
+    const isOut = fkOutCols.has(c.column_name);
+    const isIn = fkInCols.has(c.column_name);
+    let badge = "";
+    if (isOut || isIn) {
+      const tip = isOut && isIn
+        ? "References another table and is referenced by one — see Relationships below"
+        : isOut
+        ? "References another table — see Relationships below"
+        : "Referenced by another table — see Relationships below";
+      badge = `<span class="col-fk-badge" title="${escHtml(tip)}">🔗</span>`;
+    }
+    return `
+      <tr>
+        <td>${escHtml(c.column_name)}${badge}${c.is_nullable ? "" : " *"}</td>
+        <td class="col-type">${escHtml(c.data_type)}</td>
+      </tr>
+    `;
+  }).join("");
+  $("detailBody").innerHTML = `
+    <table class="columns-table">
+      <thead><tr><th>Column</th><th>Type</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <p class="hint" style="margin-top:10px;">* = NOT NULL</p>
+    ${relationshipsHtml}
+  `;
 }
 
 function closeDetailPanel() {
@@ -1477,18 +2120,32 @@ $("btnCloseDetail").addEventListener("click", closeDetailPanel);
 // table can belong to any number of clusters, or none, purely by the
 // owner's own judgment.
 //
-// Persisted in localStorage, scoped to the CONNECTED database
-// (currentConnectionKey = "host:port:database") rather than the
-// browser globally, so switching databases never mixes one schema's
-// clusters into another's. This was a deliberate scope decision, not a
-// default: a server-side store would survive a browser data clear and
-// work across machines, but takes on the real persistence layer v1's
-// read-only scope was built specifically to avoid — browser storage was
-// chosen knowing that tradeoff, not by accident. Revisit explicitly if
-// it ever stops being acceptable, don't silently upgrade it.
+// Persisted in localStorage, scoped to the current PROJECT
+// (currentProject.id) — NOT to a live connection's host/port/database,
+// which is what this originally keyed off before Projects existed as a
+// concept. That original scheme had a real, now-fixed bug: a
+// from-scratch or paste-imported project has no live connection at
+// all, so clustersStorageKey() always returned null for them and
+// Clusters silently did nothing; worse, two DIFFERENT projects pointed
+// at the SAME live database would have incorrectly shared one cluster
+// set, since the key only ever captured "which database," never "which
+// project." Keying off currentProject.id instead fixes both — every
+// project gets its own clusters regardless of origin, and two projects
+// sharing a database no longer collide.
+//
+// Still browser localStorage, not a server-side store — that tradeoff
+// (won't survive a browser data clear, doesn't follow you to another
+// machine) was a deliberate scope decision made explicitly, not a
+// default; revisit it on purpose if it ever stops being acceptable,
+// don't silently upgrade it.
+//
+// Filter/Insights/Color-by-Cluster don't need their own rescoping —
+// they have no storage of their own, they just read loadClusters()
+// (Insights' hub list doesn't even touch clusters at all), so fixing
+// the one function below is what fixes all of them together.
 // ---------------------------------------------------------------------
 function clustersStorageKey() {
-  return currentConnectionKey ? `schema_map_clusters:${currentConnectionKey}` : null;
+  return currentProject ? `schema_map_clusters:${currentProject.id}` : null;
 }
 
 function loadClusters() {
@@ -1561,30 +2218,61 @@ function removeTableFromCluster(clusterId, tableId) {
 let currentMode = "explore";
 let activeClusterId = null;
 
-function switchMode(mode) {
+function switchMode(mode, options) {
+  const skipRender = !!(options && options.skipRender);
   currentMode = mode;
   const exploring = mode === "explore";
+  const clustering = mode === "clusters";
+  const editing = mode === "editor";
   $("exploreSidebar").style.display = exploring ? "block" : "none";
-  $("clustersSidebar").style.display = exploring ? "none" : "block";
+  $("clustersSidebar").style.display = clustering ? "block" : "none";
+  $("editorSidebar").style.display = editing ? "block" : "none";
   $("exploreMain").style.display = exploring ? "block" : "none";
-  $("clustersMain").style.display = exploring ? "none" : "block";
+  $("clustersMain").style.display = clustering ? "block" : "none";
+  $("editorMain").style.display = editing ? "block" : "none";
   $("modeBtnExplore").classList.toggle("active", exploring);
-  $("modeBtnClusters").classList.toggle("active", !exploring);
+  $("modeBtnClusters").classList.toggle("active", clustering);
+  $("modeBtnEditor").classList.toggle("active", editing);
   closeDetailPanel();
   if (exploring) {
-    if (cy) cy.resize();
-    // Cluster membership may have just changed while in Clusters mode —
-    // if "Color by: Cluster" is active, the Explore graph's colors need
-    // to reflect that (applyNodeColoring() is a no-op cost either way
-    // in "Schema" mode, it just re-confirms the existing colors).
-    applyNodeColoring();
-  } else {
+    if (skipRender) {
+      // Caller (showGraphPlaceholder) is already handling what's shown —
+      // this call exists only to reset sidebar/main visibility and the
+      // mode button's active state, not to trigger any render.
+    } else if (lastGraphData && (!cy || editorStructureDirty)) {
+      // No `cy` yet (a from-scratch project never had one built at
+      // all until now) or the structure changed while editing — either
+      // way a cheap resize can't fix a canvas that's missing or stale;
+      // it needs a real rebuild from whatever lastGraphData is now.
+      // Guarded on lastGraphData existing at all — switchMode("explore")
+      // also runs during startup, before any project is open, when
+      // there's nothing to render yet (a real bug once: renderGraph(null)
+      // throws on data.tables, which silently aborted the rest of
+      // init() before it ever reached loadProjectsScreen()).
+      renderGraph(lastGraphData);
+    } else if (cy) {
+      cy.resize();
+      // Cluster membership may have just changed while in Clusters mode —
+      // if "Color by: Cluster" is active, the Explore graph's colors need
+      // to reflect that (applyNodeColoring() is a no-op cost either way
+      // in "Schema" mode, it just re-confirms the existing colors).
+      applyNodeColoring();
+    }
+  } else if (clustering) {
     refreshClusterUI();
+  } else if (editing) {
+    // Structure may have just changed via a live connection's Load
+    // graph or a version switch while in Explore/Clusters — the editor
+    // canvas always reflects whatever lastGraphData currently is, so
+    // it needs a fresh render every time this mode is entered, not
+    // just the first time.
+    renderEditorCanvas();
   }
 }
 
 $("modeBtnExplore").addEventListener("click", () => switchMode("explore"));
 $("modeBtnClusters").addEventListener("click", () => switchMode("clusters"));
+$("modeBtnEditor").addEventListener("click", () => switchMode("editor"));
 
 function renderClusterList() {
   const clusters = loadClusters();
@@ -1832,6 +2520,723 @@ $("btnSeedCluster").addEventListener("click", () => {
   refreshClusterUI();
 });
 
+// ---------------------------------------------------------------------
+// Editor — add/edit tables, columns, and foreign keys by hand (v2
+// design Phase C, see schema-map/CLAUDE.md). Mutates `lastGraphData`
+// DIRECTLY, never a separate draft copy — this was an explicit design
+// decision, not a shortcut: switching to Explore/Clusters mid-edit
+// shows the exact in-progress state, not a stale snapshot, and "Save
+// as Version" is the ONLY thing that ever writes any of this to
+// storage. A THIRD, separate Cytoscape instance (`editorCy`, distinct
+// from Explore's `cy` and the Cluster workspace's `clusterCy`) renders
+// ALL current tables/FKs, styled the same plain "labeled box" way as
+// the cluster canvas — structure, not volume or schema, is what
+// matters while editing. No validation beyond "does this exact
+// name/column/FK already exist" — trusting the user for everything
+// else (type correctness, sensible FK targets) was an explicit,
+// deliberate decision from the original design conversation, not an
+// oversight.
+// ---------------------------------------------------------------------
+let editorCy = null;
+let currentEditorTable = null; // { schema, table } of whichever node is selected, or null
+// Set by every Editor mutation, cleared by renderGraph() — lets
+// switchMode("explore") tell "structure changed since Explore's `cy`
+// was last built, needs a real rebuild" apart from "nothing changed,
+// a cheap resize+recolor is enough" (see switchMode()). Without this,
+// a from-scratch project (whose Explore `cy` never gets created at
+// all until you actually visit Explore) would show a blank canvas the
+// first time you switched there — a real bug found in testing, not a
+// hypothetical.
+let editorStructureDirty = false;
+
+function keepEditorLabelSizeConstant() {
+  if (!editorCy) return;
+  editorCy.nodes().style("font-size", (BASE_FONT_SIZE / editorCy.zoom()) + "px");
+}
+
+function tableId(schema, table) { return `${schema}.${table}`; }
+function splitTableId(id) {
+  const dot = id.indexOf(".");
+  return [id.slice(0, dot), id.slice(dot + 1)];
+}
+
+// A from-scratch project, or one loaded before `columns` existed, may
+// not have that array at all yet — every mutation function needs it to
+// exist before pushing into it.
+function ensureGraphDataShape() {
+  if (!lastGraphData) lastGraphData = { tables: [], foreign_keys: [], columns: [] };
+  if (!lastGraphData.columns) lastGraphData.columns = [];
+}
+
+function addTableToProject(schemaName, tableName) {
+  ensureGraphDataShape();
+  const exists = lastGraphData.tables.some((t) => t.schema_name === schemaName && t.table_name === tableName);
+  if (exists) return { error: "A table with that schema and name already exists." };
+  // row_estimate/total_size stay -1/null — those are live-database-only
+  // concepts (pg_class.reltuples, pg_total_relation_size); a hand-added
+  // table doesn't exist in any real database yet. Every place that
+  // already reads these (node sizing, the detail panel meta line)
+  // already tolerates -1/"not analyzed" — this isn't a new case for them.
+  // total_size: "" not null — every place that reads it (tooltip,
+  // detail panel meta line) template-literal-interpolates it directly
+  // (`... · ${nodeData.totalSize}`), and JS renders a null there as the
+  // literal text "null", not a blank — a real bug caught by reasoning
+  // through the interpolation, not by seeing it happen.
+  lastGraphData.tables.push({ schema_name: schemaName, table_name: tableName, row_estimate: -1, total_size: "" });
+  editorStructureDirty = true;
+  return {};
+}
+
+// Foreign keys from a DIFFERENT table that reference ANY column of this
+// table — self-referencing FKs (a table pointing at its own column,
+// e.g. categories.parent_id -> categories.category_id) are excluded,
+// since the whole table disappearing takes a self-reference with it
+// consistently; only an external table's dependency is a real blocker.
+function findDependentTableForeignKeys(schema, table) {
+  return (lastGraphData.foreign_keys || []).filter((fk) =>
+    fk.to_schema === schema && fk.to_table === table && !(fk.from_schema === schema && fk.from_table === table)
+  );
+}
+
+// RESTRICT semantics, matching real Postgres's own default (DROP TABLE
+// fails if another table's FK points into it, unless CASCADE) — this
+// used to silently cascade-delete any incoming FK along with the table,
+// same class of gap deleteColumnFromProject() had (see its own
+// comment). Returns { error } and changes nothing if another table
+// still depends on this one; the caller has to remove that dependency
+// first, same as a real database would require.
+function deleteTableFromProject(schema, table) {
+  const dependents = findDependentTableForeignKeys(schema, table);
+  if (dependents.length) {
+    const list = [...new Set(dependents.map((fk) => `${fk.from_schema}.${fk.from_table}.${fk.from_column}`))].join(", ");
+    return { error: `Can't delete "${schema}.${table}" — it's referenced by foreign keys from: ${list}. Remove those foreign keys (or the tables/columns they're on) first.` };
+  }
+  lastGraphData.tables = lastGraphData.tables.filter((t) => !(t.schema_name === schema && t.table_name === table));
+  lastGraphData.columns = (lastGraphData.columns || []).filter((c) => !(c.schema_name === schema && c.table_name === table));
+  lastGraphData.foreign_keys = lastGraphData.foreign_keys.filter((fk) =>
+    !(fk.from_schema === schema && fk.from_table === table) && !(fk.to_schema === schema && fk.to_table === table)
+  );
+  editorStructureDirty = true;
+  return {};
+}
+
+function addColumnToProject(schema, table, columnName, dataType, notNull, unique, isPk) {
+  ensureGraphDataShape();
+  const exists = lastGraphData.columns.some((c) => c.schema_name === schema && c.table_name === table && c.column_name === columnName);
+  if (exists) return { error: "A column with that name already exists on this table." };
+  const ordinal = lastGraphData.columns.filter((c) => c.schema_name === schema && c.table_name === table).length + 1;
+  lastGraphData.columns.push({
+    schema_name: schema, table_name: table, column_name: columnName, data_type: dataType,
+    is_nullable: !notNull, is_unique: unique, is_primary_key: isPk, default_value: null, ordinal_position: ordinal,
+  });
+  editorStructureDirty = true;
+  return {};
+}
+
+function changeColumnTypeInProject(schema, table, columnName, newType) {
+  const col = (lastGraphData.columns || []).find((c) => c.schema_name === schema && c.table_name === table && c.column_name === columnName);
+  if (!col) return;
+  col.data_type = newType;
+  editorStructureDirty = true;
+}
+
+// Foreign keys from OTHER tables that reference this exact column as
+// their target — the "who depends on this" check. Shared by the
+// RESTRICT-before-delete logic below and (later, per the v2 "Phase G"
+// design) by any validation layer that needs to check whether an
+// operation is safe before it's applied, not just before it's shown.
+function findDependentForeignKeys(schema, table, column) {
+  return (lastGraphData.foreign_keys || []).filter((fk) =>
+    fk.to_schema === schema && fk.to_table === table && fk.to_column === column
+  );
+}
+
+// RESTRICT semantics, matching real Postgres's own default: refuse the
+// delete outright while another table still depends on this column,
+// rather than silently cascading (an earlier version did that, with a
+// confirm dialog first) or auto-removing the dependency. Deliberately
+// switched to a hard block after confirm-then-cascade turned out
+// confusing in practice ("asks the first time, then deletes without
+// asking" was reported and never reproduced in three separate test
+// scenarios — the owner asked for the simpler, DB-like guarantee
+// instead: nothing disappears out from under another table's FK
+// without that FK being dealt with first). The original problem this
+// closes is still real either way: the owner asked "if I drop a column
+// referenced by 10 tables, do we handle that" — the honest answer at
+// the time was no, a dangling FK reference was left behind, and
+// generateDDL()/generateMigrationDDL() would emit a FOREIGN KEY
+// referencing a column that no longer exists. Returns { error } and
+// changes nothing if blocked.
+function deleteColumnFromProject(schema, table, columnName) {
+  const dependents = findDependentForeignKeys(schema, table, columnName);
+  if (dependents.length) {
+    const list = [...new Set(dependents.map((fk) => `${fk.from_schema}.${fk.from_table}.${fk.from_column}`))].join(", ");
+    return { error: `Can't delete "${columnName}" — it's referenced by foreign keys from: ${list}. Remove those foreign keys first.` };
+  }
+  lastGraphData.columns = lastGraphData.columns.filter((c) => !(c.schema_name === schema && c.table_name === table && c.column_name === columnName));
+  lastGraphData.foreign_keys = lastGraphData.foreign_keys.filter((fk) =>
+    !(fk.from_schema === schema && fk.from_table === table && fk.from_column === columnName)
+  );
+  editorStructureDirty = true;
+  return {};
+}
+
+function addForeignKeyToProject(fromSchema, fromTable, fromColumn, toSchema, toTable, toColumn) {
+  const exists = lastGraphData.foreign_keys.some((fk) =>
+    fk.from_schema === fromSchema && fk.from_table === fromTable && fk.from_column === fromColumn &&
+    fk.to_schema === toSchema && fk.to_table === toTable && fk.to_column === toColumn
+  );
+  if (exists) return { error: "That foreign key already exists." };
+  lastGraphData.foreign_keys.push({ from_schema: fromSchema, from_table: fromTable, from_column: fromColumn, to_schema: toSchema, to_table: toTable, to_column: toColumn });
+  editorStructureDirty = true;
+  return {};
+}
+
+function deleteForeignKeyFromProject(fromSchema, fromTable, fromColumn, toSchema, toTable, toColumn) {
+  lastGraphData.foreign_keys = lastGraphData.foreign_keys.filter((fk) => !(
+    fk.from_schema === fromSchema && fk.from_table === fromTable && fk.from_column === fromColumn &&
+    fk.to_schema === toSchema && fk.to_table === toTable && fk.to_column === toColumn
+  ));
+  editorStructureDirty = true;
+}
+
+// Node styling deliberately matches Explore's (schema-colored circles,
+// always-labeled) instead of the Cluster canvas's plain boxes — the
+// owner asked for this directly: switching to Editor shouldn't feel
+// like a visually different tool. Labels are unconditionally on here
+// (unlike Explore's LABEL_VISIBLE_THRESHOLD) since a schema you're
+// hand-designing is realistically never large enough to need that
+// stopgap.
+function renderEditorCanvas() {
+  ensureGraphDataShape();
+  if (editorCy) { capturePositions(editorCy, nodePositions); editorCy.destroy(); editorCy = null; }
+  const hasTables = lastGraphData.tables.length > 0;
+  $("editorPlaceholder").style.display = hasTables ? "none" : "flex";
+  $("editorCanvas").style.display = hasTables ? "block" : "none";
+  $("editorZoomControls").style.display = hasTables ? "flex" : "none";
+  if (!hasTables) {
+    closeEditorTableCard();
+    return;
+  }
+
+  const schemaColors = buildSchemaColorMap(lastGraphData.tables);
+  // Same buildSizeFor() Explore uses — Editor used to hardcode a fixed
+  // 46x46 for every node regardless of row count, so the same table
+  // could look a different size depending which mode you were in.
+  const sizeFor = buildSizeFor(lastGraphData.tables);
+  const nodes = lastGraphData.tables.map((t) => ({
+    data: {
+      id: tableId(t.schema_name, t.table_name), label: t.table_name,
+      schema: t.schema_name, table: t.table_name, color: schemaColors[t.schema_name],
+      size: sizeFor(t.row_estimate),
+    },
+  }));
+  applyStoredPositions(nodes, nodePositions);
+  const edges = edgeSafeForeignKeys(lastGraphData.tables, lastGraphData.foreign_keys).map((fk, i) => ({
+    data: { id: `efk${i}`, source: tableId(fk.from_schema, fk.from_table), target: tableId(fk.to_schema, fk.to_table) },
+  }));
+
+  editorCy = cytoscape({
+    container: $("editorCanvas"),
+    elements: { nodes, edges },
+    style: [
+      {
+        selector: "node",
+        style: {
+          "background-color": "data(color)",
+          label: "data(label)",
+          "font-size": BASE_FONT_SIZE + "px",
+          color: "#1c2035",
+          "text-valign": "top",
+          "text-margin-y": -6,
+          width: "data(size)",
+          height: "data(size)",
+          "text-background-color": "#ffffff",
+          "text-background-opacity": 0.85,
+          "text-background-shape": "roundrectangle",
+          "text-background-padding": "2px",
+        },
+      },
+      { selector: "node.editor-selected", style: { "border-width": 3, "border-color": "#1c2035" } },
+      {
+        selector: "edge",
+        style: {
+          width: 1.5, "line-color": "#9aa3c2", "target-arrow-color": "#9aa3c2",
+          "target-arrow-shape": "triangle", "curve-style": "bezier",
+        },
+      },
+    ],
+    // "preset" — see nodePositions/layoutPreservingPositions()'s own
+    // comment near renderGraph(): existing tables stay locked where
+    // they were, only newly-added ones get auto-placed by the layout
+    // run below.
+    layout: { name: "preset" },
+    minZoom: 0.05,
+    maxZoom: 8,
+  });
+  layoutPreservingPositions(editorCy, nodePositions, { padding: 40 });
+
+  // cose's default post-layout auto-fit zooms in aggressively when
+  // there are only a handful of nodes (a real observed case: 1-3
+  // hand-added tables fit-zoomed to the 8x/800% ceiling, which reads as
+  // broken, not "zoomed to fit") — clamp the STARTING view to 100% max;
+  // maxZoom stays 8 so a deliberate zoom-in click can still go further.
+  if (editorCy.zoom() > 1) {
+    editorCy.zoom({ level: 1, renderedPosition: { x: editorCy.width() / 2, y: editorCy.height() / 2 } });
+    editorCy.center();
+  }
+
+  editorCy.on("tap", "node", (evt) => selectEditorTable(evt.target.data("schema"), evt.target.data("table")));
+  // Same constant-on-screen-label-size idea as Explore's
+  // keepLabelSizeConstant() — a separate small function, not that one
+  // reused, because it hardcodes the module-level `cy` (Explore's own
+  // instance) rather than taking one as a parameter, and a zoom event
+  // handler receives the Event object as its argument, not the cy
+  // instance — a default-parameter trick to share the function would
+  // silently misfire on that.
+  editorCy.on("zoom", keepEditorLabelSizeConstant);
+  keepEditorLabelSizeConstant();
+  editorCy.on("zoom", updateEditorZoomLevel);
+  updateEditorZoomLevel();
+
+  if (currentEditorTable) {
+    const node = editorCy.getElementById(tableId(currentEditorTable.schema, currentEditorTable.table));
+    if (node.length) node.addClass("editor-selected");
+    else closeEditorTableCard(); // the previously-selected table no longer exists (just deleted)
+  }
+}
+
+// Left sidebar card, same side as the Cluster workspace's table picker
+// and every other Editor control — the owner tried the right-side
+// #detailPanel position (matching Explore's convention) and preferred
+// this instead, so left it is. async because a table that came from a
+// live connection (or a paste-import that skipped the optional columns
+// step) may not have its columns in lastGraphData yet at all; see
+// ensureColumnsLoadedFor().
+async function selectEditorTable(schema, table) {
+  currentEditorTable = { schema, table };
+  if (editorCy) {
+    editorCy.nodes().removeClass("editor-selected");
+    editorCy.getElementById(tableId(schema, table)).addClass("editor-selected");
+  }
+  $("editorTableCard").style.display = "block";
+  $("editorTableTitle").textContent = tableId(schema, table);
+  hideAddColumnForm();
+  hideAddFkForm();
+  $("editorColumnsList").innerHTML = '<p class="hint">Loading…</p>';
+  await ensureColumnsLoadedFor(schema, table);
+  // The user may have clicked a different table while that fetch was
+  // in flight — don't paint stale data into what's now the wrong card.
+  if (!currentEditorTable || currentEditorTable.schema !== schema || currentEditorTable.table !== table) return;
+  renderEditorColumnsList();
+  renderEditorFksList();
+}
+
+function closeEditorTableCard() {
+  currentEditorTable = null;
+  $("editorTableCard").style.display = "none";
+}
+
+// Fills in real column data for a table Editor doesn't already know
+// the columns of — true for any table that came from a live connection
+// (Explore only ever fetches columns lazily per-table on click, never
+// in bulk) or a paste-import that skipped the optional columns step.
+// Without this, Editor's columns list AND the Add-Foreign-Key form's
+// dropdowns would show empty/nothing for every real, pre-existing
+// table — a real reported problem, not hypothetical: the owner
+// described it as the dropdowns "showing null." A from-scratch table
+// genuinely has zero columns until you add some — that's correct, not
+// a fetch failure, so this only ever fetches when isConnected; there's
+// nothing to fetch FROM otherwise.
+async function ensureColumnsLoadedFor(schema, table) {
+  const alreadyHave = (lastGraphData.columns || []).some((c) => c.schema_name === schema && c.table_name === table);
+  if (alreadyHave || !isConnected) return;
+  try {
+    const res = await fetch(`table/${encodeURIComponent(schema)}/${encodeURIComponent(table)}`);
+    const data = await res.json();
+    if (!res.ok || !data.columns) return;
+    ensureGraphDataShape();
+    for (const c of data.columns) {
+      lastGraphData.columns.push({
+        schema_name: schema, table_name: table, column_name: c.column_name, data_type: c.data_type,
+        is_nullable: c.is_nullable, is_unique: !!c.is_unique, is_primary_key: !!c.is_primary_key,
+        default_value: c.default_value, ordinal_position: c.ordinal_position,
+      });
+    }
+  } catch (e) { /* best-effort — Editor just shows "no columns" if this fails */ }
+}
+
+// Same list as the Add Column form's #newColumnType options — kept as
+// one JS array instead of two hardcoded option lists (that form's HTML,
+// and every column row's inline type-select here) so the two can't
+// silently drift apart if this list ever changes. Base type NAMES only
+// — no baked-in length/precision — see PARAM_TYPE_CONFIG below for why:
+// a fixed "character varying(255)" or "numeric(12,2)" option forces one
+// arbitrary length/precision on everyone; the actual value belongs in
+// its own small box next to the picker, not hardcoded into the option.
+const COMMON_COLUMN_TYPES = [
+  "bigint", "integer", "smallint", "numeric", "real", "double precision",
+  "text", "character varying", "character", "boolean",
+  "date", "time", "timestamp", "timestamp with time zone", "interval",
+  "uuid", "json", "jsonb", "bytea",
+];
+
+// Types that take one or two parenthesized numeric arguments — the ONLY
+// two Postgres actually uses commonly: character varying/character take
+// a length, numeric takes (precision, scale). Anything else parameter-
+// shaped that a user wants goes through the Custom… field instead of
+// this app trying to model every possible parameterized type.
+const PARAM_TYPE_CONFIG = {
+  "character varying": { params: 1, defaults: ["255"], placeholders: ["length"] },
+  "character": { params: 1, defaults: ["1"], placeholders: ["length"] },
+  "numeric": { params: 2, defaults: ["12", "2"], placeholders: ["precision", "scale"] },
+};
+
+function columnTypeOptionsHtml(selectedType) {
+  const isCustom = !COMMON_COLUMN_TYPES.includes(selectedType);
+  let html = COMMON_COLUMN_TYPES.map((t) =>
+    `<option value="${escHtml(t)}"${t === selectedType ? " selected" : ""}>${escHtml(t)}</option>`
+  ).join("");
+  html += `<option value="__custom__"${isCustom ? " selected" : ""}>Custom…</option>`;
+  return html;
+}
+
+// "character varying(30)" -> { base: "character varying", params: ["30"] }.
+// "numeric" (no parens at all — a real, valid, unbounded Postgres type)
+// -> { base: "numeric", params: [] }. "bigint" -> { base: "bigint", params: [] }.
+function parseTypeForEditing(fullType) {
+  const m = /^([a-zA-Z ]+?)\s*\((.+)\)$/.exec(fullType || "");
+  if (!m) return { base: (fullType || "").trim(), params: [] };
+  return { base: m[1].trim(), params: m[2].split(",").map((p) => p.trim()) };
+}
+
+function buildTypeFromParams(base, params) {
+  const config = PARAM_TYPE_CONFIG[base];
+  const vals = (params || []).map((p) => (p || "").trim()).filter((p) => p !== "");
+  if (!config || !vals.length) return base;
+  return `${base}(${vals.join(",")})`;
+}
+
+// Shows/hides and resets the length (or precision/scale) box(es) next
+// to a type picker to match whatever base type is now selected —
+// always resets to that type's own sensible defaults, since old params
+// from a DIFFERENT type (e.g. a varchar length) aren't meaningful once
+// you've switched to, say, numeric.
+function updateTypeParamUI(selectEl, param1El, param2El, customEl, paramsRowEl) {
+  const val = selectEl.value;
+  customEl.style.display = val === "__custom__" ? "block" : "none";
+  const config = PARAM_TYPE_CONFIG[val];
+  if (!config) { paramsRowEl.style.display = "none"; return; }
+  paramsRowEl.style.display = "flex";
+  param1El.style.display = "inline-block";
+  param1El.placeholder = config.placeholders[0];
+  param1El.value = config.defaults[0];
+  if (config.params === 2) {
+    param2El.style.display = "inline-block";
+    param2El.placeholder = config.placeholders[1];
+    param2El.value = config.defaults[1];
+  } else {
+    param2El.style.display = "none";
+    param2El.value = "";
+  }
+}
+
+function resolveSelectedType(selectEl, param1El, param2El, customEl) {
+  const val = selectEl.value;
+  if (val === "__custom__") return customEl.value.trim();
+  return buildTypeFromParams(val, [param1El.value, param2El.value]);
+}
+
+function renderEditorColumnsList() {
+  const { schema, table } = currentEditorTable;
+  const columns = (lastGraphData.columns || [])
+    .filter((c) => c.schema_name === schema && c.table_name === table)
+    .sort((a, b) => (a.ordinal_position || 0) - (b.ordinal_position || 0));
+  const container = $("editorColumnsList");
+  if (!columns.length) { container.innerHTML = '<p class="hint">No columns yet.</p>'; return; }
+  container.innerHTML = "";
+  // Computed once per table, not per column — whether a column takes
+  // part in a FK either direction (references another table, or is
+  // referenced BY one), same "both directions count" convention as
+  // Explore's own FK badge (getTableForeignKeys()/renderColumnsAndRelationships()).
+  const fkOutCols = new Set((lastGraphData.foreign_keys || [])
+    .filter((fk) => fk.from_schema === schema && fk.from_table === table).map((fk) => fk.from_column));
+  const fkInCols = new Set((lastGraphData.foreign_keys || [])
+    .filter((fk) => fk.to_schema === schema && fk.to_table === table).map((fk) => fk.to_column));
+  for (const c of columns) {
+    const flags = [c.is_primary_key ? "PK" : "", !c.is_nullable ? "NOT NULL" : "", c.is_unique ? "UNIQUE" : ""].filter(Boolean).join(" · ");
+    // Symbol badges next to the name — same placement/styling
+    // (.col-fk-badge) as Explore's own 🔗 badge, so the two modes read
+    // consistently. Additive to the existing PK/NOT NULL/UNIQUE text
+    // flags, not a replacement — a column can be both "UNIQUE" (text)
+    // and carry the 🔑 symbol at a glance without reading the text.
+    const isFk = fkOutCols.has(c.column_name) || fkInCols.has(c.column_name);
+    const fkBadge = isFk ? `<span class="col-fk-badge" title="Part of a foreign key relationship">🔗</span>` : "";
+    const uniqueBadge = c.is_unique ? `<span class="col-fk-badge" title="Unique">🔑</span>` : "";
+    const parsed = parseTypeForEditing(c.data_type);
+    const isKnownBase = COMMON_COLUMN_TYPES.includes(parsed.base);
+    const config = isKnownBase ? PARAM_TYPE_CONFIG[parsed.base] : null;
+    const row = document.createElement("div");
+    row.className = "editor-col-row";
+    row.innerHTML = `
+      <div class="editor-col-row-top">
+        <span class="editor-row-main">${escHtml(c.column_name)}${fkBadge}${uniqueBadge}${flags ? ` <span class="editor-row-meta">${escHtml(flags)}</span>` : ""}</span>
+        <button type="button" title="Delete column">✕</button>
+      </div>
+      <div class="editor-col-row-typeline">
+        <select class="editor-col-type-select">${columnTypeOptionsHtml(isKnownBase ? parsed.base : "__custom__")}</select>
+      </div>
+      <div class="type-param-row editor-col-type-params" style="display: ${config ? "flex" : "none"};">
+        <input type="text" class="type-param-input editor-col-type-param1" placeholder="${config ? config.placeholders[0] : ""}"
+          value="${config ? escHtml(parsed.params[0] || config.defaults[0]) : ""}" />
+        <input type="text" class="type-param-input editor-col-type-param2" placeholder="${config && config.params === 2 ? config.placeholders[1] : ""}"
+          value="${config && config.params === 2 ? escHtml(parsed.params[1] || config.defaults[1]) : ""}"
+          style="display: ${config && config.params === 2 ? "inline-block" : "none"};" />
+        <input type="text" class="editor-col-type-custom" placeholder="custom type"
+          value="${!isKnownBase ? escHtml(c.data_type) : ""}" style="display: ${!isKnownBase ? "inline-block" : "none"};" />
+      </div>
+    `;
+    const typeSelect = row.querySelector(".editor-col-type-select");
+    const paramsRow = row.querySelector(".editor-col-type-params");
+    const param1 = row.querySelector(".editor-col-type-param1");
+    const param2 = row.querySelector(".editor-col-type-param2");
+    const typeCustom = row.querySelector(".editor-col-type-custom");
+
+    // Change applies immediately — no separate Save button, matching
+    // how the NOT NULL/UNIQUE/PK checkboxes elsewhere already apply
+    // directly rather than as a staged edit.
+    function applyRowType() {
+      const newType = resolveSelectedType(typeSelect, param1, param2, typeCustom);
+      if (newType) changeColumnTypeInProject(schema, table, c.column_name, newType);
+    }
+    typeSelect.addEventListener("change", () => {
+      updateTypeParamUI(typeSelect, param1, param2, typeCustom, paramsRow);
+      if (typeSelect.value === "__custom__") { typeCustom.value = ""; typeCustom.focus(); }
+      else applyRowType();
+    });
+    param1.addEventListener("change", applyRowType);
+    param2.addEventListener("change", applyRowType);
+    typeCustom.addEventListener("change", applyRowType);
+
+    row.querySelector("button").addEventListener("click", () => {
+      // RESTRICT, not confirm-and-cascade — a same-table-only delete
+      // (no other table depends on this column) still stays instant,
+      // but a cross-table dependency now blocks outright instead of
+      // asking to proceed. See deleteColumnFromProject()'s own comment
+      // for why this replaced the earlier confirm-dialog version.
+      const result = deleteColumnFromProject(schema, table, c.column_name);
+      if (result.error) { alert(result.error); return; }
+      renderEditorColumnsList();
+      renderEditorFksList();
+      renderEditorCanvas();
+    });
+    container.appendChild(row);
+  }
+}
+
+function renderEditorFksList() {
+  const { schema, table } = currentEditorTable;
+  const fks = lastGraphData.foreign_keys.filter((fk) => fk.from_schema === schema && fk.from_table === table);
+  const container = $("editorFksList");
+  if (!fks.length) { container.innerHTML = '<p class="hint">No foreign keys from this table yet.</p>'; return; }
+  container.innerHTML = "";
+  for (const fk of fks) {
+    const row = document.createElement("div");
+    row.className = "editor-row";
+    row.innerHTML = `
+      <span class="editor-row-main">${escHtml(fk.from_column)} → ${escHtml(fk.to_schema)}.${escHtml(fk.to_table)}.${escHtml(fk.to_column)}</span>
+      <button type="button" title="Delete foreign key">✕</button>
+    `;
+    row.querySelector("button").addEventListener("click", () => {
+      deleteForeignKeyFromProject(fk.from_schema, fk.from_table, fk.from_column, fk.to_schema, fk.to_table, fk.to_column);
+      renderEditorFksList();
+      renderEditorCanvas();
+      renderEditorColumnsList(); // the deleted FK's 🔗 badge on from_column needs to disappear too
+    });
+    container.appendChild(row);
+  }
+}
+
+function showAddTableErr(msg) {
+  const box = $("addTableErr");
+  if (!msg) { box.classList.remove("show"); box.textContent = ""; return; }
+  box.textContent = msg;
+  box.classList.add("show");
+}
+
+$("btnShowAddTableForm").addEventListener("click", () => {
+  $("addTableForm").style.display = "block";
+  $("newTableName").value = "";
+  $("newTableSchema").value = "";
+  showAddTableErr(null);
+});
+$("btnCancelAddTable").addEventListener("click", () => { $("addTableForm").style.display = "none"; });
+
+$("btnConfirmAddTable").addEventListener("click", () => {
+  const name = $("newTableName").value.trim();
+  const schema = $("newTableSchema").value.trim();
+  if (!name || !schema) { showAddTableErr("Both table name and schema are required."); return; }
+  const result = addTableToProject(schema, name);
+  if (result.error) { showAddTableErr(result.error); return; }
+  $("addTableForm").style.display = "none";
+  renderEditorCanvas();
+  selectEditorTable(schema, name);
+});
+
+$("btnDeleteTable").addEventListener("click", () => {
+  if (!currentEditorTable) return;
+  const { schema, table } = currentEditorTable;
+  if (!confirm(`Delete table "${schema}.${table}"? This also removes its own columns and foreign keys.`)) return;
+  // RESTRICT: deleteTableFromProject() refuses (and changes nothing) if
+  // another table still has an FK pointing into this one — same
+  // semantics as deleteColumnFromProject() now, see its own comment.
+  const result = deleteTableFromProject(schema, table);
+  if (result.error) { alert(result.error); return; }
+  closeEditorTableCard();
+  renderEditorCanvas();
+});
+
+function hideAddColumnForm() { $("addColumnForm").style.display = "none"; }
+function showAddColumnErr(msg) {
+  const box = $("addColumnErr");
+  if (!msg) { box.classList.remove("show"); box.textContent = ""; return; }
+  box.textContent = msg;
+  box.classList.add("show");
+}
+
+$("newColumnType").addEventListener("change", () => {
+  updateTypeParamUI($("newColumnType"), $("newColumnTypeParam1"), $("newColumnTypeParam2"), $("newColumnTypeCustom"), $("newColumnTypeParams"));
+  if ($("newColumnType").value === "__custom__") { $("newColumnTypeCustom").value = ""; $("newColumnTypeCustom").focus(); }
+});
+
+$("btnShowAddColumnForm").addEventListener("click", () => {
+  $("addColumnForm").style.display = "block";
+  $("newColumnName").value = "";
+  $("newColumnType").value = "bigint";
+  $("newColumnTypeCustom").value = "";
+  $("newColumnTypeCustom").style.display = "none";
+  $("newColumnTypeParams").style.display = "none";
+  $("newColumnNotNull").checked = false;
+  $("newColumnUnique").checked = false;
+  $("newColumnPk").checked = false;
+  showAddColumnErr(null);
+});
+$("btnCancelAddColumn").addEventListener("click", hideAddColumnForm);
+
+$("btnConfirmAddColumn").addEventListener("click", () => {
+  const name = $("newColumnName").value.trim();
+  if (!name) { showAddColumnErr("Column name is required."); return; }
+  const dataType = resolveSelectedType($("newColumnType"), $("newColumnTypeParam1"), $("newColumnTypeParam2"), $("newColumnTypeCustom"));
+  if (!dataType) { showAddColumnErr("Enter a custom type, or pick one from the list."); return; }
+  const { schema, table } = currentEditorTable;
+  const result = addColumnToProject(schema, table, name, dataType, $("newColumnNotNull").checked, $("newColumnUnique").checked, $("newColumnPk").checked);
+  if (result.error) { showAddColumnErr(result.error); return; }
+  hideAddColumnForm();
+  renderEditorColumnsList();
+});
+
+function hideAddFkForm() { $("addFkForm").style.display = "none"; }
+function showAddFkErr(msg) {
+  const box = $("addFkErr");
+  if (!msg) { box.classList.remove("show"); box.textContent = ""; return; }
+  box.textContent = msg;
+  box.classList.add("show");
+}
+
+// Both halves of this form need real column data that might not be in
+// lastGraphData yet (see ensureColumnsLoadedFor()) — the FROM side is
+// usually already loaded by selectEditorTable() by the time this runs,
+// but ensureColumnsLoadedFor() is a cheap no-op when it is, so calling
+// it again here is just defensive, not wasteful.
+async function populateAddFkForm() {
+  const { schema, table } = currentEditorTable;
+  $("newFkFromColumn").innerHTML = '<option value="">Loading…</option>';
+  await ensureColumnsLoadedFor(schema, table);
+  const fromColumns = (lastGraphData.columns || []).filter((c) => c.schema_name === schema && c.table_name === table);
+  $("newFkFromColumn").innerHTML = fromColumns.length
+    ? fromColumns.map((c) => `<option value="${escHtml(c.column_name)}">${escHtml(c.column_name)}</option>`).join("")
+    : '<option value="">(no columns yet — add one first)</option>';
+
+  const otherTables = lastGraphData.tables.filter((t) => !(t.schema_name === schema && t.table_name === table));
+  $("newFkToTable").innerHTML = otherTables.length
+    ? otherTables.map((t) => `<option value="${escHtml(tableId(t.schema_name, t.table_name))}">${escHtml(tableId(t.schema_name, t.table_name))}</option>`).join("")
+    : '<option value="">(no other tables yet)</option>';
+
+  await populateAddFkToColumn();
+}
+$("newFkToTable").addEventListener("change", populateAddFkToColumn);
+
+// The TARGET table picked here is very often one you haven't clicked
+// into yet — this is the exact "foreign key table/column showing
+// null" case the owner reported: without lazily fetching its columns
+// too, this dropdown had nothing real to show for any pre-existing
+// table.
+async function populateAddFkToColumn() {
+  const toTableValue = $("newFkToTable").value;
+  const toColumnSelect = $("newFkToColumn");
+  if (!toTableValue) { toColumnSelect.innerHTML = '<option value="">—</option>'; return; }
+  const [toSchema, toTable] = splitTableId(toTableValue);
+  toColumnSelect.innerHTML = '<option value="">Loading…</option>';
+  await ensureColumnsLoadedFor(toSchema, toTable);
+  const columns = (lastGraphData.columns || []).filter((c) => c.schema_name === toSchema && c.table_name === toTable);
+  toColumnSelect.innerHTML = columns.length
+    ? columns.map((c) => `<option value="${escHtml(c.column_name)}">${escHtml(c.column_name)}</option>`).join("")
+    : '<option value="">(no columns yet)</option>';
+}
+
+$("btnShowAddFkForm").addEventListener("click", async () => {
+  $("addFkForm").style.display = "block";
+  showAddFkErr(null);
+  await populateAddFkForm();
+});
+$("btnCancelAddFk").addEventListener("click", hideAddFkForm);
+
+$("btnConfirmAddFk").addEventListener("click", () => {
+  const { schema, table } = currentEditorTable;
+  const fromColumn = $("newFkFromColumn").value;
+  const toTableValue = $("newFkToTable").value;
+  const toColumn = $("newFkToColumn").value;
+  if (!fromColumn || !toTableValue || !toColumn) { showAddFkErr("All three fields are required — add columns to both tables first if a list is empty."); return; }
+  const [toSchema, toTable] = splitTableId(toTableValue);
+  const result = addForeignKeyToProject(schema, table, fromColumn, toSchema, toTable, toColumn);
+  if (result.error) { showAddFkErr(result.error); return; }
+  hideAddFkForm();
+  renderEditorFksList();
+  renderEditorCanvas();
+  renderEditorColumnsList(); // the new FK's 🔗 badge on from_column needs to show immediately
+});
+
+function showScratchProjectErr(msg) {
+  const box = $("scratchProjectErr");
+  if (!msg) { box.classList.remove("show"); box.textContent = ""; return; }
+  box.textContent = msg;
+  box.classList.add("show");
+}
+
+$("btnCreateScratchProject").addEventListener("click", async () => {
+  const name = $("scratchProjectName").value.trim();
+  if (!name) { showScratchProjectErr("Project name is required."); return; }
+  showScratchProjectErr(null);
+  const btn = $("btnCreateScratchProject");
+  btn.disabled = true;
+  try {
+    const res = await fetch("projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, origin: "scratch" }),
+    });
+    const project = await res.json();
+    if (!res.ok || project.error) { showScratchProjectErr(project.error || "Couldn't create project."); return; }
+    $("scratchProjectName").value = "";
+    await openProject(project);
+    await autoSaveInitialVersionIfNeeded();
+  } catch (e) {
+    showScratchProjectErr("Network error: " + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 $("btnConnect").addEventListener("click", async () => {
   const body = {
     host: $("connHost").value.trim(),
@@ -1877,13 +3282,1478 @@ $("btnDisconnect").addEventListener("click", async () => {
   applyConnectionStatus({ connected: false }, true);
 });
 
-(async function loadInitialStatus() {
+// ---------------------------------------------------------------------
+// Projects — the real entry point. A Project is the top-level container
+// (see schema-map/CLAUDE.md's "v2 design, Phase A") that a live database
+// connection, Clusters, and eventually an Editor all live inside. This
+// screen is shown before anything else; `.layout` (today's whole
+// Explore/Clusters app) stays fully hidden until a project is opened.
+// ---------------------------------------------------------------------
+let currentProject = null; // {id, name, origin, created_at}, set by openProject()
+
+function showProjectsScreen() {
+  $("projectsScreen").style.display = "block";
+  $("mainLayout").style.display = "none";
+}
+
+function showProjectWorkspace() {
+  $("projectsScreen").style.display = "none";
+  $("mainLayout").style.display = "flex";
+}
+
+async function fetchVersions(projectId) {
   try {
-    const res = await fetch("status");
-    applyConnectionStatus(await res.json());
+    const res = await fetch(`projects/${projectId}/versions`);
+    const data = await res.json();
+    return data.versions || [];
   } catch (e) {
-    applyConnectionStatus({ connected: false });
+    return [];
   }
+}
+
+async function loadProjectsScreen() {
+  showProjectsScreen();
+  populatePasteQuery();
+  const container = $("projectList");
+  container.innerHTML = '<p class="hint">Loading…</p>';
+  try {
+    const res = await fetch("projects");
+    const data = await res.json();
+    if (!data.projects.length) {
+      container.innerHTML = '<p class="hint">No projects yet — create one below to get started.</p>';
+      return;
+    }
+    container.innerHTML = "";
+    for (const p of data.projects) {
+      const item = document.createElement("div");
+      item.className = "project-item";
+      item.innerHTML = `
+        <div>
+          <div class="project-item-name">${escHtml(p.name)}</div>
+          <div class="project-item-meta">Created ${new Date(p.created_at).toLocaleString()}</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span class="project-origin-badge">${escHtml(p.origin)}</span>
+          <button type="button" class="project-item-delete" title="Delete project" data-action="delete-project">✕</button>
+        </div>
+      `;
+      item.addEventListener("click", () => openProject(p));
+      item.querySelector('[data-action="delete-project"]').addEventListener("click", async (evt) => {
+        evt.stopPropagation(); // don't also open the project
+        if (!confirm(`Delete "${p.name}"? This permanently removes the project AND all of its saved versions. This can't be undone.`)) return;
+        await fetch(`projects/${p.id}`, { method: "DELETE" });
+        loadProjectsScreen();
+      });
+      container.appendChild(item);
+    }
+  } catch (e) {
+    container.innerHTML = '<p class="hint">Network error loading projects.</p>';
+  }
+}
+
+function showCreateProjectErr(msg) {
+  const box = $("createProjectErr");
+  if (!msg) { box.classList.remove("show"); box.textContent = ""; return; }
+  box.textContent = msg;
+  box.classList.add("show");
+}
+
+$("btnCreateProject").addEventListener("click", async () => {
+  const name = $("newProjectName").value.trim();
+  if (!name) { showCreateProjectErr("Project name is required."); return; }
+  showCreateProjectErr(null);
+  const btn = $("btnCreateProject");
+  btn.disabled = true;
+  try {
+    const res = await fetch("projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, origin: "database" }),
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) { showCreateProjectErr(data.error || "Couldn't create project."); return; }
+    $("newProjectName").value = "";
+    openProject(data);
+  } catch (e) {
+    showCreateProjectErr("Network error: " + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ---------------------------------------------------------------------
+// Paste-and-load Project origin — for when there's no direct database
+// access at all (private network, no credentials to hand over). Two
+// SEPARATE queries (tables, foreign keys), each pasted back separately —
+// split out from an earlier single-combined-query version per the
+// owner's explicit ask for a simpler staged flow: less SQL for an
+// unfamiliar client to choke on per step, and a wrong/truncated paste in
+// one step gives a specific error about THAT step, not an ambiguous one
+// about a single mixed blob. Both query texts come from the backend
+// (GET /paste-query, introspection_postgres.TABLES_QUERY_SQL /
+// FOREIGN_KEYS_QUERY_SQL) so there's exactly one copy of each, kept in
+// sync with the live-fetch queries by construction, not by hand —
+// verified offline to produce byte-identical output to GET /graph for
+// the same database.
+// ---------------------------------------------------------------------
+let pasteQueries = null; // {tables_sql, foreign_keys_sql, columns_sql}, fetched once
+
+async function populatePasteQuery() {
+  if (pasteQueries) {
+    $("pasteTablesQueryDisplay").value = pasteQueries.tables_sql;
+    $("pasteForeignKeysQueryDisplay").value = pasteQueries.foreign_keys_sql;
+    $("pasteColumnsQueryDisplay").value = pasteQueries.columns_sql;
+    return;
+  }
+  try {
+    const res = await fetch("paste-query");
+    pasteQueries = await res.json();
+    $("pasteTablesQueryDisplay").value = pasteQueries.tables_sql || "";
+    $("pasteForeignKeysQueryDisplay").value = pasteQueries.foreign_keys_sql || "";
+    $("pasteColumnsQueryDisplay").value = pasteQueries.columns_sql || "";
+  } catch (e) {
+    const msg = "Couldn't load the query — network error.";
+    $("pasteTablesQueryDisplay").value = msg;
+    $("pasteForeignKeysQueryDisplay").value = msg;
+    $("pasteColumnsQueryDisplay").value = msg;
+  }
+}
+
+function wireCopyButton(buttonId, sourceElementId) {
+  $(buttonId).addEventListener("click", async () => {
+    const btn = $(buttonId);
+    try {
+      await navigator.clipboard.writeText($(sourceElementId).value || "");
+      const original = btn.textContent;
+      btn.textContent = "Copied!";
+      setTimeout(() => { btn.textContent = original; }, 1500);
+    } catch (e) {
+      // Clipboard permission can fail silently in some browser contexts —
+      // the query is also sitting right there in a selectable textarea,
+      // so this is a nicety, not the only way to get it.
+      alert("Couldn't copy automatically — select the text in the box above and copy it manually.");
+    }
+  });
+}
+wireCopyButton("btnCopyTablesQuery", "pasteTablesQueryDisplay");
+wireCopyButton("btnCopyForeignKeysQuery", "pasteForeignKeysQueryDisplay");
+wireCopyButton("btnCopyColumnsQuery", "pasteColumnsQueryDisplay");
+
+function showPasteImportErr(msg) {
+  const box = $("pasteImportErr");
+  if (!msg) { box.classList.remove("show"); box.textContent = ""; return; }
+  box.textContent = msg;
+  box.classList.add("show");
+}
+
+// Parses and lightly validates one pasted JSON array — shared by all
+// three paste steps (tables, foreign keys, columns), `label`/`steps`/
+// `requiredFields` are what differ between them. Deliberately light:
+// just enough to fail with a clear, step-specific message instead of a
+// confusing crash partway through renderGraph(), not full-schema
+// validation. `optional`: an empty columns paste is fine (that step is
+// optional — see COLUMNS_QUERY_SQL's own comment for why); an empty
+// tables/foreign-keys paste is not.
+function parsePastedArray(raw, label, steps, requiredFields, optional) {
+  if (!raw.trim()) {
+    if (optional) return { data: [] };
+    return { error: `Paste the ${label} result first (Step ${steps} above).` };
+  }
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch (e) {
+    return { error: `${label}: that's not valid JSON — paste the query result exactly as returned, nothing added or removed.` };
+  }
+  if (!Array.isArray(data)) return { error: `${label}: expected a JSON array (the query returns one even when empty — "[]").` };
+  for (const row of data) {
+    if (!requiredFields.every((f) => row && row[f] !== undefined)) {
+      return { error: `${label}: each row needs ${requiredFields.join("/")} — check the pasted JSON is the query's unmodified output.` };
+    }
+  }
+  return { data };
+}
+
+$("btnLoadPasteImport").addEventListener("click", async () => {
+  const name = $("pasteProjectName").value.trim();
+  if (!name) { showPasteImportErr("Project name is required."); return; }
+
+  const tablesResult = parsePastedArray($("pasteTablesInput").value, "tables", "1-2", ["schema_name", "table_name"], false);
+  if (tablesResult.error) { showPasteImportErr(tablesResult.error); return; }
+  const fkResult = parsePastedArray($("pasteForeignKeysInput").value, "foreign keys", "3-4", ["from_schema", "from_table", "to_schema", "to_table"], false);
+  if (fkResult.error) { showPasteImportErr(fkResult.error); return; }
+  const columnsResult = parsePastedArray($("pasteColumnsInput").value, "columns", "5-6", ["schema_name", "table_name", "column_name"], true);
+  if (columnsResult.error) { showPasteImportErr(columnsResult.error); return; }
+
+  const snapshot = { tables: tablesResult.data, foreign_keys: fkResult.data, columns: columnsResult.data };
+  showPasteImportErr(null);
+  const btn = $("btnLoadPasteImport");
+  btn.disabled = true;
+  try {
+    const res = await fetch("projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, origin: "paste" }),
+    });
+    const project = await res.json();
+    if (!res.ok || project.error) { showPasteImportErr(project.error || "Couldn't create project."); return; }
+    $("pasteProjectName").value = "";
+    $("pasteTablesInput").value = "";
+    $("pasteForeignKeysInput").value = "";
+    $("pasteColumnsInput").value = "";
+    await openProject(project);
+    // openProject() only auto-loads a saved VERSION — a brand-new
+    // paste-import project has none yet, so the pasted data itself
+    // needs to be rendered directly, exactly like a live "Load graph"
+    // click would, minus ever touching a real database.
+    lastGraphData = snapshot;
+    renderGraph(snapshot);
+    await autoSaveInitialVersionIfNeeded();
+  } catch (e) {
+    showPasteImportErr("Network error: " + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// Opens a project: shows the workspace, loads its version history, and —
+// if it already has at least one saved version — loads the LATEST one
+// straight into the graph with no live connection required at all
+// (this is the whole point of Projects owning the schema, not a live
+// connection). A brand-new project with zero versions just starts at
+// the Connection card, same as the app has always opened until now.
+async function openProject(project) {
+  currentProject = project;
+  showProjectWorkspace();
+  $("projectCurrentName").textContent = project.name;
+  $("projectCurrentOrigin").textContent = project.origin;
+  $("detProject").style.display = "block";
+
+  const versions = await fetchVersions(project.id);
+  renderProjectVersionList(versions);
+  if (versions.length) {
+    await switchToVersion(versions[0].id, /* skipConfirm */ true); // versions are ordered newest-first
+  } else if (project.origin === "scratch") {
+    // A brand-new from-scratch project has nothing to connect to or
+    // explore — go straight to Editor mode with an empty structure,
+    // instead of the "Connect to a database" placeholder that makes no
+    // sense for this origin.
+    lastGraphData = { tables: [], foreign_keys: [], columns: [] };
+    currentEditorTable = null;
+    $("modeToggle").style.display = "flex"; // normally shown by renderGraph(), never called for this path
+    switchMode("editor");
+  } else {
+    lastGraphData = null;
+    showGraphPlaceholder("Connect to a database to start exploring its structure.");
+  }
+}
+
+async function renderProjectVersions() {
+  renderProjectVersionList(await fetchVersions(currentProject.id));
+}
+
+// Reuses the Cluster list's row styling (.cluster-item etc.) — same
+// "name + meta on one line, actions below" shape, no new CSS needed.
+function renderProjectVersionList(versions) {
+  const container = $("projectVersionList");
+  populateCompareSelects(versions);
+  if (!versions.length) {
+    container.innerHTML = '<p class="hint">No versions saved yet.</p>';
+    return;
+  }
+  container.innerHTML = "";
+  for (const v of versions) {
+    const item = document.createElement("div");
+    item.className = "cluster-item";
+    item.innerHTML = `
+      <div class="cluster-item-row">
+        <span class="cluster-item-name">v${v.version_number}${v.label ? " — " + escHtml(v.label) : ""}</span>
+        <span class="cluster-item-count">${new Date(v.created_at).toLocaleDateString()}</span>
+      </div>
+      <div class="cluster-item-actions">
+        <button type="button" data-action="switch">Switch to this</button>
+        <button type="button" data-action="delete" class="danger">Delete</button>
+      </div>
+    `;
+    item.querySelector('[data-action="switch"]').addEventListener("click", () => switchToVersion(v.id));
+    item.querySelector('[data-action="delete"]').addEventListener("click", async (evt) => {
+      evt.stopPropagation();
+      if (!confirm(`Delete v${v.version_number}? This can't be undone.`)) return;
+      await fetch(`versions/${v.id}`, { method: "DELETE" });
+      renderProjectVersions();
+    });
+    container.appendChild(item);
+  }
+}
+
+// ---------------------------------------------------------------------
+// Version comparison (v2 design Phase D, redesigned in Phase H).
+//
+// Originally hands two versions' full snapshots to DataDiff Pro, the
+// sibling flagship tool in this same monorepo, rather than build a
+// second diff engine — a sound call AT THE TIME (Phase D), since this
+// tool had no comparison logic of its own yet. That's no longer true:
+// Phase F's generateMigrationDDL() already had to walk two full
+// snapshots and pair up tables/columns/foreign_keys by key to generate
+// SQL. Reusing DataDiff Pro for DISPLAY after that point meant keeping
+// TWO diff mechanisms around for the same two snapshots — a generic
+// one (DataDiff Pro, needing an explicit `list_keys` config to avoid
+// its 2-field auto-detect ceiling — see the now-removed
+// COMPARE_LIST_KEYS_YAML for why) and a purpose-built one. diffSnapshots()
+// below consolidates onto the purpose-built approach: no network call,
+// no generic path-based records to translate into English, and no
+// dependency on DataDiff Pro's list-pairing behavior at all for this
+// feature. DataDiff Pro itself is untouched — this only changes what
+// Schema Map's OWN Compare-versions feature calls internally.
+// ---------------------------------------------------------------------
+
+// Shared comparison core — walks two full version snapshots and
+// returns every structural difference as plain data (never SQL, never
+// English text), so describeSnapshotDiff() below just has to format it.
+// Deliberately a SEPARATE function from generateMigrationDDL()'s own
+// internal comparison, not a shared refactor of it — that function is
+// already verified against real Postgres end to end, and reusing its
+// internals here for a read-only display feature isn't worth the risk
+// of destabilizing something already proven; the comparison logic here
+// is simple enough (Map lookups, key diffing) that a second copy costs
+// little.
+function diffSnapshots(snapA, snapB) {
+  const tablesA = new Map((snapA.tables || []).map((t) => [`${t.schema_name}.${t.table_name}`, t]));
+  const tablesB = new Map((snapB.tables || []).map((t) => [`${t.schema_name}.${t.table_name}`, t]));
+  const colsA = snapA.columns || [];
+  const colsB = snapB.columns || [];
+  const fksA = snapA.foreign_keys || [];
+  const fksB = snapB.foreign_keys || [];
+
+  const colKey = (c) => `${c.schema_name}.${c.table_name}.${c.column_name}`;
+  const colsAByKey = new Map(colsA.map((c) => [colKey(c), c]));
+  const colsBByKey = new Map(colsB.map((c) => [colKey(c), c]));
+  const fkFullKey = (fk) => `${fk.from_schema}.${fk.from_table}.${fk.from_column}=>${fk.to_schema}.${fk.to_table}.${fk.to_column}`;
+  const fksAFull = new Map(fksA.map((fk) => [fkFullKey(fk), fk]));
+  const fksBFull = new Map(fksB.map((fk) => [fkFullKey(fk), fk]));
+
+  const removedTableKeys = [...tablesA.keys()].filter((k) => !tablesB.has(k));
+  const addedTableKeys = [...tablesB.keys()].filter((k) => !tablesA.has(k));
+  const commonTableKeys = [...tablesA.keys()].filter((k) => tablesB.has(k));
+
+  const addedTables = addedTableKeys.map((k) => tablesB.get(k));
+  const removedTables = removedTableKeys.map((k) => tablesA.get(k));
+
+  // Column-level changes only for tables present on BOTH sides — a
+  // brand-new or wholly-removed table's columns are implied by the
+  // table itself, not reported again as separate lines.
+  const addedColumns = [];
+  const removedColumns = [];
+  const typeChanges = [];
+  const nullabilityChanges = [];
+  const uniqueChanges = [];
+  for (const [key, cB] of colsBByKey) {
+    if (colsAByKey.has(key)) continue;
+    if (!tablesA.has(`${cB.schema_name}.${cB.table_name}`)) continue;
+    addedColumns.push(cB);
+  }
+  for (const [key, cA] of colsAByKey) {
+    if (colsBByKey.has(key)) continue;
+    if (!tablesB.has(`${cA.schema_name}.${cA.table_name}`)) continue;
+    removedColumns.push(cA);
+  }
+  for (const [key, cA] of colsAByKey) {
+    const cB = colsBByKey.get(key);
+    if (!cB) continue;
+    if (cA.data_type !== cB.data_type) typeChanges.push({ a: cA, b: cB });
+    if (cA.is_nullable !== cB.is_nullable) nullabilityChanges.push({ a: cA, b: cB });
+    const aUnique = !!(cA.is_unique && !cA.is_primary_key);
+    const bUnique = !!(cB.is_unique && !cB.is_primary_key);
+    if (aUnique !== bUnique) uniqueChanges.push({ col: cB, becameUnique: bUnique });
+  }
+
+  const pkColsOf = (colsByKey, tableKey) =>
+    [...colsByKey.values()].filter((c) => `${c.schema_name}.${c.table_name}` === tableKey && c.is_primary_key)
+      .map((c) => c.column_name).sort();
+  const pkChanges = [];
+  for (const tableKey of commonTableKeys) {
+    const oldCols = pkColsOf(colsAByKey, tableKey);
+    const newCols = pkColsOf(colsBByKey, tableKey);
+    if (oldCols.join(",") !== newCols.join(",")) pkChanges.push({ tableKey, oldCols, newCols });
+  }
+
+  // FKs owned by a wholly added/removed table are implied by the table
+  // change itself, same reasoning as columns above.
+  const addedFks = [...fksBFull.entries()]
+    .filter(([k]) => !fksAFull.has(k))
+    .map(([, fk]) => fk)
+    .filter((fk) => tablesA.has(`${fk.from_schema}.${fk.from_table}`));
+  const removedFks = [...fksAFull.entries()]
+    .filter(([k]) => !fksBFull.has(k))
+    .map(([, fk]) => fk)
+    .filter((fk) => tablesB.has(`${fk.from_schema}.${fk.from_table}`));
+
+  return { addedTables, removedTables, addedColumns, removedColumns, typeChanges, nullabilityChanges, uniqueChanges, pkChanges, addedFks, removedFks };
+}
+
+// Renders diffSnapshots()'s structured output as plain-English lines —
+// no JSON, no bracket-notation paths, no raw left_value/right_value
+// pairs. The owner's own words: "showing me a json difficult for me to
+// understand... easy plain text will be easy for me."
+function describeSnapshotDiff(snapA, snapB) {
+  const d = diffSnapshots(snapA, snapB);
+  const added = [];
+  const removed = [];
+  const changed = [];
+
+  for (const t of d.addedTables) {
+    added.push(`Added table ${t.schema_name}.${t.table_name}`);
+  }
+  for (const t of d.removedTables) {
+    removed.push(`Removed table ${t.schema_name}.${t.table_name}`);
+  }
+  for (const c of d.addedColumns) {
+    const flags = [c.is_primary_key ? "PK" : "", !c.is_nullable ? "NOT NULL" : "", c.is_unique && !c.is_primary_key ? "UNIQUE" : ""].filter(Boolean).join(" · ");
+    added.push(`Added column ${c.schema_name}.${c.table_name}.${c.column_name} (${c.data_type}${flags ? " · " + flags : ""})`);
+  }
+  for (const c of d.removedColumns) {
+    removed.push(`Removed column ${c.schema_name}.${c.table_name}.${c.column_name}`);
+  }
+  for (const fk of d.addedFks) {
+    added.push(`Added foreign key: ${fk.from_schema}.${fk.from_table}.${fk.from_column} → ${fk.to_schema}.${fk.to_table}.${fk.to_column}`);
+  }
+  for (const fk of d.removedFks) {
+    removed.push(`Removed foreign key: ${fk.from_schema}.${fk.from_table}.${fk.from_column} → ${fk.to_schema}.${fk.to_table}.${fk.to_column}`);
+  }
+  for (const { a, b } of d.typeChanges) {
+    changed.push(`Changed type: ${b.schema_name}.${b.table_name}.${b.column_name} — ${a.data_type} → ${b.data_type}`);
+  }
+  for (const { a, b } of d.nullabilityChanges) {
+    changed.push(`${b.schema_name}.${b.table_name}.${b.column_name} is now ${b.is_nullable ? "nullable" : "NOT NULL"} (was ${a.is_nullable ? "nullable" : "NOT NULL"})`);
+  }
+  for (const { col, becameUnique } of d.uniqueChanges) {
+    changed.push(`${col.schema_name}.${col.table_name}.${col.column_name} is now ${becameUnique ? "UNIQUE" : "no longer UNIQUE"}`);
+  }
+  for (const { tableKey, oldCols, newCols } of d.pkChanges) {
+    if (!oldCols.length) changed.push(`Primary key added to ${tableKey}: (${newCols.join(", ")})`);
+    else if (!newCols.length) changed.push(`Primary key removed from ${tableKey}`);
+    else changed.push(`Primary key changed on ${tableKey}: (${oldCols.join(", ")}) → (${newCols.join(", ")})`);
+  }
+
+  return {
+    counts: { added: added.length, removed: removed.length, changed: changed.length },
+    lines: [
+      ...added.map((text) => ({ text, label: "Added", cls: "compare-added" })),
+      ...removed.map((text) => ({ text, label: "Removed", cls: "compare-removed" })),
+      ...changed.map((text) => ({ text, label: "Changed", cls: "compare-changed" })),
+    ],
+  };
+}
+
+// The "__current__" sentinel represents whatever's live in lastGraphData
+// right now — including unsaved edits — not a saved version at all. The
+// owner's own ask: being able to compare in-progress work against any
+// past version, not just two already-saved versions against each other
+// ("compare current state with last version or any version").
+const CURRENT_STATE_SENTINEL = "__current__";
+
+function populateCompareSelects(versions) {
+  const section = $("compareVersionsSection");
+  // Comparing needs at least ONE saved version to compare the current
+  // state against (or two saved versions against each other) — a
+  // brand-new project with zero versions has nothing to compare yet.
+  if (versions.length < 1) { section.style.display = "none"; return; }
+  section.style.display = "block";
+  const versionOptionsHtml = versions.map((v) =>
+    `<option value="${v.id}">v${v.version_number}${v.label ? " — " + escHtml(v.label) : ""}</option>`
+  ).join("");
+  const currentOptionHtml = `<option value="${CURRENT_STATE_SENTINEL}">Current (unsaved)</option>`;
+  const optionsHtml = currentOptionHtml + versionOptionsHtml;
+  const aSel = $("compareVersionA");
+  const bSel = $("compareVersionB");
+  const prevA = aSel.value, prevB = bSel.value;
+  aSel.innerHTML = optionsHtml;
+  bSel.innerHTML = optionsHtml;
+  const validValues = new Set([CURRENT_STATE_SENTINEL, ...versions.map((v) => v.id)]);
+  // A -> B reads as "going from A to B" (an added table in the result
+  // means it's new in B, not in A) — so the OLDER side belongs in A and
+  // the NEWER side in B, matching how comparing two saved versions
+  // already defaults (older, then newer). Current is always the newest
+  // possible state, so it belongs in B, not A — the most recent SAVED
+  // version is the natural baseline (A) for "what have I changed since
+  // my last save." Keep an existing valid selection if the list just
+  // refreshed under an open compare picker (e.g. after saving).
+  aSel.value = validValues.has(prevA) ? prevA : versions[0].id;
+  bSel.value = validValues.has(prevB) ? prevB : CURRENT_STATE_SENTINEL;
+}
+
+function showCompareErr(msg) {
+  const box = $("compareErr");
+  if (!msg) { box.classList.remove("show"); box.textContent = ""; return; }
+  box.textContent = msg;
+  box.classList.add("show");
+}
+
+// Kept around after a compare, purely so "Generate Migration DDL" can
+// walk the same two full snapshots directly — see generateMigrationDDL()
+// for why it doesn't parse DataDiff Pro's diff records instead.
+let lastCompareSnapA = null;
+let lastCompareSnapB = null;
+let lastCompareLabelA = "";
+let lastCompareLabelB = "";
+
+// Resolves one side of a comparison — either a real saved version
+// (fetched as before) or the CURRENT_STATE_SENTINEL, which needs no
+// fetch at all since it's just whatever's already in lastGraphData.
+async function resolveCompareSide(id) {
+  if (id === CURRENT_STATE_SENTINEL) {
+    if (!lastGraphData || !lastGraphData.tables) throw new Error("Nothing loaded yet to compare.");
+    ensureGraphDataShape();
+    return { tables: lastGraphData.tables, foreign_keys: lastGraphData.foreign_keys, columns: lastGraphData.columns };
+  }
+  const res = await fetch(`versions/${id}`);
+  return res.json();
+}
+
+$("btnCompareVersions").addEventListener("click", async () => {
+  const idA = $("compareVersionA").value;
+  const idB = $("compareVersionB").value;
+  if (!idA || !idB) return;
+  if (idA === idB) { showCompareErr("Pick two different things to compare."); return; }
+  showCompareErr(null);
+  const btn = $("btnCompareVersions");
+  btn.disabled = true;
+  btn.textContent = "Comparing…";
+  try {
+    const [snapA, snapB] = await Promise.all([
+      resolveCompareSide(idA),
+      resolveCompareSide(idB),
+    ]);
+    const labelA = $("compareVersionA").selectedOptions[0].textContent;
+    const labelB = $("compareVersionB").selectedOptions[0].textContent;
+    lastCompareSnapA = snapA;
+    lastCompareSnapB = snapB;
+    lastCompareLabelA = labelA;
+    lastCompareLabelB = labelB;
+    // No network call for the diff itself — describeSnapshotDiff() is a
+    // pure, local computation over the two already-fetched snapshots.
+    openCompareModal(describeSnapshotDiff(snapA, snapB), labelA, labelB);
+  } catch (e) {
+    showCompareErr(e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Compare";
+  }
+});
+
+function openCompareModal(result, labelA, labelB) {
+  $("compareModalTitle").textContent = `Comparing ${labelA} → ${labelB}`;
+  const { counts, lines } = result;
+  $("compareSummary").innerHTML = `
+    <p class="hint">
+      <strong style="color: var(--ok-text);">${counts.added} added</strong> ·
+      <strong style="color: var(--err-text);">${counts.removed} removed</strong> ·
+      <strong style="color: var(--accent);">${counts.changed} changed</strong>
+    </p>
+  `;
+  if (!lines.length) {
+    $("compareRecords").innerHTML = '<p class="hint">No differences between these two versions.</p>';
+  } else {
+    $("compareRecords").innerHTML = lines.map((l) => `
+      <div class="compare-row ${l.cls}">
+        <div class="compare-row-label">${escHtml(l.label)}</div>
+        <div class="compare-row-path">${escHtml(l.text)}</div>
+      </div>
+    `).join("");
+  }
+  $("compareModal").style.display = "flex";
+}
+
+function closeCompareModal() {
+  $("compareModal").style.display = "none";
+}
+$("btnCloseCompareModal").addEventListener("click", closeCompareModal);
+$("compareModal").addEventListener("click", (evt) => {
+  if (evt.target.id === "compareModal") closeCompareModal(); // click on the backdrop, not the box itself
+});
+
+// Always double-quote identifiers — preserves exact case (real schemas in
+// the wild mix case, e.g. "maintenanceTracking") and sidesteps reserved-word
+// collisions, regardless of whether a given name would technically need it.
+function quoteIdent(name) {
+  return `"${String(name).replace(/"/g, '""')}"`;
+}
+
+// Postgres's own default auto-generated constraint names (what you get
+// when CREATE/ALTER doesn't specify an explicit CONSTRAINT name). Matched
+// here for two reasons: (1) so a DROP CONSTRAINT generated by the
+// migration-DDL feature (generateMigrationDDL()) has the best real chance
+// of matching a constraint that already exists in an actual database —
+// this tool doesn't capture a live database's REAL constraint names, only
+// whether a column is a PK/unique/FK, so this is a best-effort guess, not
+// a guarantee; (2) so a constraint THIS tool creates (via generateDDL())
+// can later be dropped by a migration script symmetrically. If a real
+// constraint was given an explicit custom name, adjust the generated DROP
+// before running it.
+function pkConstraintName(table) { return `${table}_pkey`; }
+function uniqueConstraintName(table, column) { return `${table}_${column}_key`; }
+function fkConstraintName(table, column) { return `${table}_${column}_fkey`; }
+
+// Resolves name collisions deterministically (e.g. two FKs that would
+// otherwise generate the same constraint name) by appending an
+// incrementing suffix — shared by generateDDL() and generateMigrationDDL()
+// so both dedupe the same way.
+function dedupeConstraintName(base, usedNames) {
+  let name = base;
+  let i = 1;
+  while (usedNames.has(name)) name = `${base}_${i++}`;
+  usedNames.add(name);
+  return name;
+}
+
+// One table's CREATE TABLE statement (columns + NOT NULL + inline UNIQUE
+// + PRIMARY KEY) — shared by generateDDL() (full schema) and
+// generateMigrationDDL() (just the tables newly added between two
+// versions), so the two can't silently produce different column DDL for
+// what should be identical logic. Returns null if the table has no
+// columns loaded (nothing to create yet, not an error).
+function buildCreateTableSQL(schema, table, tableCols) {
+  if (!tableCols.length) return null;
+  const colLines = tableCols.map((c) => {
+    let line = `  ${quoteIdent(c.column_name)} ${c.data_type}`;
+    if (!c.is_nullable) line += " NOT NULL";
+    // Skip UNIQUE when this column is already the primary key — a PK's
+    // own backing index is always unique too, so without this a PK
+    // column would get a redundant "UNIQUE ... PRIMARY KEY" pair.
+    if (c.is_unique && !c.is_primary_key) line += " UNIQUE";
+    return line;
+  });
+  const pkCols = tableCols.filter((c) => c.is_primary_key).map((c) => quoteIdent(c.column_name));
+  if (pkCols.length) colLines.push(`  PRIMARY KEY (${pkCols.join(", ")})`);
+  return `CREATE TABLE ${quoteIdent(schema)}.${quoteIdent(table)} (\n${colLines.join(",\n")}\n);`;
+}
+
+// Scope is deliberately fixed: columns + NOT NULL + UNIQUE + PRIMARY KEY +
+// FOREIGN KEY only. No indexes, no partitioning, no DEFAULT values (a
+// live-fetched default is often a nextval(...) sequence reference that
+// wouldn't exist in a fresh target database — out of scope rather than
+// guessed at) — matches the structure-only DDL scope agreed for this tool.
+function generateDDL(data) {
+  const tables = data.tables || [];
+  const columns = data.columns || [];
+  const foreignKeys = data.foreign_keys || [];
+  const lines = [];
+
+  const sortedTables = [...tables].sort((a, b) =>
+    `${a.schema_name}.${a.table_name}`.localeCompare(`${b.schema_name}.${b.table_name}`)
+  );
+
+  const schemas = [...new Set(sortedTables.map((t) => t.schema_name))]
+    .filter((s) => s !== "public")
+    .sort();
+  for (const s of schemas) {
+    lines.push(`CREATE SCHEMA IF NOT EXISTS ${quoteIdent(s)};`);
+  }
+  if (schemas.length) lines.push("");
+
+  // Tracks which tables actually got a CREATE TABLE below — a table with
+  // no columns loaded is skipped (see below), and an export scoped to a
+  // subset of a schema (a cluster, or just the tables someone clicked in
+  // Editor) legitimately won't include every table the bulk foreign_keys
+  // list mentions. Either way, a FOREIGN KEY referencing a table this
+  // script never creates isn't runnable — filtered out below instead.
+  const createdTables = new Set();
+
+  for (const t of sortedTables) {
+    const tableCols = columns
+      .filter((c) => c.schema_name === t.schema_name && c.table_name === t.table_name)
+      .sort((a, b) => (a.ordinal_position || 0) - (b.ordinal_position || 0));
+
+    const sql = buildCreateTableSQL(t.schema_name, t.table_name, tableCols);
+    if (!sql) {
+      lines.push(`-- ${quoteIdent(t.schema_name)}.${quoteIdent(t.table_name)} skipped: no columns defined yet`);
+      lines.push("");
+      continue;
+    }
+    lines.push(sql);
+    lines.push("");
+    createdTables.add(`${t.schema_name}.${t.table_name}`);
+  }
+
+  // FKs as separate ALTER TABLE statements, after every table exists —
+  // avoids having to topologically sort CREATE TABLE by dependency order,
+  // and works even for circular references between tables. Only emitted
+  // when both endpoints were actually created above (see createdTables).
+  const exportableFks = foreignKeys.filter((fk) =>
+    createdTables.has(`${fk.from_schema}.${fk.from_table}`) &&
+    createdTables.has(`${fk.to_schema}.${fk.to_table}`)
+  );
+  if (exportableFks.length) {
+    const usedNames = new Set();
+    for (const fk of exportableFks) {
+      const name = dedupeConstraintName(fkConstraintName(fk.from_table, fk.from_column), usedNames);
+      lines.push(
+        `ALTER TABLE ${quoteIdent(fk.from_schema)}.${quoteIdent(fk.from_table)} ` +
+        `ADD CONSTRAINT ${quoteIdent(name)} FOREIGN KEY (${quoteIdent(fk.from_column)}) ` +
+        `REFERENCES ${quoteIdent(fk.to_schema)}.${quoteIdent(fk.to_table)} (${quoteIdent(fk.to_column)});`
+      );
+    }
+  }
+
+  return lines.join("\n").trim() + "\n";
+}
+
+// Migration DDL between two saved versions — unlike generateDDL() (which
+// always recreates the WHOLE structure), this walks both full snapshots
+// directly and emits only what's needed to take a database from A's
+// structure to B's: drops/narrows first, then creates/adds, then FKs
+// last (same ordering reasoning as generateDDL(), plus drops have to
+// happen before anything that needs the old thing gone first). Built
+// straight from the two snapshots, NOT by parsing DataDiff Pro's diff
+// records — those are shaped for display (a flat list of field-level
+// path/value differences), not for reconstructing a full new table's
+// worth of columns/constraints cleanly, and this tool already has both
+// complete snapshots in hand from the compare step, so there's nothing
+// to gain from re-deriving the same information out of a text diff.
+function generateMigrationDDL(snapA, snapB) {
+  const tablesA = new Map((snapA.tables || []).map((t) => [`${t.schema_name}.${t.table_name}`, t]));
+  const tablesB = new Map((snapB.tables || []).map((t) => [`${t.schema_name}.${t.table_name}`, t]));
+  const colsA = snapA.columns || [];
+  const colsB = snapB.columns || [];
+  const fksA = snapA.foreign_keys || [];
+  const fksB = snapB.foreign_keys || [];
+
+  const colKey = (c) => `${c.schema_name}.${c.table_name}.${c.column_name}`;
+  const colsAByKey = new Map(colsA.map((c) => [colKey(c), c]));
+  const colsBByKey = new Map(colsB.map((c) => [colKey(c), c]));
+  // Full identity+target key — an FK that keeps its own (from) key but
+  // changes WHAT it references is treated as removed-then-added (drop
+  // the old target, add the new one), not silently ignored.
+  const fkFullKey = (fk) => `${fk.from_schema}.${fk.from_table}.${fk.from_column}=>${fk.to_schema}.${fk.to_table}.${fk.to_column}`;
+  const fksAFull = new Map(fksA.map((fk) => [fkFullKey(fk), fk]));
+  const fksBFull = new Map(fksB.map((fk) => [fkFullKey(fk), fk]));
+
+  const removedTableKeys = [...tablesA.keys()].filter((k) => !tablesB.has(k));
+  const addedTableKeys = [...tablesB.keys()].filter((k) => !tablesA.has(k));
+  const commonTableKeys = [...tablesA.keys()].filter((k) => tablesB.has(k));
+
+  const dropLines = [];
+  const alterLines = [];
+  const createLines = [];
+  const addLines = [];
+  const fkLines = [];
+  const usedNames = new Set();
+
+  // 1. Drop FKs that no longer exist with the same (from -> to) identity
+  // — retargeted or removed — but only when the FROM table survives;
+  // a table being dropped entirely takes its own FKs with it for free.
+  for (const [key, fk] of fksAFull) {
+    if (fksBFull.has(key)) continue;
+    if (!tablesB.has(`${fk.from_schema}.${fk.from_table}`)) continue;
+    dropLines.push(
+      `ALTER TABLE ${quoteIdent(fk.from_schema)}.${quoteIdent(fk.from_table)} ` +
+      `DROP CONSTRAINT IF EXISTS ${quoteIdent(fkConstraintName(fk.from_table, fk.from_column))};`
+    );
+  }
+
+  // 2. Drop PK constraints for common tables whose PK column SET changed
+  //    (added, cleared, or different columns) — done before column
+  //    drops below so a dropped PK column doesn't fail on a still-live
+  //    constraint referencing it.
+  const pkColsOf = (colsByKey, tableKey) =>
+    [...colsByKey.values()].filter((c) => `${c.schema_name}.${c.table_name}` === tableKey && c.is_primary_key)
+      .map((c) => c.column_name).sort();
+  const pkChangedTables = new Map(); // tableKey -> { oldCols, newCols }
+  for (const tableKey of commonTableKeys) {
+    const oldCols = pkColsOf(colsAByKey, tableKey);
+    const newCols = pkColsOf(colsBByKey, tableKey);
+    if (oldCols.join(",") !== newCols.join(",")) pkChangedTables.set(tableKey, { oldCols, newCols });
+  }
+  for (const [tableKey, { oldCols }] of pkChangedTables) {
+    if (!oldCols.length) continue; // nothing to drop
+    const [schema, table] = tableKey.split(".");
+    dropLines.push(`ALTER TABLE ${quoteIdent(schema)}.${quoteIdent(table)} DROP CONSTRAINT IF EXISTS ${quoteIdent(pkConstraintName(table))};`);
+  }
+
+  // 3. Drop UNIQUE constraints for common columns that went from unique
+  //    to not (PK columns skipped — see buildCreateTableSQL's own note
+  //    on why a PK column never carries a separate UNIQUE).
+  for (const [key, cA] of colsAByKey) {
+    const cB = colsBByKey.get(key);
+    if (!cB) continue; // column removal handled separately below
+    if (cA.is_unique && !cA.is_primary_key && !(cB.is_unique && !cB.is_primary_key)) {
+      dropLines.push(`ALTER TABLE ${quoteIdent(cA.schema_name)}.${quoteIdent(cA.table_name)} DROP CONSTRAINT IF EXISTS ${quoteIdent(uniqueConstraintName(cA.table_name, cA.column_name))};`);
+    }
+  }
+
+  // 4. Drop removed tables outright.
+  for (const tableKey of removedTableKeys) {
+    const t = tablesA.get(tableKey);
+    dropLines.push(`DROP TABLE ${quoteIdent(t.schema_name)}.${quoteIdent(t.table_name)};`);
+  }
+
+  // 5. Drop removed columns on tables that still exist.
+  for (const [key, cA] of colsAByKey) {
+    if (colsBByKey.has(key)) continue;
+    if (!tablesB.has(`${cA.schema_name}.${cA.table_name}`)) continue; // whole table already dropped above
+    dropLines.push(`ALTER TABLE ${quoteIdent(cA.schema_name)}.${quoteIdent(cA.table_name)} DROP COLUMN ${quoteIdent(cA.column_name)};`);
+  }
+
+  // 6. Type / nullability changes for columns present on both sides.
+  for (const [key, cA] of colsAByKey) {
+    const cB = colsBByKey.get(key);
+    if (!cB) continue;
+    if (cA.data_type !== cB.data_type) {
+      alterLines.push(
+        `ALTER TABLE ${quoteIdent(cB.schema_name)}.${quoteIdent(cB.table_name)} ` +
+        `ALTER COLUMN ${quoteIdent(cB.column_name)} TYPE ${cB.data_type} USING ${quoteIdent(cB.column_name)}::${cB.data_type};`
+      );
+    }
+    if (cA.is_nullable !== cB.is_nullable) {
+      alterLines.push(
+        `ALTER TABLE ${quoteIdent(cB.schema_name)}.${quoteIdent(cB.table_name)} ` +
+        `ALTER COLUMN ${quoteIdent(cB.column_name)} ${cB.is_nullable ? "DROP" : "SET"} NOT NULL;`
+      );
+    }
+  }
+
+  // 7. New schemas needed for newly added tables.
+  const newSchemas = [...new Set(addedTableKeys.map((k) => tablesB.get(k).schema_name))]
+    .filter((s) => s !== "public").sort();
+  for (const s of newSchemas) createLines.push(`CREATE SCHEMA IF NOT EXISTS ${quoteIdent(s)};`);
+  if (newSchemas.length) createLines.push("");
+
+  // 8. New tables, full definition (reuses generateDDL()'s own builder).
+  const newlyCreatedTables = new Set();
+  for (const tableKey of addedTableKeys) {
+    const t = tablesB.get(tableKey);
+    const tableCols = colsB.filter((c) => `${c.schema_name}.${c.table_name}` === tableKey)
+      .sort((a, b) => (a.ordinal_position || 0) - (b.ordinal_position || 0));
+    const sql = buildCreateTableSQL(t.schema_name, t.table_name, tableCols);
+    if (!sql) {
+      createLines.push(`-- ${quoteIdent(t.schema_name)}.${quoteIdent(t.table_name)} skipped: no columns defined yet`);
+      createLines.push("");
+      continue;
+    }
+    createLines.push(sql);
+    createLines.push("");
+    newlyCreatedTables.add(tableKey);
+  }
+
+  // 9. New columns on tables that already existed.
+  for (const [key, cB] of colsBByKey) {
+    if (colsAByKey.has(key)) continue;
+    const tableKey = `${cB.schema_name}.${cB.table_name}`;
+    if (!tablesA.has(tableKey)) continue; // brand-new table, already handled above
+    let line = `ALTER TABLE ${quoteIdent(cB.schema_name)}.${quoteIdent(cB.table_name)} ADD COLUMN ${quoteIdent(cB.column_name)} ${cB.data_type}`;
+    if (!cB.is_nullable) {
+      line += " NOT NULL";
+      addLines.push(`-- warning: ${cB.table_name}.${cB.column_name} is added as NOT NULL with no default — this fails if the table already has rows; add a DEFAULT or backfill first if so`);
+    }
+    if (cB.is_unique && !cB.is_primary_key) line += " UNIQUE";
+    addLines.push(line + ";");
+  }
+
+  // 10. UNIQUE constraints newly true on common columns (PK columns
+  //     skipped, same reasoning as buildCreateTableSQL()).
+  for (const [key, cB] of colsBByKey) {
+    const cA = colsAByKey.get(key);
+    if (!cA) continue; // handled inline for new columns above
+    if (cB.is_unique && !cB.is_primary_key && !(cA.is_unique && !cA.is_primary_key)) {
+      addLines.push(`ALTER TABLE ${quoteIdent(cB.schema_name)}.${quoteIdent(cB.table_name)} ADD CONSTRAINT ${quoteIdent(uniqueConstraintName(cB.table_name, cB.column_name))} UNIQUE (${quoteIdent(cB.column_name)});`);
+    }
+  }
+
+  // 11. PK added/changed on common tables (drop already happened in
+  //     step 2) — added here, after column adds, in case the new PK
+  //     includes a column that was itself just added above.
+  for (const [tableKey, { newCols }] of pkChangedTables) {
+    if (!newCols.length) continue;
+    const [schema, table] = tableKey.split(".");
+    addLines.push(`ALTER TABLE ${quoteIdent(schema)}.${quoteIdent(table)} ADD PRIMARY KEY (${newCols.map(quoteIdent).join(", ")});`);
+  }
+
+  // 12. FKs last, same reasoning as generateDDL(): needs every table/
+  //     column above to already exist. Covers genuinely new FKs and
+  //     retargeted ones (dropped above under their old target).
+  //     Filtered to endpoints that actually exist in B.
+  for (const [key, fk] of fksBFull) {
+    if (fksAFull.has(key)) continue;
+    if (!tablesB.has(`${fk.from_schema}.${fk.from_table}`)) continue;
+    if (!tablesB.has(`${fk.to_schema}.${fk.to_table}`)) continue;
+    const name = dedupeConstraintName(fkConstraintName(fk.from_table, fk.from_column), usedNames);
+    fkLines.push(
+      `ALTER TABLE ${quoteIdent(fk.from_schema)}.${quoteIdent(fk.from_table)} ` +
+      `ADD CONSTRAINT ${quoteIdent(name)} FOREIGN KEY (${quoteIdent(fk.from_column)}) ` +
+      `REFERENCES ${quoteIdent(fk.to_schema)}.${quoteIdent(fk.to_table)} (${quoteIdent(fk.to_column)});`
+    );
+  }
+
+  const allLines = [...dropLines, ...(dropLines.length ? [""] : []),
+    ...alterLines, ...(alterLines.length ? [""] : []),
+    ...createLines,
+    ...addLines, ...(addLines.length ? [""] : []),
+    ...fkLines];
+
+  if (!allLines.length) return "-- No structural differences between these two versions.\n";
+  return [
+    "-- Constraint names assume Postgres's default auto-generated naming",
+    "-- (<table>_pkey / <table>_<column>_key / <table>_<column>_fkey). If a",
+    "-- real constraint was given an explicit custom name, adjust the",
+    "-- matching DROP below before running it.",
+    "",
+    ...allLines,
+  ].join("\n").trim() + "\n";
+}
+
+$("btnExportDdl").addEventListener("click", () => {
+  if (!lastGraphData || !lastGraphData.tables || !lastGraphData.tables.length) {
+    alert("Nothing to export yet — add at least one table first.");
+    return;
+  }
+  $("ddlModalTitle").textContent = "Export Full DDL";
+  $("ddlModalSubtitle").textContent =
+    "Structure only: columns, NOT NULL, UNIQUE, PRIMARY KEY, and FOREIGN KEY constraints. No indexes, defaults, partitioning, or other business logic.";
+  $("ddlOutput").value = generateDDL(lastGraphData);
+  $("ddlModal").style.display = "flex";
+});
+
+// ---------------------------------------------------------------------
+// Static HTML export — a single, self-contained file someone can be
+// emailed/sent without needing any access to this tool, a live DB
+// connection, or a Project at all: open it in a browser and it just
+// works. Deliberately view-only and minimal (the owner's own scope):
+// click a node to see its columns and relationships, zoom in/out/fit,
+// but NOT drag nodes and NOT refresh — there's no backend for a
+// standalone file to refresh FROM anyway. Reuses this app's own
+// rendering logic (schema coloring, node sizing, the relationships
+// panel) adapted to work off one embedded data object instead of
+// lastGraphData/fetch — not a rewrite, a deliberately-slimmed copy:
+// none of Editor/Clusters/Filter/Insights/live-connection machinery
+// belongs in a file whose whole point is having none of that.
+// ---------------------------------------------------------------------
+
+// Escapes for safe embedding inside a script tag — JSON.stringify alone
+// would break the page if any string value ever contained the literal
+// closing-script-tag sequence (ends the tag early, corrupting
+// everything after it — the exact bug this function exists to avoid,
+// caught here once already: the template below originally had two
+// REAL closing script tags inside its own string content, breaking
+// THIS page's own script block the same way, fixed by escaping the
+// slash in each). Escaping every "<" as < is a valid, harmless
+// no-op for characters that aren't actually part of that sequence, and
+// unconditionally defuses the ones that are.
+function jsonForInlineScript(value) {
+  return JSON.stringify(value).replace(/</g, "\\u003c");
+}
+
+function buildStaticExportHtml(data, positions, title) {
+  const dataJson = jsonForInlineScript({
+    tables: data.tables,
+    columns: data.columns || [],
+    foreign_keys: data.foreign_keys || [],
+  });
+  const positionsJson = jsonForInlineScript(positions || null);
+  const exportedAt = new Date().toLocaleString();
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>${escHtml(title)} — Schema Map export</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.34.3/cytoscape.min.js"><\/script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f4f6fb; --surface: #ffffff; --border: #dde1ef;
+    --text: #1c2035; --muted: #6b7180; --accent: #4f5ef0;
+  }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text);
+    height: 100vh; overflow: hidden; display: flex; flex-direction: column;
+  }
+  header { padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--surface); flex: none; }
+  header h1 { font-size: 1.1rem; font-weight: 700; }
+  header p { font-size: 0.76rem; color: var(--muted); margin-top: 2px; }
+  .layout { flex: 1; display: flex; min-height: 0; }
+  .main { flex: 1; min-width: 0; position: relative; background: var(--surface); }
+  #graphCanvas { position: absolute; inset: 0; }
+  .zoom-controls {
+    position: absolute; right: 16px; bottom: 16px; z-index: 5;
+    display: flex; flex-direction: column; align-items: stretch;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: 0 4px 14px rgba(28,32,53,0.12); overflow: hidden;
+  }
+  .zoom-controls button {
+    cursor: pointer; border: none; background: var(--surface); color: var(--text);
+    width: 34px; height: 34px; font-size: 1rem; font-weight: 700; line-height: 1;
+  }
+  .zoom-controls button:hover { background: var(--bg); color: var(--accent); }
+  .zoom-controls button + button { border-top: 1px solid var(--border); }
+  .zoom-level { text-align: center; font-size: 0.68rem; color: var(--muted); padding: 4px 0; border-top: 1px solid var(--border); user-select: none; }
+  .detail-panel {
+    width: 300px; flex: none; border-left: 1px solid var(--border);
+    background: var(--surface); overflow-y: auto; padding: 16px; display: none;
+  }
+  .detail-panel.show { display: block; }
+  .detail-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 4px; }
+  .detail-header h2 { font-size: 1rem; font-weight: 700; word-break: break-word; }
+  .detail-close { cursor: pointer; border: none; background: none; color: var(--muted); font-size: 1rem; line-height: 1; padding: 2px 4px; flex: none; }
+  .detail-close:hover { color: var(--text); }
+  .detail-meta { font-size: 0.76rem; color: var(--muted); margin-bottom: 14px; }
+  table.columns-table { border-collapse: collapse; width: 100%; font-size: 0.78rem; }
+  table.columns-table th, table.columns-table td { border-bottom: 1px solid var(--border); padding: 6px 4px; text-align: left; vertical-align: top; }
+  table.columns-table th { color: var(--muted); font-weight: 600; font-size: 0.68rem; text-transform: uppercase; }
+  table.columns-table .col-type { color: var(--muted); font-size: 0.74rem; }
+  .detail-loading { color: var(--muted); font-size: 0.8rem; }
+  .detail-section-label { font-size: 0.74rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin: 16px 0 6px; }
+  .rel-group-label { font-size: 0.7rem; font-weight: 600; color: var(--accent); margin: 10px 0 3px; }
+  .rel-item { cursor: pointer; border-radius: 6px; padding: 5px 6px; margin-bottom: 1px; display: flex; align-items: center; gap: 6px; font-size: 0.76rem; flex-wrap: wrap; }
+  .rel-item:hover { background: var(--bg); }
+  .rel-col { font-weight: 600; word-break: break-word; }
+  .rel-arrow { color: var(--muted); flex: none; }
+  .col-fk-badge { cursor: help; color: var(--accent); font-size: 0.72rem; margin-left: 4px; }
+  .legend { position: absolute; left: 16px; bottom: 16px; z-index: 5; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; box-shadow: 0 4px 14px rgba(28,32,53,0.12); }
+  .legend-item { display: flex; align-items: center; gap: 7px; font-size: 0.78rem; padding: 2px 0; }
+  .legend-swatch { width: 11px; height: 11px; border-radius: 50%; flex: none; }
+  .node-tooltip { position: fixed; z-index: 50; pointer-events: none; background: var(--text); color: #fff; border-radius: 7px; padding: 7px 11px; font-size: 0.76rem; line-height: 1.5; box-shadow: 0 6px 18px rgba(28,32,53,0.28); max-width: 240px; display: none; }
+  .node-tooltip strong { display: block; font-size: 0.84rem; margin-bottom: 2px; }
+  .node-tooltip .tooltip-meta { color: rgba(255,255,255,0.75); }
+</style>
+</head>
+<body>
+<header>
+  <h1>${escHtml(title)}</h1>
+  <p>Static export from Schema Map — view only, exported ${escHtml(exportedAt)}. Click a table to see its columns and relationships; drag disabled, zoom/pan work normally.</p>
+</header>
+<div class="layout">
+  <div class="main">
+    <div id="graphCanvas"></div>
+    <div class="zoom-controls">
+      <button type="button" id="btnZoomIn" title="Zoom in">+</button>
+      <button type="button" id="btnZoomOut" title="Zoom out">−</button>
+      <button type="button" id="btnZoomFit" title="Fit to screen">⊡</button>
+      <div class="zoom-level" id="zoomLevel">100%</div>
+    </div>
+    <div class="legend" id="legend" style="display:none;"></div>
+    <div class="node-tooltip" id="nodeTooltip"></div>
+  </div>
+  <div class="detail-panel" id="detailPanel">
+    <div class="detail-header">
+      <h2 id="detailTitle">Table</h2>
+      <button type="button" class="detail-close" id="btnCloseDetail" title="Close">✕</button>
+    </div>
+    <div class="detail-meta" id="detailMeta"></div>
+    <div id="detailBody"></div>
+  </div>
+</div>
+<script>
+(function () {
+  var DATA = ${dataJson};
+  var POSITIONS = ${positionsJson};
+  var $ = function (id) { return document.getElementById(id); };
+  function escHtml(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+  var SCHEMA_COLOR_PALETTE = ["#4f5ef0", "#e0457b", "#17a673", "#f2994a", "#9b59d0", "#2f9bd6", "#d4a72c", "#e74c3c", "#16a085", "#7f8c8d"];
+  function buildSchemaColorMap(tables) {
+    var names = [];
+    tables.forEach(function (t) { if (names.indexOf(t.schema_name) === -1) names.push(t.schema_name); });
+    names.sort();
+    var map = {};
+    names.forEach(function (name, i) { map[name] = SCHEMA_COLOR_PALETTE[i % SCHEMA_COLOR_PALETTE.length]; });
+    return map;
+  }
+  var schemaColors = buildSchemaColorMap(DATA.tables);
+  if (Object.keys(schemaColors).length > 1) {
+    var legendEl = $("legend");
+    legendEl.style.display = "block";
+    Object.keys(schemaColors).sort().forEach(function (name) {
+      var item = document.createElement("div");
+      item.className = "legend-item";
+      item.innerHTML = '<span class="legend-swatch" style="background:' + schemaColors[name] + '"></span>' + escHtml(name);
+      legendEl.appendChild(item);
+    });
+  }
+
+  var rowEstimates = DATA.tables.map(function (t) { return Math.max(t.row_estimate, 0); });
+  var maxRows = Math.max(1, rowEstimates.reduce(function (a, b) { return Math.max(a, b); }, 0));
+  function sizeFor(rowEstimate) {
+    var frac = Math.max(rowEstimate, 0) / maxRows;
+    return 28 + Math.round(Math.sqrt(frac) * 60);
+  }
+
+  // Same threshold as the live app's renderGraph() — past this many
+  // tables, persistent labels stop being drawn (hover tooltip only).
+  var LABEL_VISIBLE_THRESHOLD = 150;
+  var showLabels = DATA.tables.length <= LABEL_VISIBLE_THRESHOLD;
+
+  var nodes = DATA.tables.map(function (t) {
+    var id = t.schema_name + "." + t.table_name;
+    var n = {
+      data: {
+        id: id, label: t.table_name, schema: t.schema_name,
+        rowEstimate: t.row_estimate, totalSize: t.total_size,
+        size: sizeFor(t.row_estimate), color: schemaColors[t.schema_name],
+      },
+    };
+    if (POSITIONS && POSITIONS[id]) n.position = POSITIONS[id];
+    return n;
+  });
+  var tableIds = {};
+  DATA.tables.forEach(function (t) { tableIds[t.schema_name + "." + t.table_name] = true; });
+  var edges = (DATA.foreign_keys || [])
+    .filter(function (fk) {
+      return tableIds[fk.from_schema + "." + fk.from_table] && tableIds[fk.to_schema + "." + fk.to_table];
+    })
+    .map(function (fk, i) {
+      return {
+        data: {
+          id: "fk" + i,
+          source: fk.from_schema + "." + fk.from_table,
+          target: fk.to_schema + "." + fk.to_table,
+        },
+      };
+    });
+
+  var cy = cytoscape({
+    container: $("graphCanvas"),
+    elements: { nodes: nodes, edges: edges },
+    autoungrabify: true, // the owner's own ask: zoom/pan fine, dragging nodes is not
+    style: [
+      {
+        selector: "node",
+        style: {
+          "background-color": "data(color)", label: showLabels ? "data(label)" : "",
+          "font-size": "10px", color: "#1c2035", "text-valign": "top", "text-margin-y": -6,
+          width: "data(size)", height: "data(size)",
+          "text-background-color": "#ffffff", "text-background-opacity": 0.85,
+          "text-background-shape": "roundrectangle", "text-background-padding": "2px",
+        },
+      },
+      {
+        selector: "edge",
+        style: { width: 1.5, "line-color": "#9aa3c2", "target-arrow-color": "#9aa3c2", "target-arrow-shape": "triangle", "curve-style": "bezier" },
+      },
+    ],
+    layout: POSITIONS ? { name: "preset" } : { name: "cose", animate: false, padding: 40 },
+    minZoom: 0.05,
+    maxZoom: 8,
+  });
+  if (!POSITIONS && cy.zoom() > 1) { cy.zoom({ level: 1, renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 } }); cy.center(); }
+
+  function updateZoomLevel() { $("zoomLevel").textContent = Math.round(cy.zoom() * 100) + "%"; }
+  $("btnZoomIn").addEventListener("click", function () { cy.zoom({ level: cy.zoom() * 1.25, renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 } }); });
+  $("btnZoomOut").addEventListener("click", function () { cy.zoom({ level: cy.zoom() / 1.25, renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 } }); });
+  $("btnZoomFit").addEventListener("click", function () { cy.fit(undefined, 40); });
+  cy.on("zoom", updateZoomLevel);
+  updateZoomLevel();
+
+  function showTooltip(nodeData, evt) {
+    var volumeText = nodeData.rowEstimate < 0 ? "not analyzed yet" : nodeData.rowEstimate.toLocaleString() + " rows (est.)";
+    var tooltip = $("nodeTooltip");
+    tooltip.innerHTML = "<strong>" + escHtml(nodeData.label) + "</strong>" +
+      '<div class="tooltip-meta">' + escHtml(nodeData.schema) + "</div>" +
+      "<div>" + escHtml(volumeText) + " · " + escHtml(nodeData.totalSize) + "</div>";
+    tooltip.style.display = "block";
+    positionTooltip(evt);
+  }
+  function positionTooltip(evt) {
+    if (!evt) return;
+    var tooltip = $("nodeTooltip");
+    tooltip.style.left = (evt.clientX + 14) + "px";
+    tooltip.style.top = (evt.clientY + 14) + "px";
+  }
+  function hideTooltip() { $("nodeTooltip").style.display = "none"; }
+  cy.on("mouseover", "node", function (evt) { showTooltip(evt.target.data(), evt.originalEvent); });
+  cy.on("mousemove", "node", function (evt) { positionTooltip(evt.originalEvent); });
+  cy.on("mouseout", "node", hideTooltip);
+  cy.on("pan zoom", hideTooltip);
+
+  function tableForeignKeys(nodeData) {
+    var id = nodeData.schema + "." + nodeData.label;
+    return {
+      outgoing: (DATA.foreign_keys || []).filter(function (fk) { return fk.from_schema + "." + fk.from_table === id; }),
+      incoming: (DATA.foreign_keys || []).filter(function (fk) { return fk.to_schema + "." + fk.to_table === id; }),
+    };
+  }
+  function relationshipsHtml(outgoing, incoming) {
+    if (!outgoing.length && !incoming.length) return "";
+    function rel(otherId, left, right) {
+      return '<div class="rel-item" data-target="' + escHtml(otherId) + '">' +
+        '<span class="rel-col">' + escHtml(left) + '</span><span class="rel-arrow">→</span>' +
+        '<span class="rel-col">' + escHtml(right) + "</span></div>";
+    }
+    var html = '<div class="detail-section-label">Relationships</div>';
+    if (outgoing.length) {
+      html += '<div class="rel-group-label">References</div>' + outgoing.map(function (fk) {
+        return rel(fk.to_schema + "." + fk.to_table, fk.from_column, fk.to_schema + "." + fk.to_table + "." + fk.to_column);
+      }).join("");
+    }
+    if (incoming.length) {
+      html += '<div class="rel-group-label">Referenced by</div>' + incoming.map(function (fk) {
+        return rel(fk.from_schema + "." + fk.from_table, fk.from_schema + "." + fk.from_table + "." + fk.from_column, fk.to_column);
+      }).join("");
+    }
+    return html;
+  }
+  function openTableDetail(nodeData) {
+    $("detailPanel").classList.add("show");
+    $("detailTitle").textContent = nodeData.label;
+    $("detailMeta").textContent = nodeData.schema + " · " +
+      (nodeData.rowEstimate < 0 ? "not analyzed" : nodeData.rowEstimate + " rows (est.)") + " · " + nodeData.totalSize;
+    cy.resize();
+    var fks = tableForeignKeys(nodeData);
+    var relHtml = relationshipsHtml(fks.outgoing, fks.incoming);
+    var fkOutCols = {}; fks.outgoing.forEach(function (fk) { fkOutCols[fk.from_column] = true; });
+    var fkInCols = {}; fks.incoming.forEach(function (fk) { fkInCols[fk.to_column] = true; });
+    var columns = (DATA.columns || [])
+      .filter(function (c) { return c.schema_name === nodeData.schema && c.table_name === nodeData.label; })
+      .sort(function (a, b) { return (a.ordinal_position || 0) - (b.ordinal_position || 0); });
+    if (!columns.length) {
+      $("detailBody").innerHTML = '<p class="detail-loading">No column data available for this table.</p>' + relHtml;
+      return;
+    }
+    var rows = columns.map(function (c) {
+      var isOut = fkOutCols[c.column_name], isIn = fkInCols[c.column_name];
+      var badge = "";
+      if (isOut || isIn) {
+        var tip = isOut && isIn ? "References another table and is referenced by one" : isOut ? "References another table" : "Referenced by another table";
+        badge = '<span class="col-fk-badge" title="' + escHtml(tip) + '">🔗</span>';
+      }
+      return "<tr><td>" + escHtml(c.column_name) + badge + (c.is_nullable ? "" : " *") + "</td>" +
+        '<td class="col-type">' + escHtml(c.data_type) + "</td></tr>";
+    }).join("");
+    $("detailBody").innerHTML = '<table class="columns-table"><thead><tr><th>Column</th><th>Type</th></tr></thead><tbody>' +
+      rows + '</tbody></table><p class="detail-loading" style="margin-top:10px;">* = NOT NULL</p>' + relHtml;
+  }
+  cy.on("tap", "node", function (evt) { openTableDetail(evt.target.data()); });
+  $("detailBody").addEventListener("click", function (evt) {
+    var item = evt.target.closest(".rel-item");
+    if (!item) return;
+    var node = cy.getElementById(item.getAttribute("data-target"));
+    if (node.length) openTableDetail(node.data());
+  });
+  $("btnCloseDetail").addEventListener("click", function () {
+    $("detailPanel").classList.remove("show");
+    cy.resize();
+  });
+})();
+<\/script>
+</body>
+</html>
+`;
+}
+
+$("btnExportStaticHtml").addEventListener("click", async () => {
+  if (!lastGraphData || !lastGraphData.tables || !lastGraphData.tables.length) {
+    alert("Nothing to export yet — add at least one table first.");
+    return;
+  }
+  const btn = $("btnExportStaticHtml");
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Exporting…";
+  try {
+    // Same gap-filling used before "Save as Version" — a static export
+    // with no backend to fall back on can't afford a table showing zero
+    // columns just because nobody happened to click it first.
+    await ensureAllColumnsLoadedForSave();
+    // Capture the CURRENTLY on-screen layout, if Explore is live right
+    // now, so the shared file visually matches what was being looked at
+    // instead of a fresh, different auto-layout — falls back to a
+    // regular cose layout (computed inside the exported file itself) if
+    // Explore isn't currently rendered (e.g. exporting right after
+    // switching to Editor, or from a version that was never opened in
+    // Explore this session).
+    const positions = cy ? Object.fromEntries(cy.nodes().map((n) => [n.id(), n.position()])) : null;
+    const title = currentProject ? currentProject.name : "Schema";
+    const html = buildStaticExportHtml(lastGraphData, positions, title);
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-schema-export.html`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+});
+
+// Reuses the same snapshots already fetched for the "Compare versions"
+// modal (lastCompareSnapA/B) — this button lives inside that modal, so
+// it's only ever clicked after a compare has actually run.
+$("btnGenerateMigrationDdl").addEventListener("click", () => {
+  if (!lastCompareSnapA || !lastCompareSnapB) return;
+  $("ddlModalTitle").textContent = `Migration DDL: ${lastCompareLabelA} → ${lastCompareLabelB}`;
+  $("ddlModalSubtitle").textContent =
+    "Only what changed between these two versions — creates/adds first-safe changes, plus drops for anything removed. Review before running, especially any DROP.";
+  $("ddlOutput").value = generateMigrationDDL(lastCompareSnapA, lastCompareSnapB);
+  $("ddlModal").style.display = "flex";
+});
+
+function closeDdlModal() {
+  $("ddlModal").style.display = "none";
+}
+$("btnCloseDdlModal").addEventListener("click", closeDdlModal);
+$("ddlModal").addEventListener("click", (evt) => {
+  if (evt.target.id === "ddlModal") closeDdlModal();
+});
+$("btnCopyDdl").addEventListener("click", async () => {
+  const btn = $("btnCopyDdl");
+  try {
+    await navigator.clipboard.writeText($("ddlOutput").value);
+    const original = btn.textContent;
+    btn.textContent = "Copied!";
+    setTimeout(() => { btn.textContent = original; }, 1500);
+  } catch (e) {
+    alert("Couldn't copy automatically — select the text in the box and copy it manually.");
+  }
+});
+
+async function switchToVersion(versionId, skipConfirm) {
+  if (!skipConfirm && lastGraphData) {
+    if (!confirm("Switch to this version? Any unsaved changes to the current view will be lost.")) return;
+  }
+  try {
+    const res = await fetch(`versions/${versionId}`);
+    const snapshot = await res.json();
+    if (!res.ok || snapshot.error) { alert(snapshot.error || "Couldn't load that version."); return; }
+    lastGraphData = snapshot;
+    renderGraph(snapshot);
+  } catch (e) {
+    alert("Network error: " + e.message);
+  }
+}
+
+function showVersionErr(msg) {
+  const box = $("versionErr");
+  if (!msg) { box.classList.remove("show"); box.textContent = ""; return; }
+  box.textContent = msg;
+  box.classList.add("show");
+}
+
+// Fills in columns for any table that's never been individually loaded
+// — only called when isConnected, and only if at least one table has
+// zero columns recorded, so this costs nothing for the common case
+// (a paste-imported/from-scratch project always has columns already,
+// and a live project where every table was already clicked has nothing
+// missing to fetch). Exists specifically for "Save as Version": without
+// this, a table nobody clicked in Editor/Explore before saving got
+// silently recorded with ZERO columns — not a display bug, a genuinely
+// incomplete snapshot — which then made a LATER version comparison
+// look broken (a column that was never actually removed appeared to
+// just vanish, because the baseline version never captured it having
+// existed at all). Best-effort: if the bulk fetch fails, save proceeds
+// anyway with whatever's already loaded, same fallback posture as every
+// other network call in this app — a save that goes through with a gap
+// still beats one that's silently blocked by a transient fetch error.
+async function ensureAllColumnsLoadedForSave() {
+  if (!isConnected) return;
+  ensureGraphDataShape();
+  const loadedTableKeys = new Set(lastGraphData.columns.map((c) => `${c.schema_name}.${c.table_name}`));
+  const missingTables = lastGraphData.tables.filter((t) => !loadedTableKeys.has(`${t.schema_name}.${t.table_name}`));
+  if (!missingTables.length) return;
+  try {
+    const res = await fetch("columns");
+    const data = await res.json();
+    if (!res.ok || !data.columns) return;
+    const missingKeys = new Set(missingTables.map((t) => `${t.schema_name}.${t.table_name}`));
+    for (const c of data.columns) {
+      if (missingKeys.has(`${c.schema_name}.${c.table_name}`)) lastGraphData.columns.push(c);
+    }
+  } catch (e) { /* best-effort — save proceeds with whatever's already loaded */ }
+}
+
+// Shared by the "Save as Version" button and autoSaveInitialVersion()
+// (the "add init version" feature — a project used to require an
+// explicit first save before it had ANY version history at all,
+// contradicting the original design's own "v0 at project start"
+// intent). `silent`: the auto-save call happens right after project
+// creation, before the user has done anything to save themselves —
+// errors there are best-effort (a failed auto-save just means no v0
+// exists yet, same as before this feature existed; NOT something that
+// should interrupt project creation with an error box), whereas an
+// explicit button click should always show a clear success/failure.
+async function saveVersion(label, { silent = false } = {}) {
+  if (!currentProject) return { error: "No project open." };
+  // Zero tables is a legitimate thing to snapshot (a fresh scratch
+  // project's real starting point, or a project that's had everything
+  // deleted) — only genuinely nothing-loaded-at-all (lastGraphData
+  // itself null, e.g. a database/paste project before its first
+  // connect/paste) blocks saving.
+  if (!lastGraphData || !lastGraphData.tables) {
+    return { error: "Nothing to save yet." };
+  }
+  try {
+    await ensureAllColumnsLoadedForSave();
+    const res = await fetch(`projects/${currentProject.id}/versions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        snapshot: { tables: lastGraphData.tables, foreign_keys: lastGraphData.foreign_keys, columns: lastGraphData.columns },
+        label,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) return { error: data.error || "Couldn't save version." };
+    if (!silent) renderProjectVersions();
+    return { version: data };
+  } catch (e) {
+    return { error: "Network error: " + e.message };
+  }
+}
+
+// Auto-creates v0 the first time a project actually has a real
+// structure to save — immediately for scratch/paste (both have one at
+// creation time already), or the first successful "Load graph" for a
+// database-origin project (nothing exists to snapshot before that).
+// Only ever fires once: guarded by the project genuinely having zero
+// versions yet, checked fresh each time rather than cached, since a
+// database-origin project may go a while between creation and its
+// first successful load.
+async function autoSaveInitialVersionIfNeeded() {
+  if (!currentProject) return;
+  const versions = await fetchVersions(currentProject.id);
+  if (versions.length) return;
+  await saveVersion("Initial", { silent: true });
+  renderProjectVersions();
+}
+
+$("btnSaveVersion").addEventListener("click", async () => {
+  showVersionErr(null);
+  const label = $("versionLabelInput").value.trim() || null;
+  const btn = $("btnSaveVersion");
+  btn.disabled = true;
+  const originalBtnText = btn.textContent;
+  btn.textContent = "Saving…";
+  const result = await saveVersion(label);
+  if (result.error) {
+    showVersionErr(result.error);
+  } else {
+    $("versionLabelInput").value = "";
+  }
+  btn.disabled = false;
+  btn.textContent = originalBtnText;
+});
+
+$("btnBackToProjects").addEventListener("click", async () => {
+  currentProject = null;
+  $("detProject").style.display = "none";
+  try { await fetch("disconnect", { method: "POST" }); } catch (e) { /* best-effort */ }
+  applyConnectionStatus({ connected: false });
+  lastGraphData = null;
+  loadProjectsScreen();
+});
+
+// Always start at the Projects screen, with a guaranteed-clean
+// connection state — not "wherever the server's leftover STATE happens
+// to be." A live connection is meaningless without a Project context to
+// hang it on now.
+(async function init() {
+  try { await fetch("disconnect", { method: "POST" }); } catch (e) { /* best-effort */ }
+  applyConnectionStatus({ connected: false });
+  loadProjectsScreen();
 })();
 </script>
 </body>
